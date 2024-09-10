@@ -38,10 +38,10 @@ func amgenScrubRebate(sc *scrub, rbt data) {
 	rxn    := rbt[Fields.Rxn]
 	hrxn,_ := Hash(rbt[Fields.Rxn])
 	
-	clms1 := sc.cs["claims"].Find(Fields.Rxn,  rxn)
-	clms2 := sc.cs["claims"].Find(Fields.Frxn, rxn)
-	clms3 := sc.cs["claims"].Find(Fields.Rxn,  hrxn)
-	clms4 := sc.cs["claims"].Find(Fields.Frxn, hrxn)
+	clms1 := sc.cs["claims"].Find(Fields.Rxn,  rxn,  true)	// Copies of claims. Only do this if policy updates the claim.
+	clms2 := sc.cs["claims"].Find(Fields.Frxn, rxn,  true)	// Currently this policy does not, so could use false here.
+	clms3 := sc.cs["claims"].Find(Fields.Rxn,  hrxn, true)
+	clms4 := sc.cs["claims"].Find(Fields.Frxn, hrxn, true)
 	clms  := sort_lists(Fields.Dos, false, "indx", clms1, clms2, clms3, clms4)
 	for _, clm := range clms {
 		if clm[Fields.Excl] != "" {
@@ -92,13 +92,14 @@ func amgenScrubRebate(sc *scrub, rbt data) {
 
 		if yes, how := CheckSPI(sc, rbt[Fields.Spid], clm[Fields.Spid], chains, stacks);yes {
 			rbt[Fields.Spmt] = how
+			sc.update_spi_counts(how)
 			sc.atts.add(rbt, clm, "test SPI match", "", "matched using " + how)
 		} else {
 			sc.atts.add(rbt, clm, "test SPI match", "no_match_spi", "no match")
 			continue
 		}
 		rbt["stat"] = "matched"
-		sc.metr.update_rbt_clm(sc, rbt, clm)
+		sc.metr.update_rbt_clm(rbt, clm)
 		return
 	}
 	rbt["stat"] = "nomatch"

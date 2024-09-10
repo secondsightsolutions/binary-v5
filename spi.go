@@ -80,61 +80,6 @@ func (spis *SPIs) load(c *cache) {
 	}
 }
 
-func (spis *SPIs) getI340Status(spid string) string {
-    spis.Lock()
-    defer spis.Unlock()
-    if spi := spis.find(spid); spi != nil {
-        return spi.Cde
-    }
-    return ""
-}
-
-// addPharmacy allows us to add a chain name to the SPI we already loaded (in the database the chain name is stored in the separate contracted_pharmacies table).
-// Note that we don't allow a Pharmacy to define an SPI - that must be done up above. Should we allow a CP in the database to create a new SPI here?
-func (spis *SPIs) addPharmacy(phm *Pharmacy) {
-    // Chains - a common chaim name between pharmacies allows us to cross-walk between pharmacies.
-    if phm.Chnm != "" {
-        // If a pharmacy has a dea value, set the chain name on the matching SPI(s).
-        // Small issue here; these SPIs are probably also/already pointed to by NCPDP/NPI ids. Maybe less accurate? So do it first.
-        if phm.Dea != "" {
-            for _, spi := range spis.deaMap[phm.Dea] {
-                spi.Chn = phm.Chnm
-            }
-        }
-        // Chain name is in Pharmacy, not SPI, so we need to copy over the chain name to the SPI(s) (*should* be one/same SPI here).
-        if spi, ok := spis.idMap[phm.Ncp]; ok {
-            spi.Chn = phm.Chnm
-        }
-        if spi, ok := spis.idMap[phm.Npi]; ok {
-            spi.Chn = phm.Chnm
-        }
-    }
-
-    // Stacks - a pharmacy can have zero or more NPIs, DEAs, and NCPDPs. The Pharmacy struct gives us these arrays of ids.
-    // Simply go through all the ids on the pharmacy (Pharmacy) and put each one in as a key, with the data portion being
-    // all the other ids on the pharmacy.
-    // If a pharmacy multiple ids, then this will allow a crosswalk to the other ids on the pharmacy. Note we are already
-    // doing this in its initial form of the three singular values (npi <-> dea? <-> ncp) on this one SPI. We're now
-    // just expanding this concept by putting *all* the ids (from the Pharmacy) into a relationship map.
-    // So why not just add these additional ids into the original maps above? (idMap, deaMap). So that we can
-    // turn on or off this "stacking" feature separately from the basic cross-walking alread provided.
-
-    // A pharmacy might look like this:
-    // CVS999 => DEAS['1111', '1112'], NPIS['2221', '2222', '2223', '2224'], NCP['3331'] (all these ids on this pharmacy)
-
-    // We want to end up with this map:
-    // Key      Values
-    // '1111'   ['1111', '1112', '2221', '2222', '2223', '2224', '3331']
-    // '1112'   ['1111', '1112', '2221', '2222', '2223', '2224', '3331']
-    // '2221'   ['1111', '1112', '2221', '2222', '2223', '2224', '3331']
-    // '2222'   ['1111', '1112', '2221', '2222', '2223', '2224', '3331']
-    // '2223'   ['1111', '1112', '2221', '2222', '2223', '2224', '3331']
-    // '2224'   ['1111', '1112', '2221', '2222', '2223', '2224', '3331']
-    // '3331'   ['1111', '1112', '2221', '2222', '2223', '2224', '3331']
-
-    spis.addToStacks([]string{phm.Dea}, []string{phm.Npi}, []string{phm.Ncp}, phm.Deas, phm.Npis, phm.Ncps)
-}
-
 func (spis *SPIs) addToStacks(lists... []string) {
     set := make(map[string]interface{})
     for _, list := range lists {
@@ -254,6 +199,62 @@ func (spis *SPIs) match(spidA, spidB string, useChains, useStacks bool) (bool, s
     return false, ""
 }
 
+/*
+// addPharmacy allows us to add a chain name to the SPI we already loaded (in the database the chain name is stored in the separate contracted_pharmacies table).
+// Note that we don't allow a Pharmacy to define an SPI - that must be done up above. Should we allow a CP in the database to create a new SPI here?
+func (spis *SPIs) addPharmacy(phm *Pharmacy) {
+    // Chains - a common chaim name between pharmacies allows us to cross-walk between pharmacies.
+    if phm.Chnm != "" {
+        // If a pharmacy has a dea value, set the chain name on the matching SPI(s).
+        // Small issue here; these SPIs are probably also/already pointed to by NCPDP/NPI ids. Maybe less accurate? So do it first.
+        if phm.Dea != "" {
+            for _, spi := range spis.deaMap[phm.Dea] {
+                spi.Chn = phm.Chnm
+            }
+        }
+        // Chain name is in Pharmacy, not SPI, so we need to copy over the chain name to the SPI(s) (*should* be one/same SPI here).
+        if spi, ok := spis.idMap[phm.Ncp]; ok {
+            spi.Chn = phm.Chnm
+        }
+        if spi, ok := spis.idMap[phm.Npi]; ok {
+            spi.Chn = phm.Chnm
+        }
+    }
+
+    // Stacks - a pharmacy can have zero or more NPIs, DEAs, and NCPDPs. The Pharmacy struct gives us these arrays of ids.
+    // Simply go through all the ids on the pharmacy (Pharmacy) and put each one in as a key, with the data portion being
+    // all the other ids on the pharmacy.
+    // If a pharmacy multiple ids, then this will allow a crosswalk to the other ids on the pharmacy. Note we are already
+    // doing this in its initial form of the three singular values (npi <-> dea? <-> ncp) on this one SPI. We're now
+    // just expanding this concept by putting *all* the ids (from the Pharmacy) into a relationship map.
+    // So why not just add these additional ids into the original maps above? (idMap, deaMap). So that we can
+    // turn on or off this "stacking" feature separately from the basic cross-walking alread provided.
+
+    // A pharmacy might look like this:
+    // CVS999 => DEAS['1111', '1112'], NPIS['2221', '2222', '2223', '2224'], NCP['3331'] (all these ids on this pharmacy)
+
+    // We want to end up with this map:
+    // Key      Values
+    // '1111'   ['1111', '1112', '2221', '2222', '2223', '2224', '3331']
+    // '1112'   ['1111', '1112', '2221', '2222', '2223', '2224', '3331']
+    // '2221'   ['1111', '1112', '2221', '2222', '2223', '2224', '3331']
+    // '2222'   ['1111', '1112', '2221', '2222', '2223', '2224', '3331']
+    // '2223'   ['1111', '1112', '2221', '2222', '2223', '2224', '3331']
+    // '2224'   ['1111', '1112', '2221', '2222', '2223', '2224', '3331']
+    // '3331'   ['1111', '1112', '2221', '2222', '2223', '2224', '3331']
+
+    spis.addToStacks([]string{phm.Dea}, []string{phm.Npi}, []string{phm.Ncp}, phm.Deas, phm.Npis, phm.Ncps)
+}
+
+func (spis *SPIs) getI340Status(spid string) string {
+    spis.Lock()
+    defer spis.Unlock()
+    if spi := spis.find(spid); spi != nil {
+        return spi.Cde
+    }
+    return ""
+}
+
 func (spis *SPIs) match2(spidA, spidB string, useChains bool) bool {
     res, _ := spis.match(spidA, spidB, useChains, false)
     return res
@@ -276,3 +277,4 @@ func (spis *SPIs) find(spid string) *SPI {
     }
     return nil
 }
+*/

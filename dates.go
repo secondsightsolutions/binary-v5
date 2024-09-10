@@ -21,7 +21,7 @@ func (d *Dates) FromHash(hashedVal string) (*time.Time, error) {
     if !Is64bitHash(hashedVal) {
         return nil, fmt.Errorf("not_hash")
     }
-	rows := d.c.Find("hash", hashedVal)
+	rows := d.c.Find("hash", hashedVal, false)
 	if len(rows) > 0 {
 		if tm, err := TryParseStrToTime(rows[0]["clear"]); err == nil {
 			return tm, nil
@@ -130,7 +130,7 @@ func (d *Dates) FindHash(dtStr string) (string, error) {
         return "", err
     } else {
         str  := tm.Format("2006-01-02")
-		rows := d.c.Find("clear", str)
+		rows := d.c.Find("clear", str, false)
 		if len(rows) > 0 {
 			return rows[0]["hash"], nil
 		}

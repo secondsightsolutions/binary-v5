@@ -49,17 +49,16 @@ func ping() {
     }
     if strm, err := server.GetData(context.Background(), request); err == nil {
         if _, err := strm.Recv(); err == nil {
-            fmt.Println("successfully connected to server")
-            exit(0, "")
+            exit(nil, 0, "successfully connected to server")
             return
         } else if err != io.EOF {
-            exit(7, "failed to receive ping response from server: %s", err.Error())
+            exit(nil, 7, "failed to receive ping response from server: %s", err.Error())
         } else {
-            exit(8, "successfully connected to server: authorization provisioning required for (%s)", name)
+            exit(nil, 8, "successfully connected to server: authorization provisioning required for (%s)", name)
         }
     } else {
         fmt.Printf("%T\n", err)
-        exit(9, "failed to connect to server: %s", err.Error())
+        exit(nil, 9, "failed to connect to server: %s", err.Error())
     }
 }
 
@@ -87,24 +86,25 @@ func getData(pool, tbln, Manu string, filts map[string]string) chan data {
 				} else if err == io.EOF {
 					break
 				} else {
-					exit(17, "Cannot read data source %s:%s: %s", host, port, err.Error())
+					exit(nil, 17, "Cannot read data source %s:%s: %s", host, port, err.Error())
 				}
 			}
 			close(chn)
 		}(chn)
 		return chn
     } else {
-        exit(18, "cannot open grpc data source %s:%s: %s", host, port, err.Error())
+        exit(nil, 18, "cannot open grpc data source %s:%s: %s", host, port, err.Error())
     }
 	return nil
 }
 
-func putData(pool, tbln, oper string) chan data {
+func putData(pool, tbln, oper string) (chan data, chan data) {
     server := connect()
     if strm, err := server.PutData(context.Background()); err == nil {
-		chn := make(chan data, 500)
-		go func(chan data) {
-			for row := range chn {
+		in  := make(chan data, 500)
+		out := make(chan data, 500)
+		go func(chan data, chan data) {
+			for row := range in {
 				row["table/"] = tbln
 				row["pool/"]  = pool
 				row["oper/"]  = oper
@@ -112,15 +112,16 @@ func putData(pool, tbln, oper string) chan data {
 				row["vers/"]  = vers
 				row["manu/"]  = manu
 				if err := strm.Send(&api.Data{Fields: row}); err != nil {
-					exit(19, "cannot send to server: %s", err.Error())   // Requirement that failure to send to server causes immediate exit.
+					exit(nil, 19, "cannot send to server: %s", err.Error())   // Requirement that failure to send to server causes immediate exit.
 				}
+				out <-row
 			}
-		}(chn)
-		return chn
+		}(in, out)
+		return in, out
     } else {
-        exit(18, "cannot open grpc data source %s:%s: %s", host, port, err.Error())
+        exit(nil, 20, "cannot open grpc data source %s:%s: %s", host, port, err.Error())
     }
-	return nil
+	return nil, nil
 }
 
 func createScrub() int64 {
@@ -140,8 +141,8 @@ func createScrub() int64 {
     if res, err := server.NewScrub(context.Background(), req); err == nil {
         return res.Scid
     } else {
-        exit(99, "cannot create scrub: %s", err.Error())
-		return 99
+        exit(nil, 21, "cannot create scrub: %s", err.Error())
+		return -1
     }
 }
 
@@ -163,6 +164,23 @@ func update_scrub(sc *scrub, status string) error {
 	send["policy"]      = plcy
 	send["finished_at"] = time.Now().UTC().Format("2006-01-02 15:04:05.000000")
     
+	if c,ok := sc.cs["claims"]; ok {
+        sc.metr.clm_total = int64(len(c.rows))
+		for _, clm := range sc.cs["claims"].rows {
+            status := clm[Fields.Stat]
+            if status == "matched" {
+				sc.metr.clm_matched++
+				sc.metr.clm_valid++
+			} else if status == "invalid" {
+				sc.metr.clm_invalid++
+			} else {
+				sc.metr.clm_nomatch++
+				sc.metr.clm_valid++
+			}
+		}
+	}
+	sc.metr.rbt_valid = sc.metr.rbt_total - sc.metr.rbt_invalid
+
     if status == "" {
         sc.metr.Lock()
         send["rbt_total"]   = fmt.Sprintf("%d", sc.metr.rbt_total)
@@ -199,4 +217,21 @@ func update_scrub(sc *scrub, status string) error {
     } else {
         return err
     }
+}
+
+
+func (sc *scrub) update_spi_counts(which string) {
+    sc.metr.Lock()
+    switch which {
+    case "exact":
+        sc.metr.spi_exact++
+    case "cross":
+        sc.metr.spi_cross++
+    case "stack":
+        sc.metr.spi_stack++
+    case "chain":
+        sc.metr.spi_chain++
+    default:
+    }
+    sc.metr.Unlock()
 }

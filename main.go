@@ -79,6 +79,8 @@ func exit(sc *scrub, code int, msg string, args ...any) {
 		mesg = fmt.Sprintf(msg, nargs...)
 		fmt.Println(mesg)
 	}
-	update_scrub(sc, mesg)
+    if sc != nil {
+        update_scrub(sc, mesg)
+    }
 	os.Exit(code)
 }

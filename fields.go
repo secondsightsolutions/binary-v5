@@ -1,7 +1,5 @@
 package main
 
-import "strings"
-
 var Fields = struct {
     Stat    string  // status
     Auth    string
@@ -272,25 +270,4 @@ func ToFullName(short string) string {
         return short
     }
     return "" // Not a full name nor short name.
-}
-
-// fmDbCol() will take a table/column pair and return the full name.
-// Note that this is for handling odd cases - per table custom mappings.
-func fmDbCol(tbl, dbCol string) (full string) {
-    if strings.HasSuffix(tbl, "submission_rows") {
-        if strings.EqualFold(dbCol, "date_of_service") {
-            full = "date_of_fill"
-        } else {
-            full = dbCol
-        }
-    } else if strings.HasSuffix(tbl, "ndcs") {
-        if strings.EqualFold(dbCol, "item") {
-            full = "ndc"
-        } else {
-            full = dbCol
-        }
-    } else {
-        full = dbCol
-    }
-    return
 }

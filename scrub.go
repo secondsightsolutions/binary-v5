@@ -130,7 +130,7 @@ func (sc *scrub) read_rebates(wgrp *sync.WaitGroup, out chan data) {
 func (sc *scrub) read_rebates_worker(wgrp *sync.WaitGroup, in, out chan data) {
     for rbt := range in {
         sc.plcy.scrubRebate(sc, rbt)
-        sc.metr.update_rbt(sc, rbt)
+        sc.metr.update_rbt(rbt)
         out <-rbt
     }
     wgrp.Done()
@@ -166,16 +166,33 @@ func (sc *scrub) sort_rebates(wgrp *sync.WaitGroup, in, out chan data) {
     wgrp.Done()
 }
 func (sc *scrub) send_rebates(wgrp *sync.WaitGroup, in, out chan data) {
-    pool := sc.sr.files["rebates"].pool
-    tbln := sc.sr.files["rebates"].tbln
-    chn := putData(pool, tbln, "insert")
-    for rbt := range in {
-        chn <-rbt
+    pool  := sc.sr.files["rebates"].pool
+    tbln  := sc.sr.files["rebates"].tbln
+    do,di := putData(pool, tbln, "insert")  // do - data out (send to grpc), di - data in (back from grpc)
+    for {
+        select {
+        case rbt := <-in:       // Get rebate from previous stage.
+            if rbt != nil {     // Not nil, means channel still open. Previous stage still active and sending.
+                do <-rbt        // Send to grpc.
+            } else {
+                close(do)       // Close this side - tells grpc nothing more is coming.
+            }
+            
+        case rbt := <-di:       // Get rebate back from grpc (was sent up to server, so now we can print it).
+            if rbt != nil {     // Not nil, means channel still open.
+                out <-rbt
+            } else {
+                close(out)      // Tell next stage that we're done - nothing more coming.
+                goto done       // Is nil, means grpc has no work left to do, and closed the channel.
+            }
+        }
     }
-    close(chn)
+    done:
+    wgrp.Done()
 }
 func (sc *scrub) save_rebates(wgrp *sync.WaitGroup, in chan data, w io.Writer) {
     for rbt := range in {
+        sc.cs["rebates"].toFullNames(rbt)   // Converts short names back to full names (using mappings discovered on input).
         str := sc.plcy.result(sc, rbt)
         w.Write([]byte(str+"\n"))
     }

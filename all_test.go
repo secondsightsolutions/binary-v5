@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
 	"testing"
 )
@@ -54,30 +53,23 @@ func TestAmgen(t *testing.T) {
     w  := bufio.NewWriter(&b)
     sc := new_scrub(1)
     sc.sr.manu = "amgen"
-    sc.sr.data("rebates", amgenRebates, amgenHeaders, ",", "rxn", "")
-    sc.sr.data("claims",  amgenClaims,  "",           ",", "rxn", "")
+    sc.sr.data("rebates", amgenRebates, amgenHeaders, ",", "rxn")
+    sc.sr.data("claims",  amgenClaims,  "",           ",", "rxn")
     sc.run(w)
     w.Flush()
     testResults(t, amgenResults, b.String())
 }
 
 
-func (sr *scrub_req) file(name, file string, params map[string]string) error {
-    sf := &scrub_file{name: name, file: file, keyl: 3, csep: ","}
+func (sr *scrub_req) file(name, path string, params map[string]string) error {
+    sf := &scrub_file{name: name, path: path, csep: ","}
     if params != nil {
         sf.hdrs = params[fmt.Sprintf("%s_hdrs", name)]
         sf.csep = params[fmt.Sprintf("%s_csep", name)]
-        sf.keyn = params[fmt.Sprintf("%s_keyn", name)]
-        keyln  := params[fmt.Sprintf("%s_keyl", name)]
-        if keyln != "" {
-            if keyl, err := strconv.ParseInt(keyln, 10, 64); err == nil {
-                sf.keyl = int(keyl)
-            }
-        }
+        sf.keys = params[fmt.Sprintf("%s_keys", name)]
     }
     sr.files[name] = sf
-    full := fmt.Sprintf("tests/%s/%s", sr.manu, file)
-    if fd, err := os.Open(full); err == nil {
+    if fd, err := os.Open(path); err == nil {
         sf.rdr = fd
     } else {
         return err
@@ -85,18 +77,13 @@ func (sr *scrub_req) file(name, file string, params map[string]string) error {
     return nil
 }
 
-func (sr *scrub_req) data(name, data string, hdrs, csep, keyn, keyl string) {
-    sf := &scrub_file{name: name, keyl: 3, csep: ","}
+func (sr *scrub_req) data(name, data string, hdrs, csep, keys string) {
+    sf := &scrub_file{name: name, csep: ","}
     sr.files[name] = sf
     sf.hdrs = hdrs
-    sf.keyn = keyn
+    sf.keys = keys
     if csep != "" {
         sf.csep = csep
-    }
-    if keyl != "" {
-        if keyln, err := strconv.ParseInt(keyl, 10, 64); err == nil {
-            sf.keyl = int(keyln)
-        }
     }
     sf.rdr = strings.NewReader(data)
 }

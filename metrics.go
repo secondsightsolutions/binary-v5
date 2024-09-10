@@ -32,7 +32,7 @@ type metrics struct {
     dos_aft_dof int64
 }
 
-func (m *metrics) update_rbt(sc *scrub, rbt data) {
+func (m *metrics) update_rbt(rbt data) {
     m.Lock()
     m.rbt_total++
     switch rbt[api.Fields.Stat] {
@@ -51,12 +51,9 @@ func (m *metrics) update_rbt(sc *scrub, rbt data) {
     m.Unlock()
 }
 
-func (m *metrics) update_rbt_clm(sc *scrub, rbt data, clm data) {
-    // Get data from claim first. Don't like holding two locks at once.
-    sc.cs["claims"].Lock()
-    doc := clm[Fields.Doc]
+func (m *metrics) update_rbt_clm(rbt data, clm data) {
+    doc := clm[Fields.Doc]  // Claims are copies. No need to lock.
     dof := clm[Fields.Dof]
-    sc.cs["claims"].Unlock()
 
     m.Lock()
     if clm != nil {
@@ -78,55 +75,6 @@ func (m *metrics) update_rbt_clm(sc *scrub, rbt data, clm data) {
                 m.dos_aft_dof++
             }
         }
-    }
-    m.Unlock()
-}
-
-func (m *metrics) update_scrub(sc *scrub) {
-    matched := int64(0)
-    nomatch := int64(0)
-    valid   := int64(0)
-    invalid := int64(0)
-    total   := int64(0)
-	if c,ok := sc.cs["claims"]; ok {
-        total = int64(len(c.rows))
-        sc.cs["claims"].Lock()
-		for _, clm := range sc.cs["claims"].rows {
-            status := clm[Fields.Stat]
-            if status == "matched" {
-				matched++
-				valid++
-			} else if status == "invalid" {
-				invalid++
-			} else {
-				nomatch++
-				valid++
-			}
-		}
-        sc.cs["claims"].Unlock()
-	}
-    m.Lock()
-    m.clm_total   = total
-    m.clm_matched = matched
-    m.clm_invalid = invalid
-    m.clm_nomatch = nomatch
-    m.clm_valid   = valid
-	m.rbt_valid   = m.rbt_total - m.rbt_invalid
-	m.Unlock()
-}
-
-func (m *metrics) update_spi_counts(which string) {
-    m.Lock()
-    switch which {
-    case "exact":
-        m.spi_exact++
-    case "cross":
-        m.spi_cross++
-    case "stack":
-        m.spi_stack++
-    case "chain":
-        m.spi_chain++
-    default:
     }
     m.Unlock()
 }

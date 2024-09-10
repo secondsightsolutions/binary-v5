@@ -132,7 +132,7 @@ func (c *cache) index_data(keyn string, d data) {
     vw[keyv] = append(vw[keyv], d)
 }
 
-func (c *cache) Find(keyn, val string) []data {
+func (c *cache) Find(keyn, val string, copy bool) []data {
     c.Lock()
     defer c.Unlock()
 
@@ -149,7 +149,40 @@ func (c *cache) Find(keyn, val string) []data {
             c.index_data(keyn, d)
         }
     }
-    return vw[val]
+    rows := vw[val]
+    if copy {
+        if len(rows) > 0 {
+            cps := make([]map[string]string, 0, len(rows))
+            for _, row := range rows {
+                cp := map[string]string{}
+                for k,v := range row {
+                    cp[k] = v
+                }
+                cps = append(cps, cp)
+            }
+            return cps
+        }
+    }
+    return rows
+}
+func (c *cache) Update(upd data) {
+    c.Lock()
+    defer c.Unlock()
+    if vw := c.views["indx"];vw != nil {    // Special view always created - a view indexed by the row insertion index.
+        if list, ok := vw[upd["indx"]];ok { // Get the row(s) that have this same lookup value (upd["index"])
+            if len(list) == 1 {             // A view usually has only one row per lookup value (hopefully always true for indx!)
+                row := list[0]              // Should only be one!
+                for k,v := range upd {      // Take every k/v in the updated row...
+                    row[k] = v              // ...and write it into the row in the cache.
+                }
+                for k := range row {        // Now look at every key in the cache row...
+                    if _,ok := upd[k];!ok { // If it's not in the update we received, then the k/v was removed.
+                        delete(row, k)      // So remove it from the row in the cache.
+                    }
+                }
+            }
+        }
+    }
 }
 
 func sort_lists(keyn string, desc bool, uniq string, lists ...[]data) []data {
