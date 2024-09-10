@@ -8,7 +8,7 @@ import (
 
 
 func httpRun(w http.ResponseWriter, r *http.Request) {
-    sc := new_scrub()
+    sc := new_scrub(1)
 	httpInit(sc, sc.sr, r)
 	sc.run(w)
 }
@@ -39,7 +39,7 @@ func httpFiles(form *multipart.Form, sc *scrub) {
         }
         sc.sr.files[name] = sf
         httpParam(form, &sf.csep, fmt.Sprintf("%s_sep", name), false)
-        httpParam(form, &sf.keyn, fmt.Sprintf("%s_key", name), false)
+        httpParam(form, &sf.keys, fmt.Sprintf("%s_key", name), false)
     }
 }
 func httpParam(form *multipart.Form, dst *string, name string, req bool) {

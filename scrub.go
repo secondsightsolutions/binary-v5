@@ -10,26 +10,31 @@ import (
 )
 
 type scrub struct {
-    sr *scrub_req
-    cs map[string]*cache
+    scid int64
+    sr   *scrub_req
+    cs   map[string]*cache
     plcy *policy
+    atts *attempts
+    spis *SPIs
+    metr *metrics
 }
 
 type scrub_req struct {
     auth string
     manu string
     sort string         // The sort order for rebates (defaults to "indx", the generated ordinal position in the rebate file).
-    uniq string         // How we divide across rebate procs. All rebates with same value for "uniq" must go to same rebate proc. Defaults to "dos".
+    uniq string         // How we divide across rebate procs. All rebates with same value for "uniq" must go to same rebate proc.
     files map[string]*scrub_file // The set of input files (rebates, claims, LU tables).
 }
 
 type scrub_file struct {
     name string         // The name to use for the cache, like "rebates", "claims", "ndcs", etc.
-    file string         // Optional disk file name. Used by test code, http does not use it.
+    path string         // Disk file path. Either test dir or temp dir created by http upload.
+    pool string         // The pool name. If set, means we're getting from db, not from test file.
+    tbln string         // The table name. If set, means we're getting from db, not from test file.
     hdrs string         // If set, the mapping from input hdrs to attr names (hdr1=attr1;hdr2=attr2)
     csep string         // If set, the hdr/col separator in the input (defaults to ",")
-    keyn string         // If set, the attr name of the key (the index). Can be more than one (rxn;frxn).
-    keyl int            // The length of the key. Typically 3, meaning first three chars of key value (negative means start from end of key).
+    keys string         // If set, the attr name of the key(s) (index). Can be more than one (keyn;len;sort,...).
     rdr  io.Reader      // The file reader.
 }
 
@@ -38,28 +43,57 @@ type rbt_sort struct {
     rbt data
 }
 
-func new_scrub() *scrub {
-    return &scrub{
+func new_scrub(scid int64) *scrub {
+    sc := &scrub{
+        scid: scid,
     	sr:   &scrub_req{files: map[string]*scrub_file{}},
     	cs:   map[string]*cache{},
+        atts: new_attempts(),
+        spis: newSPIs(),
+        metr: &metrics{},
+    }
+    sc.sr.files["rebates"]  = &scrub_file{name: "rebates"}
+    sc.sr.files["claims"]   = &scrub_file{name: "claims",   pool: "citus",  tbln: "submission_rows"}
+    sc.sr.files["ndcs"]     = &scrub_file{name: "ndcs",     pool: "esp2",   tbln: "ndcs"}
+    sc.sr.files["spis"]     = &scrub_file{name: "spis",     pool: "esp2",   tbln: "ncpdp_providers"}
+    sc.sr.files["pharms"]   = &scrub_file{name: "pharms",   pool: "esp2",   tbln: "contracted_pharmacies"}
+    sc.sr.files["ents"]     = &scrub_file{name: "ents",     pool: "esp2",   tbln: "covered_entities"}
+    sc.sr.files["elig"]     = &scrub_file{name: "elig",     pool: "esp2",   tbln: "eligibility_ledger"}
+    sc.sr.files["esp1"]     = &scrub_file{name: "esp1",     pool: "esp2",   tbln: "esp1_providers"}
+    return sc
+}
+
+func (sc *scrub) load_caches() {
+    for _, sf := range sc.sr.files {
+        ca := new_cache(sf)
+        if sf.path == "" {
+            file := fmt.Sprintf("%s/%s.csv", sf.path, sf.name)
+            ca.getFile(file, sf.csep)
+        } else {
+            ca.getData(sf.pool, sf.tbln, manu, nil)
+        }
+        for _, skey := range ca.keys {
+            ca.Index(skey.keyn, skey.keyl)
+            ca.Sort(skey.keyn, skey.desc)
+        }
     }
 }
+
 func (sc *scrub) run(w io.Writer) {
-    for _, sf := range sc.sr.files {
-        sc.cs[sf.name] = sf.import_file()
-    }
     hdrs := strings.Join(sc.cs["rebates"].hdrs, ",")
     w.Write([]byte("stat,"+hdrs+"\n"))
     plcy := getPolicy(sc.sr.manu)
     wgrp := sync.WaitGroup{}
-    wgrp.Add(3)
-    chn1  := make(chan data, 100000)        // Connects rebate reader/workers to the rebate re-sorter.
-    chn2  := make(chan data, 100000)        // Connects rebate re-sorter to the result writer.
+    wgrp.Add(4)
+    chn1 := make(chan data, 100000)        // Connects rebate reader/workers to the rebate re-sorter.
+    chn2 := make(chan data, 100000)        // Connects rebate re-sorter to the rebate sender.
+    chn3 := make(chan data, 100000)        // Connects rebate sender to the result writer.
     sc.plcy = plcy
 
-    go sc.read_rebates(&wgrp, chn1)
-    go sc.sort_rebates(&wgrp, chn1, chn2)
-    go sc.save_rebates(&wgrp, chn2, w)      // The result writer thread. Reads the output from the rebate re-sorter.
+    go sc.read_rebates(&wgrp, chn1)         // Reads rebates from input source.
+    go sc.sort_rebates(&wgrp, chn1, chn2)   // Re-sorts the completed rebates coming from multiple workers.
+    go sc.send_rebates(&wgrp, chn2, chn3)   // Sends rebates up to server.
+    go sc.save_rebates(&wgrp, chn3, w)      // Writes rebates to output file.
 
     wgrp.Wait()
 }
@@ -72,22 +106,18 @@ func (sc *scrub) read_rebates(wgrp *sync.WaitGroup, out chan data) {
     for a := 0; a < len(chns); a++ {
         cgrp.Add(1)
         chns[a] = make(chan data, 20)
-        go sc.read_rebates_worker(cgrp, chns[a], out, a)
+        go sc.read_rebates_worker(cgrp, chns[a], out)
     }
     // Now that all rebate worker threads are started, feed them rebates.
-    if rbtc := sc.cs["rebates"]; rbtc != nil {      // *Should* always have this!
-        for i := 0; i < len(rbtc.elems); i++ {
-            indx := fmt.Sprintf("%d", i)
-            rbts := rbtc.Find("indx", indx)
-            if len(rbts) > 0 {
-                rbt := rbts[0]
-                if sc.sr.uniq != "" {
-                    indx = rbt[sc.sr.uniq]
-                }
-                slot := hashIndex(indx, thrs)
-                chns[slot] <-rbt
-            }
+    rbts := sc.cs["rebates"].rows
+    for i := 0; i < len(rbts); i++ {
+        rbt  := rbts[i]
+        indx := fmt.Sprintf("%d", i)
+        if sc.sr.uniq != "" {
+            indx = rbt[sc.sr.uniq]
         }
+        slot := hashIndex(indx, thrs)
+        chns[slot] <-rbt
     }
     // All rebates have been distributed to the worker channels. Now close our end.
     for _, chn := range chns {
@@ -97,9 +127,10 @@ func (sc *scrub) read_rebates(wgrp *sync.WaitGroup, out chan data) {
     close(out)     // Tell the next step in the pipe (the sort thread) that no more data coming.
     wgrp.Done()
 }
-func (sc *scrub) read_rebates_worker(wgrp *sync.WaitGroup, in, out chan data, wid int) {
+func (sc *scrub) read_rebates_worker(wgrp *sync.WaitGroup, in, out chan data) {
     for rbt := range in {
         sc.plcy.scrubRebate(sc, rbt)
+        sc.metr.update_rbt(sc, rbt)
         out <-rbt
     }
     wgrp.Done()
@@ -133,6 +164,15 @@ func (sc *scrub) sort_rebates(wgrp *sync.WaitGroup, in, out chan data) {
     }
     close(out)     // Tell the next step in the pipe (the result writer thread) no more data coming.
     wgrp.Done()
+}
+func (sc *scrub) send_rebates(wgrp *sync.WaitGroup, in, out chan data) {
+    pool := sc.sr.files["rebates"].pool
+    tbln := sc.sr.files["rebates"].tbln
+    chn := putData(pool, tbln, "insert")
+    for rbt := range in {
+        chn <-rbt
+    }
+    close(chn)
 }
 func (sc *scrub) save_rebates(wgrp *sync.WaitGroup, in chan data, w io.Writer) {
     for rbt := range in {

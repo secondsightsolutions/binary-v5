@@ -12,12 +12,22 @@ import (
 
 
 func TestMain(t *testing.T) {
-	sc := new_scrub()
-	sc.sr.file("rebates", "rebates.csv", nil)
-	sc.sr.file("claims",  "claims.csv",  nil)
-	sc.sr.manu = "amgen"
-	w,_ := os.Create("out.csv")
-	sc.run(w)
+	sc := new_scrub(1)
+    test := "test1"
+    sc.sr.manu = "amgen"
+	sc.sr.file("rebates", test + "/rebates.csv", nil)
+	sc.sr.file("claims",  test + "/claims.csv",  nil)
+    sc.sr.file("ldns",    test + "/ldns.csv",    nil)
+    sc.sr.file("desigs",  test + "/desigs.csv",  nil)
+    sc.sr.file("spis",    test + "/spis.csv",    nil)
+    sc.sr.file("ndcs",    test + "/ndcs.csv",    nil)
+    sc.sr.file("pharms",  test + "/pharms.csv",  nil)
+    sc.sr.file("entities",test + "/entities.csv",nil)
+    sc.sr.file("ledger",  test + "/ledger.csv",  nil)
+	w,_ := os.Create(test + "/out.csv")
+    bw  := bufio.NewWriter(w)
+	sc.run(bw)
+    bw.Flush()
 	fmt.Println("done")
 }
 
@@ -28,21 +38,21 @@ var amgenRebates =
 002,01/02/2024,22345678,99999999999
 003,01/01/2024,12399999,77777777777
 `
-var amgenClaims = `
-clid,dos,rxn,ndc
-001,01/01/2024,12345678,88888888888
-002,01/02/2024,22345678,99999999999
+var amgenClaims = 
+`clid,doc,rxn,ndc,cnfm,elig
+001,01/01/2024,12345678,88888888888,true,true
+002,01/02/2024,22345678,99999999999,true,true
 `
 var amgenResults = 
 `stat,rbid,dos,rxn,ndc
-nomatch,001,01/01/2024,12345678,88888888888
-nomatch,002,01/02/2024,22345678,99999999999
+matched,001,01/01/2024,12345678,88888888888
+matched,002,01/02/2024,22345678,99999999999
 nomatch,003,01/01/2024,12399999,77777777777
 `
 func TestAmgen(t *testing.T) {
     var b bytes.Buffer
     w  := bufio.NewWriter(&b)
-    sc := new_scrub()
+    sc := new_scrub(1)
     sc.sr.manu = "amgen"
     sc.sr.data("rebates", amgenRebates, amgenHeaders, ",", "rxn", "")
     sc.sr.data("claims",  amgenClaims,  "",           ",", "rxn", "")
@@ -66,7 +76,8 @@ func (sr *scrub_req) file(name, file string, params map[string]string) error {
         }
     }
     sr.files[name] = sf
-    if fd, err := os.Open(file); err == nil {
+    full := fmt.Sprintf("tests/%s/%s", sr.manu, file)
+    if fd, err := os.Open(full); err == nil {
         sf.rdr = fd
     } else {
         return err

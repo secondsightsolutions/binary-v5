@@ -1,67 +1,61 @@
 package main
 
 import (
-	"bufio"
-	"io"
-	"strings"
+    "bufio"
+    "io"
+    "os"
+    "strings"
 )
 
-func (sf *scrub_file) import_file() *cache {
-	cach := &cache{views: map[string]*view{}, elems: []*elem{}, hdrs: []string{}}
-	hdrM := map[string]string{}		// cust_hdr => proper_hdr
-	hdrI := map[int]string{}		// CSV indx => proper_hdr
-	if sf.hdrs != "" {					// rid=rebate_id,rxn=rx_number
-		toks := strings.Split(sf.hdrs, ",")
-		for _, tok := range toks {
-			nvp := strings.Split(tok, "=")
-			if len(nvp) == 2 {
-				cust := nvp[0]
-				prop := nvp[1]
-				hdrM[cust] = prop
-			}
-		}
-	}
-	if sf.keyn == "" {
-		sf.keyn = "indx"
-		sf.keyl = -3
-	}
-	if sf.keyl == 0 {
-		sf.keyl = 3
-	}
-	if sf.csep == "" {
-		sf.csep = ","
-	}
-	rdr := bufio.NewReader(sf.rdr)
-	for {
-		if line, _, err := rdr.ReadLine(); err == nil {
-			str  := string(line)
-			str  = strings.ReplaceAll(str, " ",  "")
-			str  = strings.ReplaceAll(str, "\t", "")
-			toks := strings.Split(str, sf.csep)
-			if len(cach.hdrs) == 0 {
-				cach.hdrs = toks
-				for i, hdr := range cach.hdrs {
-					if prop, ok := hdrM[hdr];ok {	// If this hdr is mapped to another value
-						hdrI[i] = prop				// then assume the other value is the 
-					} else {						// proper value to use.
-						hdrI[i] = hdr				// If no custom mapping, could still be a
-					}								// custom column - just keep name as is.
-				}
-			} else {
-				row := map[string]string{}
-				for i, fld := range toks {
-					if i < len(hdrI) {
-						row[hdrI[i]] = fld
-					}
-				}
-				cach.Add(row)
-			}
-		} else if err == io.EOF {
-			break
-		} else {
-			break
-		}
-	}
-	cach.Index(sf.keyn, sf.keyl)
-	return cach
+func (c *cache) getData(pool, tbln, manu string, filts map[string]string) {
+    for row := range getData(pool, tbln, manu, filts) {
+        c.toShortNames(row)
+        c.Add(row)
+    }
+}
+
+func (c *cache) getFile(path, csep string) {
+    if fd, err := os.Open(path); err == nil {
+        defer fd.Close()
+        br := bufio.NewReader(fd)
+        rn := 0
+        for {
+            if line, _, err := br.ReadLine(); err == nil {
+                str  := string(line)
+                str  = strings.ReplaceAll(str, " ",  "")
+                str  = strings.ReplaceAll(str, "\t", "")
+                if len(str) == 0 {
+                    continue
+                }
+                toks := strings.Split(str, csep)
+                row  := map[string]string{}
+                
+                if rn == 0 {
+                    // First line is the header row. Process the column headers.
+                    c.hdrs = toks
+                    for i, hdr := range toks {
+                        if prop, ok := c.hdrm[hdr];ok {	// If this hdr is mapped to another value
+                            c.hdri[i] = prop            // then assume the other value is the 
+                        } else {						// proper value to use.
+                            c.hdri[i] = hdr				// If no custom mapping, could still be a
+                        }								// custom column - just keep name as is.
+                    }
+                } else {
+                    // The rest of the rows are data rows.
+                    for i, fld := range toks {
+                        if i < len(c.hdri) {
+                            row[c.hdri[i]] = fld
+                        }
+                    }
+                    c.toShortNames(row)
+                    c.Add(row)
+                }
+                rn++
+            } else if err == io.EOF {
+                break
+            } else {
+                break
+            }
+        }
+    }
 }

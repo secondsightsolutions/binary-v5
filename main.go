@@ -1,10 +1,84 @@
 package main
 
-import "net/http"
+import (
+	"flag"
+	"fmt"
+	"net/http"
+	"os"
+	"strings"
+)
 
 func main() {
-	http.HandleFunc("/", httpRun)
-	http.ListenAndServe(":80", nil)
-	c := &cache{}
-	c.Find("", "")
+    CryptInit(cert, cacr, "", pkey, salt, phrs)
+    parseCommandLine()
+
+    if doPing {
+        ping()
+        return
+    } else if doVers {
+        version()
+        return
+    }
+
+    if Http {
+        http.HandleFunc("/", httpRun)
+        http.ListenAndServe(":80", nil)
+    } else {
+        scid = createScrub()
+        sc := new_scrub(scid)
+        sc.load_caches()
+        sc.spis.load(sc.cs["spis"])
+    }
+}
+
+func parseCommandLine() {
+    name   = strings.ToLower(X509cname())
+    
+    flag.StringVar(&auth,    "auth",     auth,    "Authorization token")
+    flag.BoolVar(&doPing,    "ping",     false,   "Ping the server and exit")
+    flag.BoolVar(&doVers,    "version",  false,   "Print application details and exit")
+    flag.BoolVar(&Http,      "http",     false,   "Run as HTTP server")
+    flag.StringVar(&fin,     "in",       fin,     "Rebate input file")
+    flag.StringVar(&fout,    "out",      fout,    "Rebate input file")
+    flag.StringVar(&test,    "test",     "",      "Test directory")
+
+    if Type != "manu" || strings.EqualFold(name, "brg") {
+        flag.StringVar(&manu, "manu", manu, "Manufacturer name")
+    }
+    if strings.EqualFold(name, "brg") {
+        flag.StringVar(&name,    "proc",       name,    "Run as processor name")
+    }
+
+    flag.Parse()
+}
+
+func version() {
+    fmt.Printf("%s: %s\n", "name", X509ou())
+    fmt.Printf("%s: %s\n", "desc", desc)
+    fmt.Printf("%s: %s\n", "type", Type)
+    fmt.Printf("%s: %s\n", "envr", envr)
+    fmt.Printf("%s: %s\n", "vers", vers)
+    fmt.Printf("%s: %s\n", "hash", hash)
+    fmt.Printf("%s: %s\n", "manu", manu)
+    fmt.Printf("%s: %s\n", "host", host)
+    fmt.Printf("%s: %s\n", "port", port)
+}
+
+func exit(sc *scrub, code int, msg string, args ...any) {
+	nargs := []any{}
+	for _, arg := range args {
+		if sarg, ok := arg.(string); ok {
+			sarg = strings.TrimPrefix(sarg, "rpc error: code = Unknown desc = ")
+			nargs = append(nargs, sarg)
+		} else {
+			nargs = append(nargs, arg)
+		}
+	}
+	mesg := ""
+	if msg != "" {
+		mesg = fmt.Sprintf(msg, nargs...)
+		fmt.Println(mesg)
+	}
+	update_scrub(sc, mesg)
+	os.Exit(code)
 }
