@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -159,6 +160,12 @@ func TryParseStrToTime(val string) (*time.Time, error) {
 		return nil, fmt.Errorf("not_date")
 	}
 }
+func StrDecToInt(val string) int {
+	if d, err := strconv.ParseInt(val, 10, 64); err == nil {
+		return int(d)
+	}
+	return 0
+}
 
 func TestTF(d data, attr string) bool {
 	if _tf, err := strconv.ParseBool(d[attr]); err == nil {
@@ -195,3 +202,81 @@ func Is64bitHash(val string) bool {
 	return len(val) == 64
 }
 
+var ScreenLevel = struct {
+	None int
+	Text int
+	Bars int
+	All  int
+}{ 0, 1, 2, 3}
+
+func screen(start time.Time, text string, current, max int, mfr, prc int, nl bool) {
+	// Rows that are "hidden" actually just have the N of M hidden. Still display the row, along with the continually updating times (all platforms) and memory usages (on linux).
+	_brg := strings.EqualFold("brg", X509ou())
+	_mnu := strings.EqualFold(Type, "manu")
+	_lvl := 0
+
+	if _brg {
+		_lvl = ScreenLevel.All
+	} else if _mnu {
+		_lvl = mfr
+	} else {
+		_lvl = prc
+	}
+	if _lvl == ScreenLevel.None {
+		return
+	}
+	
+	MemUse.Lock()
+	valid := MemUse.valid
+	ready := MemUse.ready
+	inuse := MemUse.inuse
+	avail := MemUse.avail
+	total := MemUse.total
+	used  := 0
+	MemUse.Unlock()
+	if total > 0 {
+		used = 100 - (avail*100)/total
+	}
+
+	dur := time.Since(start)
+	mil := dur.Milliseconds() % 1000
+	sec := dur.Milliseconds() / 1000 % 60
+	min := dur.Milliseconds() / 1000 / 60
+	den := dur.Milliseconds()
+	if den < 1000 {
+		den = 1000
+	}
+	per := (int64(current) * 1000) / den
+
+	fmt.Printf("\r%100s", " ")
+
+	timS := fmt.Sprintf("%s (%02dm.%02ds.%03dms)", start.Format("2006-01-02 15:04:05"), min, sec, mil)
+	memS := fmt.Sprintf(" (%5dM of %dM: %2d%% used)", inuse, total, used)
+	perS := fmt.Sprintf(" (%6d/sec) ", per)
+	barS := ""
+	txtS := fmt.Sprintf(" %-30s", text)
+	maxS := fmt.Sprintf(" %d of %d", current, max)
+	prtS := "\r" + timS
+	if !ready || !valid {
+		memS = ""
+	}
+	if valid {
+		prtS += memS
+	}
+	if _lvl == ScreenLevel.All {
+		prtS += perS
+	}
+	if _lvl >= ScreenLevel.Bars {
+		prtS += barS
+	}
+	if _lvl >= ScreenLevel.Text {
+		prtS += txtS
+	}
+	if _lvl == ScreenLevel.All {
+		prtS += maxS
+	}
+	fmt.Print(prtS)
+	if nl {
+		fmt.Println()
+	}
+}

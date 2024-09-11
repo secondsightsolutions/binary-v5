@@ -3,7 +3,6 @@ package main
 import (
 	"sync"
 
-	"github.com/secondsightsolutions/binary-v4/api"
 )
 
 type metrics struct {
@@ -35,7 +34,7 @@ type metrics struct {
 func (m *metrics) update_rbt(rbt data) {
     m.Lock()
     m.rbt_total++
-    switch rbt[api.Fields.Stat] {
+    switch rbt[Fields.Stat] {
     case "matched":
         m.rbt_matched++
     case "nomatch":

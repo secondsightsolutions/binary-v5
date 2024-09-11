@@ -9,14 +9,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/secondsightsolutions/binary-v4/api"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
 
-var server  api.BinarySvcClient
+var server  BinarySvcClient
 
-func connect() api.BinarySvcClient {
+func connect() BinarySvcClient {
 	target := fmt.Sprintf("%s:%s", host, port)
 	if server != nil {
 		return server
@@ -27,7 +26,7 @@ func connect() api.BinarySvcClient {
 	}
 	crd := credentials.NewTLS(cfg)
 	if conn, err := grpc.NewClient(target, grpc.WithTransportCredentials(crd)); err == nil {
-		server = api.NewBinarySvcClient(conn)
+		server = NewBinarySvcClient(conn)
 	} else {
 		fmt.Printf("failed to connect to grpc server at %s:%s: %s\n", host, port, err.Error())
 		os.Exit(27)
@@ -38,7 +37,7 @@ func connect() api.BinarySvcClient {
 func ping() {
     server  := connect()
     filter  := "filt/prid/="
-    request := &api.GetDataReq{
+    request := &GetDataReq{
         Attrs: map[string]string{
             "table/" : "rbtbin.proc",
             "pool/"  : "citus",
@@ -76,7 +75,7 @@ func getData(pool, tbln, Manu string, filts map[string]string) chan data {
 	if Manu != "" {
 		attrs["filt/manufacturer/="] = Manu
 	}
-    if strm, err := server.GetData(context.Background(), &api.GetDataReq{Attrs: attrs}); err == nil {
+    if strm, err := server.GetData(context.Background(), &GetDataReq{Attrs: attrs}); err == nil {
 		chn := make(chan data, 500)
 		go func(chan data) {
 			for {
@@ -111,7 +110,7 @@ func putData(pool, tbln, oper string) (chan data, chan data) {
 				row["auth/"]  = auth
 				row["vers/"]  = vers
 				row["manu/"]  = manu
-				if err := strm.Send(&api.Data{Fields: row}); err != nil {
+				if err := strm.Send(&Data{Fields: row}); err != nil {
 					exit(nil, 19, "cannot send to server: %s", err.Error())   // Requirement that failure to send to server causes immediate exit.
 				}
 				out <-row
@@ -126,7 +125,7 @@ func putData(pool, tbln, oper string) (chan data, chan data) {
 
 func createScrub() int64 {
 	host, _ := os.Hostname()
-	req := &api.NewScrubReq{
+	req := &NewScrubReq{
 		Auth: auth,
 		Manu: manu,
 		Proc: X509cname(),
@@ -210,7 +209,7 @@ func update_scrub(sc *scrub, status string) error {
     
     server := connect()
     if grpcStrm, err := server.PutData(context.Background()); err == nil {
-        err := grpcStrm.Send(&api.Data{Fields: send})
+        err := grpcStrm.Send(&Data{Fields: send})
         grpcStrm.CloseSend()
         time.Sleep(time.Duration(3)*time.Second)    // Crazy bug in grpc. Writes to server are buffered internally - no way to flush!
         return err

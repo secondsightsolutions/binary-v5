@@ -76,6 +76,7 @@ func (sc *scrub) load_caches() {
             ca.Index(skey.keyn, skey.keyl)
             ca.Sort(skey.keyn, skey.desc)
         }
+        sc.cs[sf.name] = ca
     }
 }
 

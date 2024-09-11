@@ -6,12 +6,14 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 )
 
 func main() {
     CryptInit(cert, cacr, "", pkey, salt, phrs)
+    getEnv()
     parseCommandLine()
-
+    
     if doPing {
         ping()
         return
@@ -20,15 +22,22 @@ func main() {
         return
     }
 
+    done := make(chan any)
+    go memoryWatch(done)
+
     if Http {
+        screen(time.Now(), "http binary starting", 0, 0, ScreenLevel.Text, ScreenLevel.Text, true)
         http.HandleFunc("/", httpRun)
         http.ListenAndServe(":80", nil)
     } else {
+        screen(time.Now(), "local binary starting", 0, 0, ScreenLevel.Text, ScreenLevel.Text, true)
         scid = createScrub()
         sc := new_scrub(scid)
         sc.load_caches()
         sc.spis.load(sc.cs["spis"])
+        screen(time.Now(), "local binary completed", 0, 0, ScreenLevel.Text, ScreenLevel.Text, true)
     }
+    done <-nil
 }
 
 func parseCommandLine() {
@@ -83,4 +92,25 @@ func exit(sc *scrub, code int, msg string, args ...any) {
         update_scrub(sc, mesg)
     }
 	os.Exit(code)
+}
+
+func getEnv() {
+    setIf(&manu,    "BIN_MANU")
+    setIf(&hash,    "BIN_HASH")
+    setIf(&pkey,    "BIN_PKEY")
+    setIf(&cacr,    "BIN_CACR")
+    setIf(&cert,    "BIN_MYCR")
+    setIf(&phrs,    "BIN_PHRS")
+    setIf(&salt,    "BIN_SALT")
+    setIf(&host,    "BIN_HOST")
+    setIf(&port,    "BIN_PORT")
+    setIf(&desc,    "BIN_DESC")
+    setIf(&envr,    "BIN_ENVR")
+    setIf(&auth,	"BIN_AUTH")
+}
+
+func setIf(envVar *string, envName string) {
+    if envVal := os.Getenv(envName); envVal != "" {
+        *envVar = envVal
+    }
 }
