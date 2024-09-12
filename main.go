@@ -26,16 +26,52 @@ func main() {
     memoryWatch(done)
 
     if Http {
-        screen(time.Now(), -1, 0, ScreenLevel.Text, ScreenLevel.Text, true, "http binary starting")
+        screen(time.Now(), nil, -1, 0, ScreenLevel.Text, ScreenLevel.Text, true, "http binary starting")
         http.HandleFunc("/", httpRun)
         http.ListenAndServe(":80", nil)
     } else {
-        screen(time.Now(), -1, 0, ScreenLevel.Text, ScreenLevel.Text, true, "local binary starting")
+        screen(time.Now(), nil, -1, 0, ScreenLevel.Text, ScreenLevel.Text, true, "local binary starting")
         scid = createScrub()
         sc := new_scrub(scid)
         sc.sr.files["rebates"].path = fin
         sc.load_caches()
         sc.spis.load(sc.cs["spis"])
+
+        bar := 0
+        now := time.Now()
+        screen(now, nil, -1, 0, ScreenLevel.Text, ScreenLevel.Text, false, "running a test (-1,0)")
+        for a := 0; a < 25; a++ {
+            screen(now, &bar, -1, 0, ScreenLevel.Text, ScreenLevel.Text, false, "running a test (-1,0)")
+            time.Sleep(time.Duration(500)*time.Millisecond)
+        }
+        screen(now, &bar, -1, 0, ScreenLevel.Text, ScreenLevel.Text, true, "running a test (-1,0)")
+
+        bar = 0
+        now = time.Now()
+        screen(now, nil, 0, 0, ScreenLevel.Text, ScreenLevel.Text, false, "running a test (0,0)")
+        for a := 0; a < 25; a++ {
+            screen(now, &bar, 0, 0, ScreenLevel.Text, ScreenLevel.Text, false, "running a test (0,0)")
+            time.Sleep(time.Duration(500)*time.Millisecond)
+        }
+        screen(now, &bar, 0, 0, ScreenLevel.Text, ScreenLevel.Text, true, "running a test (0,0)")
+
+        bar = 0
+        now = time.Now()
+        screen(now, nil, 0, 0, ScreenLevel.Text, ScreenLevel.Text, false, "running a test (n,0)")
+        for a := 0; a < 25; a++ {
+            screen(now, &bar, a, 0, ScreenLevel.Text, ScreenLevel.Text, false, "running a test (n,0)")
+            time.Sleep(time.Duration(500)*time.Millisecond)
+        }
+        screen(now, &bar, 24, 0, ScreenLevel.Text, ScreenLevel.Text, true, "running a test (n,0)")
+
+        bar = 0
+        now = time.Now()
+        screen(now, nil, 0, 25, ScreenLevel.Text, ScreenLevel.Text, false, "running a test (n,m)")
+        for a := 0; a < 25; a++ {
+            screen(now, &bar, a, 25, ScreenLevel.Text, ScreenLevel.Text, false, "running a test (n,m)")
+            time.Sleep(time.Duration(500)*time.Millisecond)
+        }
+        screen(now, &bar, 24, 25, ScreenLevel.Text, ScreenLevel.Text, true, "running a test (n,m)")
     }
     done <-nil
 }
@@ -48,7 +84,7 @@ func parseCommandLine() {
     flag.BoolVar(&doVers,    "version",  false,   "Print application details and exit")
     flag.BoolVar(&Http,      "http",     false,   "Run as HTTP server")
     flag.StringVar(&fin,     "in",       fin,     "Rebate input file")
-    flag.StringVar(&fout,    "out",      fout,    "Rebate input file")
+    flag.StringVar(&fout,    "out",      fout,    "Rebate output file")
     flag.StringVar(&test,    "test",     "",      "Test directory")
 
     if Type != "manu" || strings.EqualFold(name, "brg") {

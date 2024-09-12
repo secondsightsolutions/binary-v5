@@ -38,10 +38,11 @@ func (c *cache) getFile(name, path, csep string) error {
         return err
     }
     now := time.Now()
-    screen(now, 0, lines, ScreenLevel.All, level, false, "loading %s", name)
+    bar := 0
     if fd, err := os.Open(path); err == nil {
         defer fd.Close()
         br := bufio.NewReader(fd)
+        hd := true
         rn := 0
         for {
             if line, _, err := br.ReadLine(); err == nil {
@@ -54,7 +55,7 @@ func (c *cache) getFile(name, path, csep string) error {
                 toks := strings.Split(str, csep)
                 row  := map[string]string{}
                 
-                if rn == 0 {
+                if hd {
                     // First line is the header row. Process the column headers.
                     c.hdrs = toks
                     for i, hdr := range toks {
@@ -64,30 +65,35 @@ func (c *cache) getFile(name, path, csep string) error {
                             c.hdri[i] = hdr				// If no custom mapping, could still be a
                         }								// custom column - just keep name as is.
                     }
-                } else {
-                    // The rest of the rows are data rows.
-                    for i, fld := range toks {
-                        if i < len(c.hdri) {
-                            row[c.hdri[i]] = fld
-                        }
+                    hd = false
+                    continue
+                }
+                // The rest of the rows are data rows.
+                for i, fld := range toks {
+                    if i < len(c.hdri) {
+                        row[c.hdri[i]] = fld
                     }
-                    c.toShortNames(row)
-                    c.Add(row)
                 }
+                c.toShortNames(row)
+                c.Add(row)
+                
+                //if (rn)%5000 == 0 {
+                    screen(now, &bar, rn, lines, ScreenLevel.All, level, false, "loading %s", name)
+                //}
                 rn++
-                if (rn-1)%5000 == 0 {
-                    screen(now, rn-1, lines, ScreenLevel.All, level, false, "loading %s", name)
-                }
             } else if err == io.EOF {
+                if rn > 0 {
+                    rn--
+                }
                 break
             } else {
-                screen(now, rn-1, lines, ScreenLevel.All, level, true, "loading %s", name)
+                screen(now, &bar, rn, lines, ScreenLevel.All, level, true, "loading %s", name)
                 return err
             }
         }
-        screen(now, rn-1, lines, ScreenLevel.All, level, true, "loading %s", name)
+        screen(now, &bar, rn, lines, ScreenLevel.All, level, true, "loading %s", name)
     } else {
-        screen(now, 0, lines, ScreenLevel.All, level, true, "loading %s", name)
+        screen(now, &bar, 0, lines, ScreenLevel.All, level, true, "loading %s", name)
     }
     return nil
 }

@@ -211,11 +211,12 @@ var ScreenLevel = struct {
 	All  int
 }{ 0, 1, 2, 3}
 
-func screen(start time.Time, cur, max int, mfr, prc int, nl bool, text string, args ...any) {
+func screen(start time.Time, bar *int, cur, max int, mfr, prc int, nl bool, text string, args ...any) {
 	// Rows that are "hidden" actually just have the N of M hidden. Still display the row, along with the continually updating times (all platforms) and memory usages (on linux).
 	_brg := strings.EqualFold("brg", X509ou())
 	_mnu := strings.EqualFold(Type, "manu")
 	_lvl := 0
+	bars := 20
 	if _brg {
 		_lvl = ScreenLevel.All
 	} else if _mnu {
@@ -247,11 +248,30 @@ func screen(start time.Time, cur, max int, mfr, prc int, nl bool, text string, a
 	if den < 1000 {
 		den = 1000
 	}
-	per := (int64(cur) * 1000) / den
+	per := (int64(cur+1) * 1000) / den
 	if cur < 0 {
 		per = 0
 	}
+	cnt := 0
+	if max > 0 {
+		fcr := float32(cur+1)
+		fmx := float32(max)
+		pct := fcr/fmx
+		cnt = int(float32(bars) * pct)
+		if cnt == 0 {
+			cnt = 1
+		} else if cnt > bars {	// Should never happen.
+			cnt = bars
+		}
 
+	} else if bar != nil {
+		if nl {
+			cnt = (*bar%bars)
+		} else {
+			cnt = (*bar%bars)+1
+		}
+		*bar++
+	}
 	fmt.Printf("\r%100s", " ")
 
 	timS := fmt.Sprintf("%s (%02dm.%02ds.%03dms)", start.Format("2006-01-02 15:04:05"), min, sec, mil)
@@ -260,14 +280,17 @@ func screen(start time.Time, cur, max int, mfr, prc int, nl bool, text string, a
 	barS := ""
 	text = fmt.Sprintf(text, args...)
 	txtS := fmt.Sprintf(" %-30s", text)
-	curS := fmt.Sprintf(" %d", cur)
-	maxS := fmt.Sprintf(" %d of %d", cur, max)
+	curS := fmt.Sprintf(" %d", cur+1)
+	maxS := fmt.Sprintf(" %d of %d", cur+1, max)
 	prtS := "\r" + timS
 	if !ready || !valid {
 		memS = ""
 	}
 	if valid {
 		prtS += memS
+	}
+	if bar != nil {
+		barS = "[" + fmt.Sprintf("%-*s", bars, strings.Repeat("#", cnt))  + "]"
 	}
 	if cur >= 0 {
 		if _lvl == ScreenLevel.All {
