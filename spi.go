@@ -60,6 +60,9 @@ func newSPIs() *SPIs {
 }
 
 func (spis *SPIs) load(c *cache) {
+    if c == nil {
+        return
+    }
     spis.Lock()
     defer spis.Unlock()
     if len(spis.idMap) == 0 && len(spis.deaMap) == 0 {

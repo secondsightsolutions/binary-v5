@@ -52,23 +52,24 @@ func new_scrub(scid int64) *scrub {
         spis: newSPIs(),
         metr: &metrics{},
     }
-    sc.sr.files["rebates"]  = &scrub_file{name: "rebates"}
-    sc.sr.files["claims"]   = &scrub_file{name: "claims",   pool: "citus",  tbln: "submission_rows"}
-    sc.sr.files["ndcs"]     = &scrub_file{name: "ndcs",     pool: "esp2",   tbln: "ndcs"}
-    sc.sr.files["spis"]     = &scrub_file{name: "spis",     pool: "esp2",   tbln: "ncpdp_providers"}
-    sc.sr.files["pharms"]   = &scrub_file{name: "pharms",   pool: "esp2",   tbln: "contracted_pharmacies"}
-    sc.sr.files["ents"]     = &scrub_file{name: "ents",     pool: "esp2",   tbln: "covered_entities"}
-    sc.sr.files["elig"]     = &scrub_file{name: "elig",     pool: "esp2",   tbln: "eligibility_ledger"}
-    sc.sr.files["esp1"]     = &scrub_file{name: "esp1",     pool: "esp2",   tbln: "esp1_providers"}
+    sc.sr.files["rebates"]  = &scrub_file{name: "rebates", csep: ","}
+    // sc.sr.files["claims"]   = &scrub_file{name: "claims",   pool: "citus",  tbln: "submission_rows"}
+    // sc.sr.files["ndcs"]     = &scrub_file{name: "ndcs",     pool: "esp2",   tbln: "ndcs"}
+    // sc.sr.files["spis"]     = &scrub_file{name: "spis",     pool: "esp2",   tbln: "ncpdp_providers"}
+    // sc.sr.files["pharms"]   = &scrub_file{name: "pharms",   pool: "esp2",   tbln: "contracted_pharmacies"}
+    // sc.sr.files["ents"]     = &scrub_file{name: "ents",     pool: "esp2",   tbln: "covered_entities"}
+    // sc.sr.files["elig"]     = &scrub_file{name: "elig",     pool: "esp2",   tbln: "eligibility_ledger"}
+    // sc.sr.files["esp1"]     = &scrub_file{name: "esp1",     pool: "esp2",   tbln: "esp1_providers"}
     return sc
 }
 
 func (sc *scrub) load_caches() {
     for _, sf := range sc.sr.files {
         ca := new_cache(sf)
-        if sf.path == "" {
-            file := fmt.Sprintf("%s/%s.csv", sf.path, sf.name)
-            ca.getFile(file, sf.csep)
+        if sf.path != "" {
+            if err := ca.getFile(sf.name, sf.path, sf.csep); err != nil {
+                exit(sc, 1, "failed to load cache %s from file %s: %s", sf.name, sf.path, err.Error())
+            }
         } else {
             ca.getData(sf.pool, sf.tbln, manu, nil)
         }

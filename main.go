@@ -23,19 +23,19 @@ func main() {
     }
 
     done := make(chan any)
-    go memoryWatch(done)
+    memoryWatch(done)
 
     if Http {
-        screen(time.Now(), "http binary starting", 0, 0, ScreenLevel.Text, ScreenLevel.Text, true)
+        screen(time.Now(), -1, 0, ScreenLevel.Text, ScreenLevel.Text, true, "http binary starting")
         http.HandleFunc("/", httpRun)
         http.ListenAndServe(":80", nil)
     } else {
-        screen(time.Now(), "local binary starting", 0, 0, ScreenLevel.Text, ScreenLevel.Text, true)
+        screen(time.Now(), -1, 0, ScreenLevel.Text, ScreenLevel.Text, true, "local binary starting")
         scid = createScrub()
         sc := new_scrub(scid)
+        sc.sr.files["rebates"].path = fin
         sc.load_caches()
         sc.spis.load(sc.cs["spis"])
-        screen(time.Now(), "local binary completed", 0, 0, ScreenLevel.Text, ScreenLevel.Text, true)
     }
     done <-nil
 }

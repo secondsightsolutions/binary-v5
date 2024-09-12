@@ -1,10 +1,11 @@
 package main
 
 import (
-    "bufio"
-    "io"
-    "os"
-    "strings"
+	"bufio"
+	"io"
+	"os"
+	"strings"
+	"time"
 )
 
 func (c *cache) getData(pool, tbln, manu string, filts map[string]string) {
@@ -14,7 +15,30 @@ func (c *cache) getData(pool, tbln, manu string, filts map[string]string) {
     }
 }
 
-func (c *cache) getFile(path, csep string) {
+func (c *cache) getFile(name, path, csep string) error {
+    lines := 0
+    level := ScreenLevel.All
+    if strings.EqualFold(Type, "proc") {
+        if name != "rebates" {
+            level = ScreenLevel.None
+        }
+    }
+    if fd, err := os.Open(path); err == nil {
+        if cnt, err := lineCounter(fd); err == nil {
+            lines = cnt
+            if csep != "" {     // If not FW (so there's a header row)
+                if lines > 0 {
+                    lines--
+                }
+            }
+        } else {
+            return err
+        }
+    } else {
+        return err
+    }
+    now := time.Now()
+    screen(now, 0, lines, ScreenLevel.All, level, false, "loading %s", name)
     if fd, err := os.Open(path); err == nil {
         defer fd.Close()
         br := bufio.NewReader(fd)
@@ -51,11 +75,19 @@ func (c *cache) getFile(path, csep string) {
                     c.Add(row)
                 }
                 rn++
+                if (rn-1)%5000 == 0 {
+                    screen(now, rn-1, lines, ScreenLevel.All, level, false, "loading %s", name)
+                }
             } else if err == io.EOF {
                 break
             } else {
-                break
+                screen(now, rn-1, lines, ScreenLevel.All, level, true, "loading %s", name)
+                return err
             }
         }
+        screen(now, rn-1, lines, ScreenLevel.All, level, true, "loading %s", name)
+    } else {
+        screen(now, 0, lines, ScreenLevel.All, level, true, "loading %s", name)
     }
+    return nil
 }

@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 	"time"
@@ -209,12 +211,11 @@ var ScreenLevel = struct {
 	All  int
 }{ 0, 1, 2, 3}
 
-func screen(start time.Time, text string, current, max int, mfr, prc int, nl bool) {
+func screen(start time.Time, cur, max int, mfr, prc int, nl bool, text string, args ...any) {
 	// Rows that are "hidden" actually just have the N of M hidden. Still display the row, along with the continually updating times (all platforms) and memory usages (on linux).
 	_brg := strings.EqualFold("brg", X509ou())
 	_mnu := strings.EqualFold(Type, "manu")
 	_lvl := 0
-
 	if _brg {
 		_lvl = ScreenLevel.All
 	} else if _mnu {
@@ -246,7 +247,10 @@ func screen(start time.Time, text string, current, max int, mfr, prc int, nl boo
 	if den < 1000 {
 		den = 1000
 	}
-	per := (int64(current) * 1000) / den
+	per := (int64(cur) * 1000) / den
+	if cur < 0 {
+		per = 0
+	}
 
 	fmt.Printf("\r%100s", " ")
 
@@ -254,8 +258,10 @@ func screen(start time.Time, text string, current, max int, mfr, prc int, nl boo
 	memS := fmt.Sprintf(" (%5dM of %dM: %2d%% used)", inuse, total, used)
 	perS := fmt.Sprintf(" (%6d/sec) ", per)
 	barS := ""
+	text = fmt.Sprintf(text, args...)
 	txtS := fmt.Sprintf(" %-30s", text)
-	maxS := fmt.Sprintf(" %d of %d", current, max)
+	curS := fmt.Sprintf(" %d", cur)
+	maxS := fmt.Sprintf(" %d of %d", cur, max)
 	prtS := "\r" + timS
 	if !ready || !valid {
 		memS = ""
@@ -263,20 +269,52 @@ func screen(start time.Time, text string, current, max int, mfr, prc int, nl boo
 	if valid {
 		prtS += memS
 	}
-	if _lvl == ScreenLevel.All {
-		prtS += perS
-	}
-	if _lvl >= ScreenLevel.Bars {
-		prtS += barS
+	if cur >= 0 {
+		if _lvl == ScreenLevel.All {
+			prtS += perS
+		}
+		if _lvl >= ScreenLevel.Bars {
+			prtS += barS
+		}
 	}
 	if _lvl >= ScreenLevel.Text {
 		prtS += txtS
 	}
-	if _lvl == ScreenLevel.All {
-		prtS += maxS
+	if cur >= 0 {
+		if _lvl == ScreenLevel.All {
+			if max > 0 {
+				prtS += maxS
+			} else {
+				prtS += curS
+			}
+		}
 	}
 	fmt.Print(prtS)
 	if nl {
 		fmt.Println()
+	}
+}
+
+func lineCounter(r io.Reader) (int, error) {
+	buf := make([]byte, 32*1024)
+	count := 0
+	lineSep := []byte{'\n'}
+	var last byte
+
+	for {
+		c, err := r.Read(buf)
+		count += bytes.Count(buf[:c], lineSep)
+		if c != 0 {
+			last = buf[c-1]
+		}
+		switch {
+		case err == io.EOF:
+			if last != lineSep[0] {
+				count++
+			}
+			return count, nil
+		case err != nil:
+			return count, err
+		}
 	}
 }
