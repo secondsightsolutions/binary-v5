@@ -2,6 +2,7 @@ package main
 
 var Fields = struct {
     Stat    string  // status
+    Rbid    string  // rebate_id
     Auth    string
     Vers    string
     Manu    string  // manufacturer
@@ -73,6 +74,7 @@ var Fields = struct {
     Mrst   string   // MRS_Status
 }{
     "stat",
+    "rbid",
     "auth",
     "vers",
     "manu",
@@ -146,6 +148,7 @@ var Fields = struct {
 
 var FullToShort = map[string]string{
     "status":                           Fields.Stat,
+    "rebate_id":                        Fields.Rbid,
     "manufacturer":                     Fields.Manu,
     "manufacturer_name":                Fields.Manu,
     "manu":                             Fields.Manu,
@@ -203,6 +206,7 @@ var FullToShort = map[string]string{
 
 var ShortToFull = map[string]string{
     Fields.Stat:    "status",
+    Fields.Rbid:    "rebate_id",
     Fields.Manu:    "manufacturer",
     Fields.Envr:    "environment",
     Fields.Spid:    "service_provider_id",

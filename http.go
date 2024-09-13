@@ -8,9 +8,9 @@ import (
 
 
 func httpRun(w http.ResponseWriter, r *http.Request) {
-    sc := new_scrub(1)
+    sc := new_scrub(1, "amgen")
 	httpInit(sc, sc.sr, r)
-	sc.run(w)
+	sc.run()
 }
 
 func httpInit(sc *scrub, sr *scrub_req, r *http.Request) error {

@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"io"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -24,6 +26,7 @@ type scrub_req struct {
     manu string
     sort string         // The sort order for rebates (defaults to "indx", the generated ordinal position in the rebate file).
     uniq string         // How we divide across rebate procs. All rebates with same value for "uniq" must go to same rebate proc.
+    outf string         // The output file.
     files map[string]*scrub_file // The set of input files (rebates, claims, LU tables).
 }
 
@@ -32,7 +35,7 @@ type scrub_file struct {
     path string         // Disk file path. Either test dir or temp dir created by http upload.
     pool string         // The pool name. If set, means we're getting from db, not from test file.
     tbln string         // The table name. If set, means we're getting from db, not from test file.
-    hdrs string         // If set, the mapping from input hdrs to attr names (hdr1=attr1;hdr2=attr2)
+    hdrm string         // If set, the mapping from input hdrs to attr names (hdr1=attr1;hdr2=attr2)
     csep string         // If set, the hdr/col separator in the input (defaults to ",")
     keys string         // If set, the attr name of the key(s) (index). Can be more than one (keyn;len;sort,...).
     rdr  io.Reader      // The file reader.
@@ -43,16 +46,17 @@ type rbt_sort struct {
     rbt data
 }
 
-func new_scrub(scid int64) *scrub {
+func new_scrub(scid int64, manu string) *scrub {
     sc := &scrub{
         scid: scid,
-    	sr:   &scrub_req{files: map[string]*scrub_file{}},
+    	sr:   &scrub_req{manu: manu, files: map[string]*scrub_file{}},
     	cs:   map[string]*cache{},
         atts: new_attempts(),
         spis: newSPIs(),
         metr: &metrics{},
+        plcy: getPolicy(manu),
     }
-    sc.sr.files["rebates"]  = &scrub_file{name: "rebates", csep: ","}
+    sc.sr.files["rebates"]  = &scrub_file{name: "rebates", csep: ",", hdrm: "rxnum=rxn;hrxnum=hrxn"}
     // sc.sr.files["claims"]   = &scrub_file{name: "claims",   pool: "citus",  tbln: "submission_rows"}
     // sc.sr.files["ndcs"]     = &scrub_file{name: "ndcs",     pool: "esp2",   tbln: "ndcs"}
     // sc.sr.files["spis"]     = &scrub_file{name: "spis",     pool: "esp2",   tbln: "ncpdp_providers"}
@@ -67,7 +71,7 @@ func (sc *scrub) load_caches() {
     for _, sf := range sc.sr.files {
         ca := new_cache(sf)
         if sf.path != "" {
-            if err := ca.getFile(sf.name, sf.path, sf.csep); err != nil {
+            if err := ca.getFile(sf); err != nil {
                 exit(sc, 1, "failed to load cache %s from file %s: %s", sf.name, sf.path, err.Error())
             }
         } else {
@@ -81,21 +85,17 @@ func (sc *scrub) load_caches() {
     }
 }
 
-func (sc *scrub) run(w io.Writer) {
-    hdrs := strings.Join(sc.cs["rebates"].hdrs, ",")
-    w.Write([]byte("stat,"+hdrs+"\n"))
-    plcy := getPolicy(sc.sr.manu)
+func (sc *scrub) run() {
     wgrp := sync.WaitGroup{}
     wgrp.Add(4)
     chn1 := make(chan data, 100000)        // Connects rebate reader/workers to the rebate re-sorter.
     chn2 := make(chan data, 100000)        // Connects rebate re-sorter to the rebate sender.
     chn3 := make(chan data, 100000)        // Connects rebate sender to the result writer.
-    sc.plcy = plcy
 
     go sc.read_rebates(&wgrp, chn1)         // Reads rebates from input source.
     go sc.sort_rebates(&wgrp, chn1, chn2)   // Re-sorts the completed rebates coming from multiple workers.
     go sc.send_rebates(&wgrp, chn2, chn3)   // Sends rebates up to server.
-    go sc.save_rebates(&wgrp, chn3, w)      // Writes rebates to output file.
+    go sc.save_rebates(&wgrp, chn3)         // Writes rebates to output file.
 
     wgrp.Wait()
 }
@@ -168,35 +168,54 @@ func (sc *scrub) sort_rebates(wgrp *sync.WaitGroup, in, out chan data) {
     wgrp.Done()
 }
 func (sc *scrub) send_rebates(wgrp *sync.WaitGroup, in, out chan data) {
-    pool  := sc.sr.files["rebates"].pool
-    tbln  := sc.sr.files["rebates"].tbln
-    do,di := putData(pool, tbln, "insert")  // do - data out (send to grpc), di - data in (back from grpc)
+    // pool  := sc.sr.files["rebates"].pool
+    // tbln  := sc.sr.files["rebates"].tbln
+    // do,di := putData(pool, tbln, "insert")  // do - data out (send to grpc), di - data in (back from grpc)
+    // for {
+    //     select {
+    //     case rbt := <-in:       // Get rebate from previous stage.
+    //         if rbt != nil {     // Not nil, means channel still open. Previous stage still active and sending.
+    //             do <-rbt        // Send to grpc.
+    //         } else {
+    //             close(do)       // Close this side - tells grpc nothing more is coming.
+    //         }
+            
+    //     case rbt := <-di:       // Get rebate back from grpc (was sent up to server, so now we can print it).
+    //         if rbt != nil {     // Not nil, means channel still open.
+    //             out <-rbt
+    //         } else {
+    //             close(out)      // Tell next stage that we're done - nothing more coming.
+    //             goto done       // Is nil, means grpc has no work left to do, and closed the channel.
+    //         }
+    //     }
+    // }
     for {
         select {
         case rbt := <-in:       // Get rebate from previous stage.
             if rbt != nil {     // Not nil, means channel still open. Previous stage still active and sending.
-                do <-rbt        // Send to grpc.
-            } else {
-                close(do)       // Close this side - tells grpc nothing more is coming.
-            }
-            
-        case rbt := <-di:       // Get rebate back from grpc (was sent up to server, so now we can print it).
-            if rbt != nil {     // Not nil, means channel still open.
-                out <-rbt
+                out <-rbt       // Send to grpc.
             } else {
                 close(out)      // Tell next stage that we're done - nothing more coming.
-                goto done       // Is nil, means grpc has no work left to do, and closed the channel.
+                goto done
             }
         }
     }
     done:
     wgrp.Done()
 }
-func (sc *scrub) save_rebates(wgrp *sync.WaitGroup, in chan data, w io.Writer) {
-    for rbt := range in {
-        sc.cs["rebates"].toFullNames(rbt)   // Converts short names back to full names (using mappings discovered on input).
-        str := sc.plcy.result(sc, rbt)
-        w.Write([]byte(str+"\n"))
+func (sc *scrub) save_rebates(wgrp *sync.WaitGroup, in chan data) {
+    if fd, err := os.Create(sc.sr.outf); err == nil {
+        w := bufio.NewWriter(fd)
+        hdrs := strings.Join(sc.cs["rebates"].hdrs, ",")
+        w.Write([]byte("stat,"+hdrs+"\n"))
+        for rbt := range in {
+            str := sc.plcy.result(sc, rbt)
+            w.Write([]byte(str+"\n"))
+        }
+        w.Flush()
+        fd.Close()
+    } else {
+        exit(sc, 1, "cannot create output file (%s): %s", sc.sr.outf, err.Error())
     }
     wgrp.Done()
 }

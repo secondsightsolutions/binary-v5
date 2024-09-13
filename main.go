@@ -32,46 +32,12 @@ func main() {
     } else {
         screen(time.Now(), nil, -1, 0, ScreenLevel.Text, ScreenLevel.Text, true, "local binary starting")
         scid = createScrub()
-        sc := new_scrub(scid)
+        sc := new_scrub(scid, manu)
         sc.sr.files["rebates"].path = fin
+        sc.sr.outf = fout
         sc.load_caches()
         sc.spis.load(sc.cs["spis"])
-
-        bar := 0
-        now := time.Now()
-        screen(now, nil, -1, 0, ScreenLevel.Text, ScreenLevel.Text, false, "running a test (-1,0)")
-        for a := 0; a < 25; a++ {
-            screen(now, &bar, -1, 0, ScreenLevel.Text, ScreenLevel.Text, false, "running a test (-1,0)")
-            time.Sleep(time.Duration(500)*time.Millisecond)
-        }
-        screen(now, &bar, -1, 0, ScreenLevel.Text, ScreenLevel.Text, true, "running a test (-1,0)")
-
-        bar = 0
-        now = time.Now()
-        screen(now, nil, 0, 0, ScreenLevel.Text, ScreenLevel.Text, false, "running a test (0,0)")
-        for a := 0; a < 25; a++ {
-            screen(now, &bar, 0, 0, ScreenLevel.Text, ScreenLevel.Text, false, "running a test (0,0)")
-            time.Sleep(time.Duration(500)*time.Millisecond)
-        }
-        screen(now, &bar, 0, 0, ScreenLevel.Text, ScreenLevel.Text, true, "running a test (0,0)")
-
-        bar = 0
-        now = time.Now()
-        screen(now, nil, 0, 0, ScreenLevel.Text, ScreenLevel.Text, false, "running a test (n,0)")
-        for a := 0; a < 25; a++ {
-            screen(now, &bar, a, 0, ScreenLevel.Text, ScreenLevel.Text, false, "running a test (n,0)")
-            time.Sleep(time.Duration(500)*time.Millisecond)
-        }
-        screen(now, &bar, 24, 0, ScreenLevel.Text, ScreenLevel.Text, true, "running a test (n,0)")
-
-        bar = 0
-        now = time.Now()
-        screen(now, nil, 0, 25, ScreenLevel.Text, ScreenLevel.Text, false, "running a test (n,m)")
-        for a := 0; a < 25; a++ {
-            screen(now, &bar, a, 25, ScreenLevel.Text, ScreenLevel.Text, false, "running a test (n,m)")
-            time.Sleep(time.Duration(500)*time.Millisecond)
-        }
-        screen(now, &bar, 24, 25, ScreenLevel.Text, ScreenLevel.Text, true, "running a test (n,m)")
+        sc.run()
     }
     done <-nil
 }
@@ -93,8 +59,10 @@ func parseCommandLine() {
     if strings.EqualFold(name, "brg") {
         flag.StringVar(&name,    "proc",       name,    "Run as processor name")
     }
-
     flag.Parse()
+    if manu == "" {
+        exit(nil, 1, "missing manu")
+    }
 }
 
 func version() {

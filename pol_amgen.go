@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"time"
 )
 
@@ -105,5 +106,16 @@ func amgenScrubRebate(sc *scrub, rbt data) {
 	rbt["stat"] = "nomatch"
 }
 func amgenResult(sc *scrub, rbt data) string {
-	return rbt["stat"] + "," + rbt["rbid"] + "," + rbt["dos"] + "," + rbt["rxn"] + "," + rbt["ndc"]
+	var sb bytes.Buffer
+	rbts := sc.cs["rebates"]
+	sb.WriteString(rbt["stat"])
+	sb.WriteString(",")
+	for i, hdr := range rbts.hdrs {		// These are the original headers we received on import.
+		shrn := rbts.GetShortName(hdr)
+		sb.WriteString(rbt[shrn])
+		if i < len(rbts.hdrs)-1 {
+			sb.WriteString(",")
+		}
+	}
+	return sb.String()
 }

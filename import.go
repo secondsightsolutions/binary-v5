@@ -15,7 +15,10 @@ func (c *cache) getData(pool, tbln, manu string, filts map[string]string) {
     }
 }
 
-func (c *cache) getFile(name, path, csep string) error {
+func (c *cache) getFile(sf *scrub_file) error {
+    name  := sf.name
+    path  := sf.path
+    csep  := sf.csep
     lines := 0
     level := ScreenLevel.All
     if strings.EqualFold(Type, "proc") {

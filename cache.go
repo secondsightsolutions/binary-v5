@@ -69,14 +69,14 @@ func new_cache(sf *scrub_file) *cache {
             ca.keys = append(ca.keys, sort_key{keyn: keyn, keyl: keyl, desc: desc})
         }
     }
-    if sf.hdrs != "" {
-        toks := strings.Split(sf.hdrs, ",")
-        for _, tok := range toks {
-            csp := strings.Split(tok, "=")
-            if len(csp) == 2 {
-                cust := csp[0]
-                shrt := csp[1]
-                ca.hdrm[cust] = shrt
+    if sf.hdrm != "" {
+        toks1 := strings.Split(sf.hdrm, ";")
+        for _, tok1 := range toks1 {
+            toks2 := strings.Split(tok1, "=")
+            if len(toks2) == 2 {
+                fuln := toks2[0]
+                shrn := toks2[1]
+                ca.hdrm[fuln] = shrn
             }
         }
     }
@@ -133,6 +133,9 @@ func (c *cache) index_data(keyn string, d data) {
 }
 
 func (c *cache) Find(keyn, val string, copy bool) []data {
+    if c == nil {
+        return nil
+    }
     c.Lock()
     defer c.Unlock()
 
@@ -314,12 +317,9 @@ func (c *cache) toShortNames(row data) {
     }
 }
 
-func (c *cache) toFullNames(row data) {
-    // convert column names to full names, if possible.
-    for shrn := range row {
-		if fuln, ok := c.shrt[shrn];ok {
-			row[fuln] = row[shrn]
-			delete(row, shrn)
-		}
+func (c *cache) GetShortName(fuln string) string {
+    if shrn, ok := c.full[fuln];ok {
+        return shrn
     }
+    return fuln
 }
