@@ -57,13 +57,13 @@ func new_scrub(scid int64, manu string) *scrub {
         plcy: getPolicy(manu),
     }
     sc.sr.files["rebates"]  = &scrub_file{name: "rebates", csep: ",", hdrm: "rxnum=rxn;hrxnum=hrxn"}
-    // sc.sr.files["claims"]   = &scrub_file{name: "claims",   pool: "citus",  tbln: "submission_rows"}
-    // sc.sr.files["ndcs"]     = &scrub_file{name: "ndcs",     pool: "esp2",   tbln: "ndcs"}
-    // sc.sr.files["spis"]     = &scrub_file{name: "spis",     pool: "esp2",   tbln: "ncpdp_providers"}
-    // sc.sr.files["pharms"]   = &scrub_file{name: "pharms",   pool: "esp2",   tbln: "contracted_pharmacies"}
-    // sc.sr.files["ents"]     = &scrub_file{name: "ents",     pool: "esp2",   tbln: "covered_entities"}
-    // sc.sr.files["elig"]     = &scrub_file{name: "elig",     pool: "esp2",   tbln: "eligibility_ledger"}
-    // sc.sr.files["esp1"]     = &scrub_file{name: "esp1",     pool: "esp2",   tbln: "esp1_providers"}
+    sc.sr.files["claims"]   = &scrub_file{name: "claims",   pool: "citus",  tbln: "submission_rows"}
+    sc.sr.files["ndcs"]     = &scrub_file{name: "ndcs",     pool: "esp",    tbln: "ndcs"}
+    sc.sr.files["spis"]     = &scrub_file{name: "spis",     pool: "esp",    tbln: "ncpdp_providers"}
+    sc.sr.files["pharms"]   = &scrub_file{name: "pharms",   pool: "esp",    tbln: "contracted_pharmacies"}
+    sc.sr.files["ents"]     = &scrub_file{name: "ents",     pool: "esp",    tbln: "covered_entities"}
+    sc.sr.files["elig"]     = &scrub_file{name: "elig",     pool: "esp",    tbln: "eligibility_ledger"}
+    sc.sr.files["esp1"]     = &scrub_file{name: "esp1",     pool: "esp",    tbln: "esp1_providers"}
     return sc
 }
 
