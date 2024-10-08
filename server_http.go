@@ -13,14 +13,14 @@ func httpRun(w http.ResponseWriter, r *http.Request) {
 	sc.run()
 }
 
-func httpInit(sc *scrub, sr *scrub_req, r *http.Request) error {
+func httpInit(sc *Scrub, sr *scrub_req, r *http.Request) error {
     if err := r.ParseMultipartForm(1024*1024*100); err != nil {
         return err
     }
     httpParam(r.MultipartForm, &sr.auth, "auth", true)
     httpParam(r.MultipartForm, &sr.manu, "manu", true)
     httpParam(r.MultipartForm, &sr.sort, "sort", false)
-    httpParam(r.MultipartForm, &sr.uniq, "uniq", false)
+    //httpParam(r.MultipartForm, &sr.uniq, "uniq", false)
 
     httpFiles(r.MultipartForm, sc)
     if _, ok := sc.sr.files["rebates"];!ok {
@@ -29,18 +29,18 @@ func httpInit(sc *scrub, sr *scrub_req, r *http.Request) error {
     return nil
 }
 
-func httpFiles(form *multipart.Form, sc *scrub) {
-    for name, list := range form.File {
-        sf := &scrub_file{name: name}
-        if len(list) > 0 {
-            if mph, err := list[0].Open(); err == nil {
-                sf.rdr = mph
-            }
-        }
-        sc.sr.files[name] = sf
-        httpParam(form, &sf.csep, fmt.Sprintf("%s_sep", name), false)
-        httpParam(form, &sf.keys, fmt.Sprintf("%s_key", name), false)
-    }
+func httpFiles(form *multipart.Form, sc *Scrub) {
+    // for name, list := range form.File {
+        // sf := &scrub_file{name: name}
+        // if len(list) > 0 {
+        //     if mph, err := list[0].Open(); err == nil {
+        //         sf.rdr = mph
+        //     }
+        // }
+        // sc.sr.files[name] = sf
+        // httpParam(form, &sf.csep, fmt.Sprintf("%s_sep", name), false)
+        // httpParam(form, &sf.keys, fmt.Sprintf("%s_key", name), false)
+    // }
 }
 func httpParam(form *multipart.Form, dst *string, name string, req bool) {
     if vals, ok := form.Value[name];ok {

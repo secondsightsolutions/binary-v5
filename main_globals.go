@@ -2,10 +2,14 @@ package main
 
 import (
 	_ "embed"
+	"strings"
 )
 
 // Values that can be injected at build time
 var (
+	//go:embed embed/app.txt
+	app string
+
 	//go:embed embed/type.txt
 	Type string
 
@@ -58,4 +62,21 @@ var (
 	doPing bool
 	doVers bool
 	Http   bool
+
+	runClient  bool
+	runServer  bool
+	runService bool
 )
+
+func init() {
+    switch strings.ToLower(app) {
+    case "client":
+        runClient = true
+    case "server":
+        runServer = true
+    case "service":
+        runService = true
+    default:
+		runClient = true
+    }
+}

@@ -19,15 +19,15 @@ type attempt struct {
 func new_attempts() *attempts {
 	return &attempts{list: []*attempt{}}
 }
-func (a *attempts) add(rbt, clm data, oper, code, desc string) {
-	att := &attempt{oper: oper, code: code, desc: desc}
-	if rbt != nil {
-		att.rbt = rbt["indx"]
-	}
-	if clm != nil {
-		att.clm = clm["indx"]
-	}
-	a.list = append(a.list, att)
+func (a *attempts) add(rbt *Rebate, clm *Claim, oper, code, desc string) {
+	// att := &attempt{oper: oper, code: code, desc: desc}
+	// if rbt != nil {
+	// 	att.rbt = rbt["indx"]
+	// }
+	// if clm != nil {
+	// 	att.clm = clm["indx"]
+	// }
+	// a.list = append(a.list, att)
 }
 func (a *attempts) String() string {
 	var sb bytes.Buffer

@@ -128,40 +128,41 @@ func TryParseStrToUnix(val, useFmt string) (int64, string, error) {
 	return 0, "", fmt.Errorf("not a date")
 }
 
-func ParseStrToTime(val string) time.Time {
+func ParseStrToTime(val string) *time.Time {
 	if i64, err := strconv.ParseInt(val, 10, 64); err == nil {
-		if i64 > int64(time.Second) {
-			return time.Unix(i64 / int64(time.Second), i64 % int64(time.Second))
-		} else if i64 > int64(time.Millisecond) {
-			return time.Unix(i64 / int64(time.Millisecond), i64 % int64(time.Millisecond))
-		} else if i64 > int64(time.Microsecond) {
-			return time.Unix(i64 / int64(time.Microsecond), i64 % int64(time.Microsecond))
-		} else if i64 > int64(time.Nanosecond) {
-			return time.Unix(i64 / int64(time.Nanosecond), i64 % int64(time.Nanosecond))
+		if tm := ParseI64ToTime(i64); tm != nil {
+			return tm
 		}
 	}
 	for _fmt := range prefDateFmts {
 		if tm, err := time.Parse(_fmt, val); err == nil {
-			return tm
+			return &tm
 		}
 	}
 	for _, _fmt := range allDateFmts {
 		if tm, err := time.Parse(_fmt, val); err == nil {
 			prefDateFmts[_fmt] = nil
-			return tm
+			return &tm
 		}
 	}
-	return time.Time{}
+	return nil
 }
-func TryParseStrToTime(val string) (*time.Time, error) {
-	zt := time.Time{}
-	tm := ParseStrToTime(val)
-	if tm != zt {
-		return &tm, nil
+func ParseI64ToTime(i64 int64) *time.Time {
+	if i64 > int64(time.Nanosecond) {
+		tm := time.Unix(i64 / int64(time.Nanosecond), i64 % int64(time.Nanosecond))
+		return &tm
+	} else if i64 > int64(time.Microsecond) {
+		tm := time.Unix(i64 / int64(time.Microsecond), i64 % int64(time.Microsecond))
+		return &tm
+	} else if i64 > int64(time.Millisecond) {
+		tm := time.Unix(i64 / int64(time.Millisecond), i64 % int64(time.Millisecond))
+		return &tm
 	} else {
-		return nil, fmt.Errorf("not_date")
+		tm := time.Unix(i64 / int64(time.Second), i64 % int64(time.Second))
+		return &tm
 	}
 }
+
 func StrDecToInt(val string) int {
 	if d, err := strconv.ParseInt(val, 10, 64); err == nil {
 		return int(d)
@@ -169,21 +170,14 @@ func StrDecToInt(val string) int {
 	return 0
 }
 
-func TestTF(d data, attr string) bool {
-	if _tf, err := strconv.ParseBool(d[attr]); err == nil {
-		return _tf
-	}
-	return false
+func CheckBefore(t1, t2 *time.Time) bool {
+	return t1.Before(*t2)
 }
-
-func CheckBefore(t1, t2 time.Time) bool {
-	return t1.Before(t2)
+func CheckOnAfter(t1, t2 *time.Time) bool {
+	return t1.Equal(*t2) || t1.After(*t2)
 }
-func CheckOnAfter(t1, t2 time.Time) bool {
-	return t1.Equal(t2) || t1.After(t2)
-}
-func CheckRange(t1, t2 time.Time, bef, aft int) string {
-	days := t2.Sub(t1) / (time.Hour * 24)
+func CheckRange(t1, t2 *time.Time, bef, aft int) string {
+	days := t2.Sub(*t1) / (time.Hour * 24)
 	if days < 0 {
 		days *= -1
 		if days > time.Duration(bef) {
@@ -196,12 +190,8 @@ func CheckRange(t1, t2 time.Time, bef, aft int) string {
 	}
 	return ""
 }
-func CheckSPI(sc *scrub, spiA, spiB string, chains, stacks bool) (bool, string) {
-	return sc.spis.match(spiA, spiB, chains, stacks)
-}
-
-func Is64bitHash(val string) bool {
-	return len(val) == 64
+func CheckSPI(sc *Scrub, spiA, spiB string, chains, stacks bool) (bool, string) {
+	return server.spis.match(spiA, spiB, chains, stacks)
 }
 
 var ScreenLevel = struct {
@@ -340,4 +330,15 @@ func lineCounter(r io.Reader) (int, error) {
 			return count, err
 		}
 	}
+}
+
+func renderCols(hdrs []string, row map[string]string) string {
+	var sb bytes.Buffer
+	for i, hdr := range hdrs {
+		sb.WriteString(row[hdr])
+		if i < len(hdrs)-1 {
+			sb.WriteString(",")
+		}
+	}
+	return sb.String()
 }

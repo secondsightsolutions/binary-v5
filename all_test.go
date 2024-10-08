@@ -4,6 +4,10 @@ import (
 	"testing"
 )
 
+func TestMain(t *testing.T) {
+    dflts()
+    main()
+}
 func TestAmgen(t *testing.T) {
     dflts()
     manu = "amgen"

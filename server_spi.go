@@ -5,28 +5,28 @@ import (
     "sync"
 )
 
-type SPI struct {
-    Ncp string
-    Npi string
-    Dea string
-    Sto string
-    Nam string
-    Lbn string
-    Chn string
-    Cde string // NCPDP 340b status code
-}
-type Pharmacy struct {
-	I340  string
-	Phid  string
-	Ncp   string
-	Npi   string
-	Dea   string
-	Chnm  string
-	State string
-	Ncps  []string
-	Npis  []string
-	Deas  []string
-}
+// type SPI struct {
+//     Ncp string
+//     Npi string
+//     Dea string
+//     Sto string
+//     Nam string
+//     Lbn string
+//     Chn string
+//     Cde string // NCPDP 340b status code
+// }
+// type Pharmacy struct {
+// 	I340  string
+// 	Phid  string
+// 	Ncp   string
+// 	Npi   string
+// 	Dea   string
+// 	Chnm  string
+// 	State string
+// 	Ncps  []string
+// 	Npis  []string
+// 	Deas  []string
+// }
 
 type SPIs struct {
     sync.Mutex
@@ -68,17 +68,9 @@ func (spis *SPIs) load(c *cache) {
     if len(spis.idMap) == 0 && len(spis.deaMap) == 0 {
         c.Lock()
         defer c.Unlock()
-		for _, item := range c.rows {
-			spis.addSPI(&SPI{
-				Ncp: item[Fields.Ncp],
-				Npi: item[Fields.Npi],
-				Dea: item[Fields.Dea],
-				Sto: item[Fields.Stor],
-				Nam: item[Fields.Name],
-				Lbn: item[Fields.Lbn],
-				Chn: item[Fields.Chnm],
-				Cde: item[Fields.Istc],
-			})
+		for _, row := range c.rows {
+            spi := row.elem.(*SPI)
+			spis.addSPI(spi)
         }
 	}
 }

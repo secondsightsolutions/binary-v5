@@ -1,10 +1,10 @@
 package main
 
 type policy struct {
-    prepRebates	func(*scrub)
-    prepClaims 	func(*scrub)
-    scrubRebate func(*scrub, data)
-    result      func(*scrub, data) string
+    prepRebates	func(*Scrub)
+    prepClaims 	func(*Scrub)
+    scrubRebate func(*Scrub, *Rebate)
+    result      func(*Scrub, *Rebate) string
 }
 
 func getPolicy(manu string) *policy {

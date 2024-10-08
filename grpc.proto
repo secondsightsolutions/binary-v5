@@ -1,0 +1,254 @@
+syntax = "proto3";
+
+// export PATH="$PATH:$(go env GOPATH)/bin"
+// protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative grpc.proto
+
+option go_package = "github.com/secondsightsolutions/binary-v5/main";
+
+package main;
+
+
+message Rebate {
+    int32   indx = 1;
+    string  stat = 2;
+    string  hrxn = 3;
+    string  fspd = 4;
+    string  fndc = 5;
+    string  spmt = 6;   // SPI match type: exact, xwalk, stack, chain
+    string  errc = 7;
+    string  errm = 8;
+    map<string,string> flds = 10;
+}
+
+message Claim {
+    string clid   = 1;   // id
+    string manu   = 2;   // manufacturer
+    string spid   = 3;   // service_provider_id
+    string hrxn   = 4;   // rx_number
+    string hfrx   = 5;   // formatted_rx_number
+    string ndc    = 6;   // ndc
+    string i340   = 7;   // id_340b
+    string shid   = 8;   // short_id - Short unique identifier string used as a claim-id for customers to see.
+    string hdos   = 9;   // date_of_service
+    string hdop   = 10;  // date_prescribed
+    int64  dos    = 11;  // formatted_dos
+    int64  doc    = 12;  // created_at
+    int64  dop    = 13;  // formatted_dop
+    double qty    = 14;  // quantity
+    string netw   = 15;  // network
+    string chnm   = 16;  // chain_name
+    //string phtp   = 17;  // Pharmacy type (1CP, WO, NCP, ...)
+    string prnm   = 18;  // product_name
+    string prid   = 19;  // prescriber_id
+    bool   cnfm   = 20;  // claim_conforms_flag
+    bool   elig   = 21;  // eligible_at_submission
+    bool   susp   = 22;  // suspended_at_submission
+    bool   isih   = 23;  // Entity has in-house pharmacy
+    bool   isgr   = 24;  // Entity is grantee
+    string excl   = 25;  // exclusion reason - will have a value only in test mode.
+    int64  lscid  = 26;  // rbt_rrid - scrub id of lock owner
+    string lhdos  = 27;  // rbt_hdos - hashed dos of first rebate using this claim
+    string lownr  = 28;  // rbt_hdos_owner - name of processor who set this lock
+    string lauth  = 29;  // rbt_hdos_auth - auth token used to set this lock
+    
+    map<int64,Rebate>  rbts = 50;
+    map<string,string> xtra = 51;
+    bool   valid = 52;
+    bool   match = 53;
+    
+    //string rbid   = 80;
+    //string ceid   = 8;   // contracted_entity_id
+    //string phid   = 9;   // pharmacy_id
+    //string dea    = 10;  // dea
+    //string guid   = 11;  // submission_guid
+    //string hdpr   = 13;  // date_prescribed
+    //string winv   = 14;  // wholesaler_invoice_number
+    //double wacp  = 15;   // wac_price
+    //string spiq   = 17;  // service_provider_id_qualifier
+    //string priq   = 18;  // prescriber_id_qualifier
+    //bool   dupl   = 24;  // duplicate
+    //bool   stage  = 25;  // staging
+    //int64  upat   = 27;  // updated_at
+}
+
+message Entity {
+    string i340  = 1;
+    int64  strt  = 2;
+    int64  term  = 3;
+    string state = 4;
+
+    repeated Designation desigs = 10;
+}
+
+message Pharmacy {
+    string i340 = 1;
+    string phid = 2;
+    string ncp  = 3;
+    string npi  = 4;
+    string dea  = 5;
+    string chnm = 6;
+    string state = 10;
+    repeated string ncps = 7;
+    repeated string npis = 8;
+    repeated string deas = 9;
+}
+
+message NDC {
+    string ndc  = 1;
+    string name = 2;
+    string netw = 3;
+}
+
+message SPI {
+    string ncp = 1;
+    string npi = 2;
+    string dea = 3;
+    string sto = 4;
+    string nam = 5;
+    string lbn = 6;
+    string chn = 7;
+    string cde = 8;   // NCPDP 340b status code
+}
+
+message Designation {
+    string manu = 1;
+    string i340 = 2;
+    string netw = 3;
+    string flag = 4;
+    string phid = 5;
+    bool   assg = 6;
+    bool   term = 7;
+    int64  xdat = 8;   // expired_at
+    int64  dlat = 9;
+    int64  xsat = 10;  // expires_at
+    int64  crat = 12;  // created_at
+    int64  cpat = 13;
+    bool   excl = 14;
+    string hin  = 15;
+
+    map<string,string> xtra = 11;
+}
+
+message LDN {
+    string manu = 1;
+    string netw = 2;
+    string phid = 3;
+    bool   assg = 4;
+    bool   term = 5;
+
+    map<string,string> xtra = 10;
+}
+
+message ESP1PharmNDC {
+    string  spid  = 1;
+    string  ndc   = 2;
+    int64   start = 3;
+    int64   term  = 4;
+}
+
+message Eligibility {
+    int64  elid   = 1;   // id
+    string i340   = 2;   // id_340b
+    string phid   = 3;   // pharmacy_id
+    string manu   = 4;   // manufacturer
+    string netw   = 5;   // network
+    int64  strt   = 6;   // start_at
+    int64  term   = 7;   // end_at
+}
+
+message Req {
+    string auth = 1;
+    string ver  = 2;
+    string manu = 3;
+}
+message Res {
+}
+message RebateRec {
+    int64  scrubId = 1;
+    int64  rnum    = 2;
+    string status  = 3;
+    string fprt    = 4;
+}
+message ClaimRec {
+    int64  scrubId = 1;
+    string clid    = 2;
+    string excl    = 3;
+}
+message ClaimUpdate {
+    int64  scrubId = 1;
+    string clid    = 2;
+    int64  lscid   = 3;  // rbt_rrid - scrub id of lock owner
+    string lhdos   = 4;  // rbt_hdos - hashed dos of first rebate using this claim
+    string lownr   = 5;  // rbt_hdos_owner - name of processor who set this lock
+    string lauth   = 6;  // rbt_hdos_auth - auth token used to set this lock
+}
+
+message StartReq {
+    string auth = 1;
+    string manu = 2;
+    string plcy = 3;
+    string name = 4;
+    string vers = 5;
+    string desc = 6;
+    string hash = 7;
+    string host = 8;
+    string type = 9;
+    string hdrs = 10;
+    string cmdl = 11;
+}
+message StartRes {
+    int64   scrubId         = 1;
+}
+message Metrics {
+    int32   rbt_total     = 1;
+    int32   rbt_valid     = 2;
+    int32   rbt_matched   = 3;
+    int32   rbt_nomatch   = 4;
+    int32   rbt_invalid   = 5;
+    int32   rbt_passed    = 6;
+    int32   rbt_failed    = 7;
+    int32   clm_total     = 8;
+    int32   clm_valid     = 9;
+    int32   clm_matched   = 10;
+    int32   clm_nomatch   = 11;
+    int32   clm_invalid   = 12;
+    int32   spi_exact     = 13;
+    int32   spi_cross     = 14;
+    int32   spi_stack     = 15;
+    int32   spi_chain     = 16;
+    int32   dos_equ_doc   = 17;
+    int32   dos_bef_doc   = 18;
+    int32   dos_aft_doc   = 19;
+    int32   dos_equ_dof   = 20;
+    int32   dos_bef_dof   = 21;
+    int32   dos_aft_dof   = 22;
+}
+
+message ScrubRes {
+    string text = 1;
+}
+message DoneReq {
+}
+
+service BinaryV5Srv {
+    rpc Start(StartReq)                     returns (StartRes) {}
+    rpc Scrub(stream Rebate)                returns (Metrics) {}
+    rpc Done(DoneReq)                       returns (ScrubRes) {}
+}
+
+service BinaryV5Svc {
+    rpc Ping(Req)                           returns (Res) {}
+    rpc GetSPIs(Req)                        returns (stream SPI) {}
+    rpc GetNDCs(Req)                        returns (stream NDC) {}
+    rpc GetEntities(Req)                    returns (stream Entity) {}
+    rpc GetPharmacies(Req)                  returns (stream Pharmacy) {}
+    rpc GetESP1Pharms(Req)                  returns (stream ESP1PharmNDC) {}
+    rpc GetClaims(Req)                      returns (stream Claim) {}
+    rpc GetEligibilityLedger(Req)           returns (stream Eligibility) {}
+
+    rpc Start(StartReq)                     returns (StartRes) {}
+    rpc AddRebates(stream RebateRec)        returns (Res) {}
+    rpc AddClaims(stream ClaimRec)          returns (Res) {}
+    rpc UpdateClaims(stream ClaimUpdate)    returns (Res) {}
+    rpc Done(Metrics)                       returns (Res) {}
+}
