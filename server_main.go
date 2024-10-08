@@ -29,24 +29,27 @@ func server_main(wg *sync.WaitGroup, stop chan any) {
 			interval = time.Duration(60) * time.Second
 			server.connect()
 			if _, err := server.svc.Ping(context.Background(), &Req{Auth: auth, Ver: vers}); err == nil {
-				fmt.Println("server: ping to service succeeded")
+				log("server", "main", "ping to rebate service succeeded")
 				if !server.ca.done {
 					server.load()
 				}
 			} else {
-				fmt.Printf("server: ping to service failed: %s\n", err.Error())
+				log("server", "main", "ping to rebate service failed: %s", err.Error())
 			}
 
 		case err := <-run_grpc_server():
 			if !stopping {
-				fmt.Printf("server: grpc failure: %s\n", err.Error())
+				log("server", "main", "grpc failure: %s", err.Error())
 			} else {
+				log("server", "main", "grpc completed, returning")
 				return
 			}
 			
 		case <-stop:
+			log("server", "main", "stop requested, shutting down grpc")
 			stopping = true
 			server.gsr.GracefulStop()
+			log("server", "main", "grpc completed, returning")
 			return
 		}
 	}

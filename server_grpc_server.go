@@ -51,6 +51,7 @@ func (s *srvServer) Ping(ctx context.Context, in *Req) (*Res, error) {
 }
 
 func (s *srvServer) Start(ctx context.Context, req *StartReq) (*StartRes, error) {
+    getPolicy(req.Manu)
     return nil, nil
 }
 

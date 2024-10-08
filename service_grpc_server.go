@@ -19,190 +19,148 @@ type svcServer struct {
     UnimplementedBinaryV5SvcServer
 }
 
-func run_grpc_service() {
+func run_grpc_service() chan error {
     cfg := &tls.Config{
         Certificates: []tls.Certificate{TLSCert},
         ClientAuth:   tls.RequireAndVerifyClientCert,
         ClientCAs:    X509pool,
     }
+    chn  := make(chan error)
     cred := credentials.NewTLS(cfg)
     service.gsr = grpc.NewServer(grpc.Creds(cred))
 
-    if lis, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%s", port)); err == nil {
-        service.srv = &svcServer{}
-        RegisterBinaryV5SvcServer(service.gsr, service.srv)
-        fmt.Println("service: grpc server starting")
-        if err := service.gsr.Serve(lis); err != nil {
-            fmt.Printf("cannot start GRPC server endpoint: %s\n", err.Error())
+    go func() {
+        if lis, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%s", port)); err == nil {
+            service.srv = &svcServer{}
+            RegisterBinaryV5SvcServer(service.gsr, service.srv)
+            fmt.Println("service: grpc server starting")
+            if err := service.gsr.Serve(lis); err != nil {
+                chn <-err
+            }
+            close(chn)
+        } else {
+            chn <-err
+            close(chn)
         }
-        fmt.Println("service: grpc server exiting")
-        return
-    }
+    }()
+    return chn
 }
 
 func (s *svcServer) Ping(context.Context, *Req) (*Res, error) {
     return &Res{}, nil
 }
 func (s *svcServer) GetSPIs(req *Req, strm grpc.ServerStreamingServer[SPI]) error {
-    create := func(obj map[string]any) any {
-        spi := &SPI{}
-        spi.Cde = toStr(obj["status_code_340b"])
-        spi.Chn = toStr(obj["chain_name"])
-        spi.Dea = toStr(obj["dea_registration_id"])
-        spi.Lbn = toStr(obj["legal_business_name"])
-        spi.Ncp = toStr(obj["ncpdp_provider_id"])
-        spi.Npi = toStr(obj["national_provider_id"])
-        spi.Sto = toStr(obj["store_number"])
-        return spi
+    cols := map[string]string{
+        "ncpdp_provider_id":        "ncp",
+        "national_provider_id":     "npi",
+        "dea_registration_id":      "dea",
+        "store_number":             "sto",
+        "legal_business_name":      "lbn",
+        "status_code_340b":         "cde",
+        "chain_name":               "chn",
     }
-    qry := "SELECT ncpdp_provider_id, national_provider_id, dea_registration_id, store_number, legal_business_name, status_code_340b, chain_name FROM ncpdp_providers"
-    return db_read(strm, svcCentralPool, qry, create)
+    return db_read(strm, svcCentralPool, "ncpdp_providers", cols, "")
 }
 func (s *svcServer) GetNDCs(req *Req, strm grpc.ServerStreamingServer[NDC]) error {
-    create := func(obj map[string]any) any {
-        ndc := &NDC{}
-        ndc.Name = toStr(obj["product_name"])
-        ndc.Ndc  = toStr(obj["item"])
-        ndc.Netw = toStr(obj["network"])
-        return ndc
+    cols := map[string]string{
+        "item":         "ndc",
+        "product_name": "name",
+        "network":      "netw",
     }
-    qry := fmt.Sprintf("SELECT item, product_name, network FROM ndcs WHERE manufacturer_name = '%s'", req.Manu)
-    return db_read(strm, svcCentralPool, qry, create)
+    return db_read(strm, svcCentralPool, "ndcs", cols, fmt.Sprintf("manufacturer_name = '%s'", req.Manu))
 }
 func (s *svcServer) GetEntities(req *Req, strm grpc.ServerStreamingServer[Entity]) error {
-    create := func(obj map[string]any) any {
-        ent := &Entity{}
-        ent.I340  = toStr(obj["id_340b"])
-        ent.State = toStr(obj["state"])
-        ent.Strt  = toU64(obj["participating_start_date"])
-        ent.Term  = toU64(obj["term_date"])
-        return ent
+    cols := map[string]string{
+        "id_340b":                  "i340",
+        "state":                    "state",
+        "participating_start_date": "strt",
+        "term_date":                "term",
     }
-    qry := "SELECT id_340b, state, participating_start_date, term_date FROM covered_entities"
-    return db_read(strm, svcCentralPool, qry, create)
+    return db_read(strm, svcCentralPool, "covered_entities", cols, "")
 }
 func (s *svcServer) GetPharmacies(req *Req, strm grpc.ServerStreamingServer[Pharmacy]) error {
-    create := func(obj map[string]any) any {
-        phm := &Pharmacy{}
-        phm.Chnm = toStr(obj["chain_name"])
-        phm.Dea  = toStr(obj["dea_id"])
-        phm.Deas = toStrList(obj["dea"])
-        phm.I340 = toStr(obj["id_340b"])
-        phm.Ncp  = toStr(obj["ncpdp_provider_id"])
-        phm.Ncps = toStrList(obj["ncpdp"])
-        phm.Npi  = toStr(obj["national_provider_id"])
-        phm.Npis = toStrList(obj["npi"])
-        phm.Phid = toStr(obj["pharmacy_id"])
-        phm.State= toStr(obj["pharmacy_state"])
-        return phm
+    cols := map[string]string{
+        "chain_name":           "chnm",
+        "id_340b":              "i340",
+        "pharmacy_id":          "phid",
+        "dea_id":               "dea",
+        "national_provider_id": "npi",
+        "ncpdp_provider_id":    "ncp",
+        "dea":                  "deas",
+        "npi":                  "npis",
+        "ncpdp":                "ncps",
+        "pharmacy_state":       "state",
     }
-    qry := "SELECT chain_name, id_340b, pharmacy_id, dea_id, national_provider_id, ncpdp_provider_id, dea, npi, ncpdp, pharmacy_state from contracted_pharmacies"
-    return db_read(strm, svcCentralPool, qry, create)
+    return db_read(strm, svcCentralPool, "contracted_pharmacies", cols, "")
 }
 func (s *svcServer) GetESP1Pharms(req *Req, strm grpc.ServerStreamingServer[ESP1PharmNDC]) error {
-    create := func(obj map[string]any) any {
-        phm := &ESP1PharmNDC{}
-        phm.Ndc  = toStr(obj["ndc"])
-        phm.Spid = toStr(obj["service_provider_id"])
-        phm.Start= toU64(obj["start"])
-        phm.Term = toU64(obj["term"])
-        return phm
+    cols := map[string]string{
+        "service_provider_id":  "spid",
+        "ndc":                  "ndc",
+        "start":                "strt",
+        "term":                 "term",
     }
-    qry := fmt.Sprintf("SELECT service_provider_id, ndc, start, term FROM esp1_providers WHERE manufacturer = '%s'", req.Manu)
-    return db_read(strm, svcCitusPool, qry, create)
+    return db_read(strm, svcCitusPool, "esp1_providers", cols, fmt.Sprintf("manufacturer = '%s'", req.Manu))
 }
 func (s *svcServer) GetClaims(req *Req, strm grpc.ServerStreamingServer[Claim]) error {
-    create := func(obj map[string]any) any {
-        clm := &Claim{}
-        clm.Chnm  = toStr(obj["chain_name"])
-        clm.Clid  = toStr(obj["id"])
-        clm.Cnfm  = toBool(obj["claim_conforms_flag"])
-        clm.Doc   = toU64(obj["created_at"])
-        clm.Dop   = toU64(obj["formatted_dop"])
-        clm.Dos   = toU64(obj["formatted_dos"])
-        clm.Hdop  = toStr(obj["date_prescribed"])
-        clm.Hdos  = toStr(obj["date_of_service"])
-        clm.Hfrx  = toStr(obj["formatted_rx_number"])
-        clm.Hrxn  = toStr(obj["rx_number"])
-        clm.I340  = toStr(obj["contracted_entity_id"])   // TODO: is this right?
-        clm.Isgr  = IsGrantee(clm.I340)
-        clm.Isih  = len(toStrList(obj["in_house_pharmacy_ids"])) > 0
-        clm.Lauth = toStr(obj["rbt_hdos_auth"])
-        clm.Lhdos = toStr(obj["rbt_hdos"])
-        clm.Lownr = toStr(obj["rbt_hdos_owner"])
-        clm.Lscid = toI64(obj["rbt_rrid"])
-        clm.Manu  = toStr(obj["manufacturer"])
-        clm.Ndc   = toStr(obj["ndc"])
-        clm.Netw  = toStr(obj["network"])
-        clm.Prnm  = toStr(obj["product_name"])
-        clm.Qty   = toF64(obj["quantity"])
-        clm.Shid  = toStr(obj["short_id"])
-        clm.Spid  = toStr(obj["service_provider_id"])
-        clm.Prid  = toStr(obj["prescriber_id"])
-        clm.Elig  = toBool(obj["eligible_at_submission"])
-        clm.Susp  = toBool(obj["suspended_at_submission"])
-        clm.Valid = true
-        return clm
+    cols := map[string]string{
+        "id":                       "clid",
+        "chain_name":               "chnm",
+        "claim_conforms_flag":      "cnfm",
+        "created_at":               "doc",
+        "formatted_dop":            "dop",
+        "formatted_dos":            "dos",
+        "date_prescribed":          "hdop",
+        "date_of_service":          "dos",
+        "formatted_rx_number":      "hfrx",
+        "rx_number":                "hrxn",
+        "contracted_entity_id":     "i340",
+        "rbt_hdos_auth":            "lauth",
+        "rbt_hdos_owner":           "lownr",
+        "rbt_rrid":                 "lscid",
+        "manufacturer":             "manu",
+        "ndc":                      "ndc",
+        "network":                  "netw",
+        "product_name":             "prnm",
+        "quantity":                 "qty",
+        "short_id":                 "shid",
+        "service_provider_id":      "spid",
+        "prescriber_id":            "prid",
+        "eligible_at_submission":   "elig",
+        "suspended_at_submission":  "susp",
+        "in_house_pharmacy_ids":    "ihph",
     }
-    qry := fmt.Sprintf("SELECT * FROM submission_rows WHERE manufacturer = '%s'", req.Manu)
-    return db_read(strm, svcCitusPool, qry, create)
+    return db_read(strm, svcCitusPool, "submission_rows", cols, fmt.Sprintf("manufacturer = '%s'", req.Manu))
 }
 func (s *svcServer) GetEligibilityLedger(req *Req, strm grpc.ServerStreamingServer[Eligibility]) error {
-    create := func(obj map[string]any) any {
-        elg := &Eligibility{}
-        elg.Elid = toI64(obj["id"])
-        elg.I340 = toStr(obj["id_340b"])
-        elg.Manu = toStr(obj["manufacturer"])
-        elg.Netw = toStr(obj["network"])
-        elg.Phid = toStr(obj["pharmacy_id"])
-        elg.Strt = toU64(obj["start_at"])
-        elg.Term = toU64(obj["end_at"])
-        return elg
+    cols := map[string]string{
+        "elid":         "id",
+        "id_340b":      "i340",
+        "pharmacy_id":  "phid",
+        "manufacturer": "manu",
+        "network":      "netw",
+        "start_at":     "strt",
+        "end_at":       "term",
     }
-    qry := fmt.Sprintf("SELECT id, id_340b, pharmacy_id, manufacturer, network, start_at, end_at FROM eligibility_ledger WHERE manufacturer = '%s'", req.Manu)
-    return db_read(strm, svcCitusPool, qry, create)
+    return db_read(strm, svcCitusPool, "eligibility_ledger", cols, fmt.Sprintf("manufacturer = '%s'", req.Manu))
 }
 func (s *svcServer) Start(ctx context.Context, req *StartReq) (*StartRes, error) {
-    create := func(obj any) map[string]any {
-        m := map[string]any{}
-        m["auth"] = req.Auth
-        m["cmdl"] = req.Cmdl
-        m["desc"] = req.Desc
-        m["auth"] = req.Hash
-        m["auth"] = req.Hdrs
-        m["auth"] = req.Host
-        m["auth"] = req.Manu
-        m["auth"] = req.Name
-        m["auth"] = req.Plcy
-        m["auth"] = req.Type
-        m["auth"] = req.Vers
-        return m
-    }
-    id, err := db_insert1(ctx, "scrubs", req, create)
-    return &StartRes{ScrubId: id}, err
+    return &StartRes{ScrubId: 0}, nil
 }
 func (s *svcServer) AddRebates(strm grpc.ClientStreamingServer[RebateRec, Res]) error {
-    create := func(obj any) map[string]any {
-        m := map[string]any{}
-        rr := obj.(*RebateRec)
-        m["scrub_id"] = rr.ScrubId
-        m["fprt"]     = rr.Fprt
-        m["rnum"]     = rr.Rnum
-        m["status"]   = rr.Status
-        return m
+    toSlice := func(obj any) []any {
+        rbt := obj.(*RebateRec)
+        vals := make([]any, 4)
+        vals[0] = rbt.ScrubId
+        vals[1] = rbt.Fprt
+        vals[2] = rbt.Rnum
+        vals[3] = rbt.Status
+        return vals
     }
-    return db_insert(strm, "rebates", create)
+    return db_insert(strm, svcCitusPool, "rbtbin.rebates", []string{"scrub_id", "fprt", "rnum", "status"}, toSlice, 10000)
 }
 func (s *svcServer) AddClaims(strm grpc.ClientStreamingServer[ClaimRec, Res]) error {
-    create := func(obj any) map[string]any {
-        m := map[string]any{}
-        cr := obj.(*ClaimRec)
-        m["scrub_id"] = cr.ScrubId
-        m["clm_guid"] = cr.Clid
-        m["excl"]     = cr.Excl
-        return m
-    }
-    return db_insert(strm, "claims", create)
+    return nil
 }
 func (s *svcServer) UpdateClaims(strm grpc.ClientStreamingServer[ClaimUpdate, Res]) error {
     return nil

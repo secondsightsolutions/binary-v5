@@ -43,8 +43,7 @@ message Claim {
     bool   cnfm   = 20;  // claim_conforms_flag
     bool   elig   = 21;  // eligible_at_submission
     bool   susp   = 22;  // suspended_at_submission
-    bool   isih   = 23;  // Entity has in-house pharmacy
-    bool   isgr   = 24;  // Entity is grantee
+    repeated int64 ihph = 23; // in_house_pharmacy_ids
     string excl   = 25;  // exclusion reason - will have a value only in test mode.
     int64  lscid  = 26;  // rbt_rrid - scrub id of lock owner
     string lhdos  = 27;  // rbt_hdos - hashed dos of first rebate using this claim
@@ -66,6 +65,8 @@ message Claim {
     //double wacp  = 15;   // wac_price
     //string spiq   = 17;  // service_provider_id_qualifier
     //string priq   = 18;  // prescriber_id_qualifier
+    //bool   isih   = 23;  // Entity has in-house pharmacy
+    //bool   isgr   = 24;  // Entity is grantee
     //bool   dupl   = 24;  // duplicate
     //bool   stage  = 25;  // staging
     //int64  upat   = 27;  // updated_at
@@ -142,7 +143,7 @@ message LDN {
 message ESP1PharmNDC {
     string  spid  = 1;
     string  ndc   = 2;
-    int64   start = 3;
+    int64   strt  = 3;
     int64   term  = 4;
 }
 

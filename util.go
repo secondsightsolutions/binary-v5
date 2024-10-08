@@ -342,3 +342,8 @@ func renderCols(hdrs []string, row map[string]string) string {
 	}
 	return sb.String()
 }
+
+func log(app, title, msg string, args ...any) {
+	str := fmt.Sprintf("[%-8s] %-20s: ", app, title)
+	fmt.Printf(str + fmt.Sprintf(msg, args...) + "\n")
+}

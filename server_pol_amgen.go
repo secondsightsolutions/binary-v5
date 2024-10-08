@@ -12,7 +12,7 @@ func amgenPrepClaims(sc *Scrub) {
 	dt509 := time.Date(2023, time.May,    9, 0, 0, 0, 0, time.UTC)
 	for _, row := range sc.ca.clms.rows {
 		clm := row.elem.(*Claim)
-		if clm.Isgr || clm.Isih {
+		if IsGrantee(clm.I340) || len(clm.Ihph) > 0 {
 			continue
 		}
 		clmTm := ParseI64ToTime(clm.Doc)
