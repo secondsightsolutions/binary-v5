@@ -165,23 +165,23 @@ message Req {
 message Res {
 }
 message RebateRec {
-    int64  scrubId = 1;
-    int64  rnum    = 2;
-    string status  = 3;
-    string fprt    = 4;
+    string scid   = 1;
+    string rnum   = 2;
+    string status = 3;
+    string fprt   = 4;
 }
 message ClaimRec {
-    int64  scrubId = 1;
-    string clid    = 2;
-    string excl    = 3;
+    string scid   = 1;
+    string clid   = 2;
+    string excl   = 3;
 }
 message ClaimUpdate {
-    int64  scrubId = 1;
-    string clid    = 2;
-    int64  lscid   = 3;  // rbt_rrid - scrub id of lock owner
-    string lhdos   = 4;  // rbt_hdos - hashed dos of first rebate using this claim
-    string lownr   = 5;  // rbt_hdos_owner - name of processor who set this lock
-    string lauth   = 6;  // rbt_hdos_auth - auth token used to set this lock
+    string scid   = 1;
+    string clid   = 2;
+    string lscid  = 3;  // rbt_rrid - scrub id of lock owner
+    string lhdos  = 4;  // rbt_hdos - hashed dos of first rebate using this claim
+    string lownr  = 5;  // rbt_hdos_owner - name of processor who set this lock
+    string lauth  = 6;  // rbt_hdos_auth - auth token used to set this lock
 }
 
 message StartReq {

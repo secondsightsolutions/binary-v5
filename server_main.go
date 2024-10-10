@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
@@ -21,6 +20,8 @@ var server *Server
 func server_main(wg *sync.WaitGroup, stop chan any) {
 	defer wg.Done()
 	server   = &Server{spis: newSPIs()}
+
+	started  := time.Now()
 	interval := time.Duration(0)
 	stopping := false
 	for {
@@ -29,27 +30,27 @@ func server_main(wg *sync.WaitGroup, stop chan any) {
 			interval = time.Duration(60) * time.Second
 			server.connect()
 			if _, err := server.svc.Ping(context.Background(), &Req{Auth: auth, Ver: vers}); err == nil {
-				log("server", "main", "ping to rebate service succeeded")
+				log("server", "main", "ping to rebate service succeeded", time.Since(started), nil)
 				if !server.ca.done {
 					server.load()
 				}
 			} else {
-				log("server", "main", "ping to rebate service failed: %s", err.Error())
+				log("server", "main", "ping to rebate service failed: %s", time.Since(started), err)
 			}
 
 		case err := <-run_grpc_server():
 			if !stopping {
-				log("server", "main", "grpc failure: %s", err.Error())
+				log("server", "main", "grpc failure: %s", time.Since(started), err)
 			} else {
-				log("server", "main", "grpc completed, returning")
+				log("server", "main", "grpc completed, returning", time.Since(started), err)
 				return
 			}
 			
 		case <-stop:
-			log("server", "main", "stop requested, shutting down grpc")
+			log("server", "main", "stop requested, shutting down grpc", time.Since(started), nil)
 			stopping = true
 			server.gsr.GracefulStop()
-			log("server", "main", "grpc completed, returning")
+			log("server", "main", "grpc completed, returning", time.Since(started), nil)
 			return
 		}
 	}

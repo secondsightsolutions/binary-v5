@@ -169,6 +169,12 @@ func StrDecToInt(val string) int {
 	}
 	return 0
 }
+func StrDecToInt64(val string) int64 {
+	if d, err := strconv.ParseInt(val, 10, 64); err == nil {
+		return d
+	}
+	return 0
+}
 
 func CheckBefore(t1, t2 *time.Time) bool {
 	return t1.Before(*t2)
@@ -343,7 +349,15 @@ func renderCols(hdrs []string, row map[string]string) string {
 	return sb.String()
 }
 
-func log(app, title, msg string, args ...any) {
-	str := fmt.Sprintf("[%-8s] %-20s: ", app, title)
-	fmt.Printf(str + fmt.Sprintf(msg, args...) + "\n")
+func log(app, title, msg string, dur time.Duration, err error, args ...any) {
+	mesg := fmt.Sprintf(msg, args...)
+	mil  := dur.Milliseconds() % 1000
+	sec  := dur.Milliseconds() / 1000 % 60
+	min  := dur.Milliseconds() / 1000 / 60
+	durn := fmt.Sprintf("(%02dm.%02ds.%03dms)", min, sec, mil)
+	str  := fmt.Sprintf("[%-8s] %-20s: %s %s", app, title, durn, mesg)
+	if err != nil {
+		str = fmt.Sprintf("%s - %s", str, err.Error())
+	}
+	fmt.Println(str)
 }

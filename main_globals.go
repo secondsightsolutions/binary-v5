@@ -49,6 +49,13 @@ var (
 	//go:embed embed/port.txt
 	port string
 
+	// service
+
+	//go:embed embed/azac.txt
+	azac string
+
+	//go:embed embed/azky.txt
+	azky string
 )
 
 var (
