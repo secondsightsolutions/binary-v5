@@ -5,55 +5,58 @@ import (
 	"sync"
 	"time"
 
-	grpc "google.golang.org/grpc"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Server struct {
+    svc  BinaryV5SvcClient
+	srv  BinaryV5SrvServer
+    pools map[string]*pgxpool.Pool
 	ca   CA
 	spis *SPIs
-	svc  BinaryV5SvcClient
-	srv  BinaryV5SrvServer
-	gsr  *grpc.Server
 }
 var server *Server
 
 func server_main(wg *sync.WaitGroup, stop chan any) {
 	defer wg.Done()
-	server   = &Server{spis: newSPIs()}
 
-	started  := time.Now()
-	interval := time.Duration(0)
-	stopping := false
+	server  = &Server{srv: &binaryV5SrvServer{}, pools: map[string]*pgxpool.Pool{}, spis: newSPIs()}
+    
+    server.getEnv()
+    server.load()
+
+	srvWGrp := &sync.WaitGroup{}
+	srvWGrp.Add(3)
+	go run_database_ping(srvWGrp, stop, 60, nil)
+	go run_services_ping(srvWGrp, stop, 60, server)
+    go run_grpc_services(srvWGrp, stop, "server", "23460", RegisterBinaryV5SrvServer, server.srv)
+	srvWGrp.Wait()
+}
+
+func run_services_ping(wg *sync.WaitGroup, stop chan any, intv int, server *Server) {
+	defer wg.Done()
+	pingService := func() {
+		server.connect()
+		started := time.Now()
+		if _, err := server.svc.Ping(context.Background(), &Req{Auth: auth, Ver: vers}); err == nil {
+			log("server", "main", "ping to rebate service succeeded", time.Since(started), nil)
+		} else {
+			log("server", "main", "ping to rebate service failed: %s", time.Since(started), err)
+		}
+	}
+	pingService()
+	durn := time.Duration(intv) * time.Second
 	for {
 		select {
-		case <-time.After(interval):
-			interval = time.Duration(60) * time.Second
-			server.connect()
-			if _, err := server.svc.Ping(context.Background(), &Req{Auth: auth, Ver: vers}); err == nil {
-				log("server", "main", "ping to rebate service succeeded", time.Since(started), nil)
-				if !server.ca.done {
-					server.load()
-				}
-			} else {
-				log("server", "main", "ping to rebate service failed: %s", time.Since(started), err)
-			}
-
-		case err := <-run_grpc_server():
-			if !stopping {
-				log("server", "main", "grpc failure: %s", time.Since(started), err)
-			} else {
-				log("server", "main", "grpc completed, returning", time.Since(started), err)
-				return
-			}
-			
+		case <-time.After(durn):
+			pingService()
 		case <-stop:
-			log("server", "main", "stop requested, shutting down grpc", time.Since(started), nil)
-			stopping = true
-			server.gsr.GracefulStop()
-			log("server", "main", "grpc completed, returning", time.Since(started), nil)
 			return
 		}
 	}
+}
+
+func (srv* Server) getEnv() {
 }
 
 func (srv *Server) load() {

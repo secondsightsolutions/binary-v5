@@ -2,63 +2,21 @@ package main
 
 import (
 	context "context"
-	"crypto/tls"
 	"fmt"
 	"io"
-	"net"
-	"sync"
-	"time"
 
 	grpc "google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 )
 
-type svcServer struct {
+type binaryV5SvcServer struct {
     UnimplementedBinaryV5SvcServer
 }
 
-func run_grpc_services(wg *sync.WaitGroup, stop chan any) {
-    defer wg.Done()
-
-    cfg := &tls.Config{
-        Certificates: []tls.Certificate{TLSCert},
-        ClientAuth:   tls.RequireAndVerifyClientCert,
-        ClientCAs:    X509pool,
-    }
-    for {
-        select {
-        case <-time.After(time.Duration(5) * time.Second):
-            if service.gsr == nil {
-                cred := credentials.NewTLS(cfg)
-                service.gsr = grpc.NewServer(grpc.Creds(cred))
-
-                go func() {
-                    if lis, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%s", port)); err == nil {
-                        service.srv = &svcServer{}
-                        RegisterBinaryV5SvcServer(service.gsr, service.srv)
-                        log("service", "grpc", "server starting", 0, nil)
-                        if err := service.gsr.Serve(lis); err != nil {
-                            service.gsr = nil
-                        }
-                    } else {
-                        service.gsr = nil
-                    }
-                }()
-            }
-        case <-stop:
-            if service.gsr != nil {
-                service.gsr.GracefulStop()
-                return
-            }
-        }
-    }
-}
-
-func (s *svcServer) Ping(context.Context, *Req) (*Res, error) {
+func (s *binaryV5SvcServer) Ping(context.Context, *Req) (*Res, error) {
     return &Res{}, nil
 }
-func (s *svcServer) GetSPIs(req *Req, strm grpc.ServerStreamingServer[SPI]) error {
+func (s *binaryV5SvcServer) GetSPIs(req *Req, strm grpc.ServerStreamingServer[SPI]) error {
     cols := map[string]string{
         "ncpdp_provider_id":        "ncp",
         "national_provider_id":     "npi",
@@ -70,7 +28,7 @@ func (s *svcServer) GetSPIs(req *Req, strm grpc.ServerStreamingServer[SPI]) erro
     }
     return db_strm_select(strm, service.pools["esp"], "ncpdp_providers", cols, "")
 }
-func (s *svcServer) GetNDCs(req *Req, strm grpc.ServerStreamingServer[NDC]) error {
+func (s *binaryV5SvcServer) GetNDCs(req *Req, strm grpc.ServerStreamingServer[NDC]) error {
     cols := map[string]string{
         "item":         "ndc",
         "product_name": "name",
@@ -78,7 +36,7 @@ func (s *svcServer) GetNDCs(req *Req, strm grpc.ServerStreamingServer[NDC]) erro
     }
     return db_strm_select(strm, service.pools["esp"], "ndcs", cols, fmt.Sprintf("manufacturer_name = '%s'", req.Manu))
 }
-func (s *svcServer) GetEntities(req *Req, strm grpc.ServerStreamingServer[Entity]) error {
+func (s *binaryV5SvcServer) GetEntities(req *Req, strm grpc.ServerStreamingServer[Entity]) error {
     cols := map[string]string{
         "id_340b":                  "i340",
         "state":                    "state",
@@ -87,7 +45,7 @@ func (s *svcServer) GetEntities(req *Req, strm grpc.ServerStreamingServer[Entity
     }
     return db_strm_select(strm, service.pools["esp"], "covered_entities", cols, "")
 }
-func (s *svcServer) GetPharmacies(req *Req, strm grpc.ServerStreamingServer[Pharmacy]) error {
+func (s *binaryV5SvcServer) GetPharmacies(req *Req, strm grpc.ServerStreamingServer[Pharmacy]) error {
     cols := map[string]string{
         "chain_name":           "chnm",
         "id_340b":              "i340",
@@ -102,7 +60,7 @@ func (s *svcServer) GetPharmacies(req *Req, strm grpc.ServerStreamingServer[Phar
     }
     return db_strm_select(strm, service.pools["esp"], "contracted_pharmacies", cols, "")
 }
-func (s *svcServer) GetESP1Pharms(req *Req, strm grpc.ServerStreamingServer[ESP1PharmNDC]) error {
+func (s *binaryV5SvcServer) GetESP1Pharms(req *Req, strm grpc.ServerStreamingServer[ESP1PharmNDC]) error {
     cols := map[string]string{
         "service_provider_id":  "spid",
         "ndc":                  "ndc",
@@ -111,7 +69,7 @@ func (s *svcServer) GetESP1Pharms(req *Req, strm grpc.ServerStreamingServer[ESP1
     }
     return db_strm_select(strm, service.pools["citus"], "esp1_providers", cols, fmt.Sprintf("manufacturer = '%s'", req.Manu))
 }
-func (s *svcServer) GetClaims(req *Req, strm grpc.ServerStreamingServer[Claim]) error {
+func (s *binaryV5SvcServer) GetClaims(req *Req, strm grpc.ServerStreamingServer[Claim]) error {
     cols := map[string]string{
         "id":                       "clid",
         "chain_name":               "chnm",
@@ -141,7 +99,7 @@ func (s *svcServer) GetClaims(req *Req, strm grpc.ServerStreamingServer[Claim]) 
     }
     return db_strm_select(strm, service.pools["citus"], "submission_rows", cols, fmt.Sprintf("manufacturer = '%s'", req.Manu))
 }
-func (s *svcServer) GetEligibilityLedger(req *Req, strm grpc.ServerStreamingServer[Eligibility]) error {
+func (s *binaryV5SvcServer) GetEligibilityLedger(req *Req, strm grpc.ServerStreamingServer[Eligibility]) error {
     cols := map[string]string{
         "elid":         "id",
         "id_340b":      "i340",
@@ -153,10 +111,10 @@ func (s *svcServer) GetEligibilityLedger(req *Req, strm grpc.ServerStreamingServ
     }
     return db_strm_select(strm, service.pools["citus"], "eligibility_ledger", cols, fmt.Sprintf("manufacturer = '%s'", req.Manu))
 }
-func (s *svcServer) Start(ctx context.Context, req *StartReq) (*StartRes, error) {
+func (s *binaryV5SvcServer) Start(ctx context.Context, req *StartReq) (*StartRes, error) {
     return &StartRes{ScrubId: 0}, nil
 }
-func (s *svcServer) AddRebates(strm grpc.ClientStreamingServer[RebateRec, Res]) error {
+func (s *binaryV5SvcServer) AddRebates(strm grpc.ClientStreamingServer[RebateRec, Res]) error {
     toSlice := func(obj any) []string {
         rbt  := obj.(*RebateRec)
         vals := make([]string, 4)
@@ -168,7 +126,7 @@ func (s *svcServer) AddRebates(strm grpc.ClientStreamingServer[RebateRec, Res]) 
     }
     return scrubStreamExec[RebateRec](strm, "binary", "rbtbin.rebates", "insert", []string{"scrub_id", "rnum", "status", "fprt"}, toSlice, nil, nil)
 }
-func (s *svcServer) AddClaims(strm grpc.ClientStreamingServer[ClaimRec, Res]) error {
+func (s *binaryV5SvcServer) AddClaims(strm grpc.ClientStreamingServer[ClaimRec, Res]) error {
     toSlice := func(obj any) []string {
         clm  := obj.(*ClaimRec)
         vals := make([]string, 4)
@@ -179,7 +137,7 @@ func (s *svcServer) AddClaims(strm grpc.ClientStreamingServer[ClaimRec, Res]) er
     }
     return scrubStreamExec[ClaimRec](strm, "binary", "rbtbin.claims", "insert", []string{"scrub_id", "clm_guid", "exclude"}, toSlice, nil, nil)
 }
-func (s *svcServer) UpdateClaims(strm grpc.ClientStreamingServer[ClaimUpdate, Res]) error {
+func (s *binaryV5SvcServer) UpdateClaims(strm grpc.ClientStreamingServer[ClaimUpdate, Res]) error {
     values := func(obj any) map[string]string {
         cu   := obj.(*ClaimUpdate)
         vals := map[string]string{}
@@ -197,7 +155,7 @@ func (s *svcServer) UpdateClaims(strm grpc.ClientStreamingServer[ClaimUpdate, Re
     }
     return scrubStreamExec[ClaimUpdate](strm, "citus", "public.submission_rows", "update", nil, nil, values, where)
 }
-func (s *svcServer) Done(ctx context.Context, m *Metrics) (*Res, error) {
+func (s *binaryV5SvcServer) Done(ctx context.Context, m *Metrics) (*Res, error) {
     values := func(obj any) map[string]string {
         met  := obj.(*Metrics)
         vals := map[string]string{}

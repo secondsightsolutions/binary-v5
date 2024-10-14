@@ -14,7 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func run_save_to_azure(wg *sync.WaitGroup, intv int, account, key string, stop chan any) {
+func run_save_to_azure(wg *sync.WaitGroup, stop chan any, intv int, account, key string) {
 	defer wg.Done()
 	for {
 		select {
@@ -25,7 +25,7 @@ func run_save_to_azure(wg *sync.WaitGroup, intv int, account, key string, stop c
 		}
 	}
 }
-func run_save_to_datab(wg *sync.WaitGroup, intv int, account, key string, pools map[string]*pgxpool.Pool, stop chan any) {
+func run_save_to_datab(wg *sync.WaitGroup, stop chan any, intv int, account, key string, pools map[string]*pgxpool.Pool) {
 	defer wg.Done()
 	for {
 		select {
