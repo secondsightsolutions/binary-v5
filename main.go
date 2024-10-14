@@ -27,7 +27,7 @@ func main() {
         exit(nil, 0, "")
     }
     runClient = false
-    runService = true
+    runServer = true
     
     if runClient {
         wg.Add(1)

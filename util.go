@@ -354,10 +354,18 @@ func log(app, title, msg string, dur time.Duration, err error, args ...any) {
 	mil  := dur.Milliseconds() % 1000
 	sec  := dur.Milliseconds() / 1000 % 60
 	min  := dur.Milliseconds() / 1000 / 60
+	curT := time.Now().Format("2006-01-02 15:04:05")
 	durn := fmt.Sprintf("(%02dm.%02ds.%03dms)", min, sec, mil)
-	str  := fmt.Sprintf("[%-8s] %-20s: %s %s", app, title, durn, mesg)
+	str  := fmt.Sprintf("%s [%-8s] %-20s: %s %s", curT, app, title, durn, mesg)
 	if err != nil {
-		str = fmt.Sprintf("%s - %s", str, err.Error())
+		errS := err.Error()
+		if strings.Contains(errS, "rpc error") {
+			toks := strings.Split(errS, ":")
+			if len(toks) > 0 {
+				errS = toks[len(toks)-1]
+			}
+		}
+		str = fmt.Sprintf("%s - %s", str, errS)
 	}
 	fmt.Println(str)
 }

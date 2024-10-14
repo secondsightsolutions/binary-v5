@@ -20,10 +20,11 @@ var server *Server
 func server_main(wg *sync.WaitGroup, stop chan any) {
 	defer wg.Done()
 
-	server  = &Server{srv: &binaryV5SrvServer{}, pools: map[string]*pgxpool.Pool{}, spis: newSPIs()}
+	server = &Server{srv: &binaryV5SrvServer{}, pools: map[string]*pgxpool.Pool{}, spis: newSPIs()}
     
     server.getEnv()
-    server.load()
+	server.connect()
+    server.load(stop)
 
 	srvWGrp := &sync.WaitGroup{}
 	srvWGrp.Add(3)
@@ -36,7 +37,6 @@ func server_main(wg *sync.WaitGroup, stop chan any) {
 func run_services_ping(wg *sync.WaitGroup, stop chan any, intv int, server *Server) {
 	defer wg.Done()
 	pingService := func() {
-		server.connect()
 		started := time.Now()
 		if _, err := server.svc.Ping(context.Background(), &Req{Auth: auth, Ver: vers}); err == nil {
 			log("server", "main", "ping to rebate service succeeded", time.Since(started), nil)
@@ -59,14 +59,14 @@ func run_services_ping(wg *sync.WaitGroup, stop chan any, intv int, server *Serv
 func (srv* Server) getEnv() {
 }
 
-func (srv *Server) load() {
-	srv.ca.clms = new_cache(srv.getClaims())
-	srv.ca.esp1 = new_cache(srv.getESP1PharmNDCs())
-	srv.ca.ents = new_cache(srv.getEntities())
-	srv.ca.ledg = new_cache(srv.getEligibilityLedger())
-	srv.ca.ndcs = new_cache(srv.getNDCs())
-	srv.ca.phms = new_cache(srv.getPharmacies())
-	srv.ca.spis = new_cache(srv.getSPIs())
+func (srv *Server) load(stop chan any) {
+	srv.ca.clms = new_cache(srv.getClaims(	stop, 100000, 5))
+	srv.ca.esp1 = new_cache(srv.getESP1(	stop,  50000, 5))
+	srv.ca.ents = new_cache(srv.getEntities(stop,  50000, 5))
+	srv.ca.ledg = new_cache(srv.getLedger(	stop,  50000, 5))
+	srv.ca.ndcs = new_cache(srv.getNDCs(	stop,  50000, 5))
+	srv.ca.phms = new_cache(srv.getPharms(	stop,  50000, 5))
+	srv.ca.spis = new_cache(srv.getSPIs(	stop,  50000, 5))
 	srv.spis.load(srv.ca.spis)
 	srv.ca.done = true
 }
