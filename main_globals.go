@@ -7,8 +7,8 @@ import (
 
 // Values that can be injected at build time
 var (
-	//go:embed embed/app.txt
-	app string
+	//go:embed embed/appl.txt
+	appl string
 
 	//go:embed embed/type.txt
 	Type string
@@ -43,11 +43,11 @@ var (
 	//go:embed embed/salt.txt
 	salt string
 
-	//go:embed embed/host.txt
-	host string
+	//go:embed embed/srvh.txt
+	srvh string
 
-	//go:embed embed/port.txt
-	port string
+	//go:embed embed/svch.txt
+	svch string
 
 	// service
 
@@ -73,10 +73,13 @@ var (
 	runClient  bool
 	runServer  bool
 	runService bool
+
+	srvp int = 23460
+	svcp int = 23461
 )
 
 func init() {
-    switch strings.ToLower(app) {
+    switch strings.ToLower(appl) {
     case "client":
         runClient = true
     case "server":

@@ -14,19 +14,6 @@ func client_main(wg *sync.WaitGroup, stop chan any) {
     <-stop
 }
 
-func version() {
-    fmt.Printf("%s: %s\n", "name", X509ou())
-    fmt.Printf("%s: %s\n", "desc", desc)
-    fmt.Printf("%s: %s\n", "type", Type)
-    fmt.Printf("%s: %s\n", "envr", envr)
-    fmt.Printf("%s: %s\n", "vers", vers)
-    fmt.Printf("%s: %s\n", "hash", hash)
-    fmt.Printf("%s: %s\n", "manu", manu)
-    fmt.Printf("%s: %s\n", "host", host)
-    fmt.Printf("%s: %s\n", "port", port)
-}
-
-
 func exit(sc *Scrub, code int, msg string, args ...any) {
 	nargs := []any{}
 	for _, arg := range args {

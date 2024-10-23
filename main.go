@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"os/signal"
 	"sync"
@@ -14,7 +15,7 @@ func main() {
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
     
-    dflts()
+    //dflts()
     getEnv()
     CryptInit(cert, cacr, "", pkey, salt, phrs)
     options()
@@ -26,8 +27,6 @@ func main() {
         version()
         exit(nil, 0, "")
     }
-    runClient = false
-    runServer = true
     
     if runClient {
         wg.Add(1)
@@ -54,8 +53,8 @@ func getEnv() {
     setIf(&cert,    "BIN_MYCR")
     setIf(&phrs,    "BIN_PHRS")
     setIf(&salt,    "BIN_SALT")
-    setIf(&host,    "BIN_HOST")
-    setIf(&port,    "BIN_PORT")
+    setIf(&srvh,    "BIN_SRVH")
+    setIf(&svch,    "BIN_SVCH")
     setIf(&desc,    "BIN_DESC")
     setIf(&envr,    "BIN_ENVR")
     setIf(&auth,	"BIN_AUTH")
@@ -66,3 +65,19 @@ func setIf(envVar *string, envName string) {
         *envVar = envVal
     }
 }
+
+func version() {
+	fmt.Printf("%s: %s\n", "appl", appl)
+    fmt.Printf("%s: %s\n", "name", X509ou())
+    fmt.Printf("%s: %s\n", "desc", desc)
+    fmt.Printf("%s: %s\n", "type", Type)
+    fmt.Printf("%s: %s\n", "envr", envr)
+    fmt.Printf("%s: %s\n", "vers", vers)
+    fmt.Printf("%s: %s\n", "hash", hash)
+    fmt.Printf("%s: %s\n", "manu", manu)
+    fmt.Printf("%s: %s\n", "srvh", srvh)
+    fmt.Printf("%s: %d\n", "srvp", srvp)
+    fmt.Printf("%s: %s\n", "svch", svch)
+    fmt.Printf("%s: %d\n", "svcp", svcp)
+}
+

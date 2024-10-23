@@ -79,6 +79,7 @@ func db_strm_select[T any](strm grpc.ServerStreamingServer[T], pool *pgxpool.Poo
 			if cnt < len(cols)-1 {
 				sb.WriteString(", ")
 			}
+			cnt++
 		}
 		sb.WriteString(" FROM " + tbln)
 		if where != "" {
@@ -88,13 +89,20 @@ func db_strm_select[T any](strm grpc.ServerStreamingServer[T], pool *pgxpool.Poo
 	}
 	ctx := strm.Context()
 	qry := mk(tbln, cols, where)
+	cnt := 0
+	log("service", "db_strm_select", qry, 0, nil)
 	if tx, err := pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted}); err == nil {
 		if rows, err := tx.Query(ctx, qry); err == nil {
 			for rows.Next() {
+				cnt++
+				if cnt%5000 == 0 {
+					log("service", "db_strm_select", "%s: read %d rows", 0, nil, tbln, cnt)
+				}
 				if obj, err := pgx.RowToAddrOfStructByNameLax[T](rows); err == nil {
 					strm.SendMsg(obj)
 				} else {
 					tx.Rollback(ctx)
+					log("service", "db_strm_select", "%s: error1", 0, err, tbln)
 					return err
 				}
 			}
@@ -102,9 +110,11 @@ func db_strm_select[T any](strm grpc.ServerStreamingServer[T], pool *pgxpool.Poo
 			tx.Commit(ctx)
 		} else {
 			tx.Rollback(ctx)
+			log("service", "db_strm_select", "%s: error2", 0, err, tbln)
 			return err
 		}
 	} else {
+		log("service", "db_strm_select", "%s: error3", 0, err, tbln)
 		return err
 	}
     return nil

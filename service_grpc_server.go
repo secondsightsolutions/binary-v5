@@ -38,25 +38,26 @@ func (s *binaryV5SvcServer) GetNDCs(req *Req, strm grpc.ServerStreamingServer[ND
 }
 func (s *binaryV5SvcServer) GetEntities(req *Req, strm grpc.ServerStreamingServer[Entity]) error {
     cols := map[string]string{
-        "id_340b":                  "i340",
-        "state":                    "state",
-        "participating_start_date": "strt",
-        "term_date":                "term",
+        "id_340b":                                          "i340",
+        "state":                                            "state",
+        "COALESCE(EXTRACT(EPOCH FROM TIMESTAMP TO_DATE(participating_start_date, 'YYYY-MM-DD')), 0)":  "strt",
+        "COALESCE(EXTRACT(EPOCH FROM TIMESTAMP TO_DATE(term_date, 'YYYY-MM-DD')), 0)":                 "term",
     }
+    // extract(epoch from timestamp '2014-01-28 00:00:00')
     return db_strm_select(strm, service.pools["esp"], "covered_entities", cols, "")
 }
 func (s *binaryV5SvcServer) GetPharmacies(req *Req, strm grpc.ServerStreamingServer[Pharmacy]) error {
     cols := map[string]string{
-        "chain_name":           "chnm",
-        "id_340b":              "i340",
-        "pharmacy_id":          "phid",
-        "dea_id":               "dea",
-        "national_provider_id": "npi",
-        "ncpdp_provider_id":    "ncp",
-        "dea":                  "deas",
-        "npi":                  "npis",
-        "ncpdp":                "ncps",
-        "pharmacy_state":       "state",
+        "COALESCE(chain_name, '')":           "chnm",
+        "COALESCE(id_340b, '')":              "i340",
+        "COALESCE(pharmacy_id, '')":          "phid",
+        "COALESCE(dea_id, '')":               "dea",
+        "COALESCE(national_provider_id, '')": "npi",
+        "COALESCE(ncpdp_provider_id, '')":    "ncp",
+        "COALESCE(dea, '{}')":                  "deas",
+        "COALESCE(npi, '{}')":                  "npis",
+        "COALESCE(ncpdp, '{}')":                "ncps",
+        "COALESCE(pharmacy_state, '')":       "state",
     }
     return db_strm_select(strm, service.pools["esp"], "contracted_pharmacies", cols, "")
 }

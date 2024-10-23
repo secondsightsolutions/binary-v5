@@ -12,7 +12,7 @@ import (
 )
 
 
-func run_grpc_services[T any](wg *sync.WaitGroup, stop chan any, name, port string, regis func(grpc.ServiceRegistrar, T), srv T) {
+func run_grpc_services[T any](wg *sync.WaitGroup, stop chan any, name string, port int, regis func(grpc.ServiceRegistrar, T), srv T) {
     defer wg.Done()
 
     cfg := &tls.Config{
@@ -29,7 +29,7 @@ func run_grpc_services[T any](wg *sync.WaitGroup, stop chan any, name, port stri
                 gsr  = grpc.NewServer(grpc.Creds(cred))
 
                 go func() {
-                    if lis, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%s", port)); err == nil {
+                    if lis, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", port)); err == nil {
                         regis(gsr, srv)
                         log(name, "grpc", "server starting", 0, nil)
                         if err := gsr.Serve(lis); err != nil {
