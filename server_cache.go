@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 type CA struct {
@@ -60,17 +61,10 @@ func new_cache(list []any) *cache {
     	views: map[string]*view{},
     	rows:  []*row{},
     }
-    ca.CreateView("indx", "", 0, false)
     for _, obj := range list {
         ca.Add(obj)
     }
     // At this point the main list is naturally sorted by the index.
-
-    // Since every view (including indx) has chunks, make sure each indx chunk is sorted by index.
-    vw := ca.views["indx"]
-    for shrt, list := range vw.rows {
-        vw.rows[shrt] = sort_list(vw.skey.keyn, vw.skey.keyf, vw.skey.desc, list)
-    }
     return ca
 }
 
@@ -96,7 +90,7 @@ func (c *cache) Sort(keyn string, keyf string, keyl int, desc bool) {
 func (c *cache) Add(a any) {
     c.Lock()
     defer c.Unlock()
-    row := &row{indx: len(c.rows)}
+    row := &row{indx: len(c.rows), elem: a}
     c.rows = append(c.rows, row)
     for _, view := range c.views {
         view.add(row)
@@ -166,7 +160,8 @@ func sort_list(keyn, keyf string, desc bool, list []*row) []*row {
     // Since we want to be careful not to pull in too much data, we'll read in the elems just
     // long enough to grab their current index and the value of the keyn attribute.
     // Once we have the full list of sort_elem objects we'll sort them, then use their new
-    // order to rewrite the full list (and then the sublists within the chunks).
+    // order to create a new full list.
+    // This function does not deal with views.
 
     elms  := []*sort_elem{} // This is the list of tiny elems - contains just enough to do a sort.
     dtOK  := true           // Continue to convert as datetime
@@ -179,89 +174,85 @@ func sort_list(keyn, keyf string, desc bool, list []*row) []*row {
         elms = append(elms, se)
 
         // Set one of the type values, whichever it is.
-        if keyn == "indx" {
+        if keyn == "indx" {     // The list *should* be in indx order. Do we need this?
             se.intVal = int64(row.indx)
-        } else {
-            if keyn == "indx" {     // This is special. Every cache row has a built-in index that initially is the insert order.
-                se.intVal = int64(row.indx)
+            dtOK  = false
+            fltOK = false
+            blOK  = false
+        } else {                // We're not using the index, we're using some other attribute to sort on.
+            objv := objVal(row.elem, keyf)
+            switch val := objv.(type) {
+            case string:
+                // Convert the string to as many of the more refined types that we can.
+                // However, once we see a type that we cannot convert to, stop trying to convert the remaining rows to those types.
+                // This saves us on processing time.
+                // For instance, converting a string to a time can be expensive. So as soon as we hit a row whose value cannot be
+                // converted to a time, time is no longer ubiquitous across all rows, so stop trying to save value as a time. Won't
+                // be able to sort on it when done, so no point in continuing with that type.
+                if dtOK {
+                    if dt, _fmt, err := TryParseStrToUnix(val, dtFmt);err == nil {
+                        se.dtVal = dt   // This value is a datetime! Save it. Will sort on this when done (if all rows have dt).
+                        dtFmt = _fmt    // Save time. Once we parse the first one, continue with just that format.
+                    } else {
+                        dtOK = false    // This value is not a datetime, do not continue trying to parse as dt.
+                    }
+                }
+                if fltOK {
+                    // If so far all non-empty values have been parseable as floats, keep doing it.
+                    if flt64, err := strconv.ParseFloat(val, 64);err == nil {
+                        se.fltVal = flt64
+                    } else {
+                        fltOK = false
+                    }
+                }
+                if intOK {
+                    // If so far all non-empty values have been parseable as ints, keep doing it.
+                    if i64, err := strconv.ParseInt(val, 10, 64);err == nil {
+                        se.intVal = i64
+                    } else {
+                        intOK = false
+                    }
+                }
+                if blOK {
+                    if bl, err := strconv.ParseBool(val); err == nil {
+                        se.boolVal = bl
+                    } else {
+                        blOK = false
+                    }
+                }
+                se.strVal = val     // It's always at least a string.
+
+            case float32:
+                se.fltVal = float64(val)
+                dtOK  = false
+                intOK = false
+                blOK  = false
+            case float64:
+                se.fltVal = val
+                dtOK  = false
+                intOK = false
+                blOK  = false
+            case int:
+                se.intVal = int64(val)
                 dtOK  = false
                 fltOK = false
                 blOK  = false
-            } else {                // We're not using the index, we're using some other attribute to sort on.
-                objv := objVal(row.elem, keyf)
-                switch val := objv.(type) {
-                case string:
-                    // Convert the string to as many of the more refined types that we can.
-                    // However, once we see a type that we cannot convert to, stop trying to convert the remaining rows to those types.
-                    // This saves us on processing time.
-                    // For instance, converting a string to a time can be expensive. So as soon as we hit a row whose value cannot be
-                    // converted to a time, time is no longer ubiquitous across all rows, so stop trying to save value as a time. Won't
-                    // be able to sort on it when done, so no point in continuing with that type.
-                    if dtOK {
-                        if dt, _fmt, err := TryParseStrToUnix(val, dtFmt);err == nil {
-                            se.dtVal = dt   // This value is a datetime! Save it. Will sort on this when done (if all rows have dt).
-                            dtFmt = _fmt    // Save time. Once we parse the first one, continue with just that format.
-                        } else {
-                            dtOK = false    // This value is not a datetime, do not continue trying to parse as dt.
-                        }
-                    }
-                    if fltOK {
-                        // If so far all non-empty values have been parseable as floats, keep doing it.
-                        if flt64, err := strconv.ParseFloat(val, 64);err == nil {
-                            se.fltVal = flt64
-                        } else {
-                            fltOK = false
-                        }
-                    }
-                    if intOK {
-                        // If so far all non-empty values have been parseable as ints, keep doing it.
-                        if i64, err := strconv.ParseInt(val, 10, 64);err == nil {
-                            se.intVal = i64
-                        } else {
-                            intOK = false
-                        }
-                    }
-                    if blOK {
-                        if bl, err := strconv.ParseBool(val); err == nil {
-                            se.boolVal = bl
-                        } else {
-                            blOK = false
-                        }
-                    }
-                    se.strVal = val     // It's always at least a string.
-
-                case float32:
-                    se.fltVal = float64(val)
-                    dtOK  = false
-                    intOK = false
-                    blOK  = false
-                case float64:
-                    se.fltVal = val
-                    dtOK  = false
-                    intOK = false
-                    blOK  = false
-                case int:
-                    se.intVal = int64(val)
-                    dtOK  = false
-                    fltOK = false
-                    blOK  = false
-                case int32:
-                    se.intVal = int64(val)
-                    dtOK  = false
-                    fltOK = false
-                    blOK  = false
-                case int64:
-                    se.intVal = val
-                    dtOK  = false
-                    fltOK = false
-                    blOK  = false
-                case bool:
-                    se.boolVal = val
-                    dtOK  = false
-                    fltOK = false
-                    intOK = false
-                default:
-                }
+            case int32:
+                se.intVal = int64(val)
+                dtOK  = false
+                fltOK = false
+                blOK  = false
+            case int64:
+                se.intVal = val
+                dtOK  = false
+                fltOK = false
+                blOK  = false
+            case bool:
+                se.boolVal = val
+                dtOK  = false
+                fltOK = false
+                intOK = false
+            default:
             }
         }
     }
@@ -310,10 +301,10 @@ func sort_list(keyn, keyf string, desc bool, list []*row) []*row {
     }
     // The sort_elem list has been sorted. Now build the new master list using the new order.
     newRows := make([]*row, 0, len(elms))
-    for _, se := range elms {               // Here, this is the new correct order.
-        elm := list[se.index]               // This is the elem in the current master list.
-        newRows  = append(newRows, elm)     // Add it in sequence into the new master list.
-        elm.indx = len(newRows)             // Set the new indx on the row (since it now has a different order).
+    for _, se := range elms {                               // Here, this is the new correct order (these are the sort elements).
+        currRow  := list[se.index]                          // This is the elem in the current master list. Get it using the new sort order.
+        newRow   := &row{elem: currRow.elem, indx: se.index}// Create a new row, but share the data element! Lets us have a new indx.
+        newRows  = append(newRows, newRow)                  // Add it in sequence into the new master list.
     }
     return newRows
 }
@@ -335,6 +326,10 @@ func strVal(obj any, keyf string) string {
             str = fmt.Sprintf("%d", val)
         case int64:
             str = fmt.Sprintf("%d", val)
+        case time.Time:
+            str = val.Format("2006/01/02 15:04:05.000000")
+        case *time.Time:
+            str = val.Format("2006/01/02 15:04:05.000000")
         default:
         }
     }

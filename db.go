@@ -75,7 +75,7 @@ func db_strm_select[T any](strm grpc.ServerStreamingServer[T], pool *pgxpool.Poo
 		sb.WriteString("SELECT ")
 		cnt := 0
 		for k,v := range cols {
-			sb.WriteString(k + " " + v)
+			sb.WriteString(v + " " + k)
 			if cnt < len(cols)-1 {
 				sb.WriteString(", ")
 			}
@@ -89,20 +89,22 @@ func db_strm_select[T any](strm grpc.ServerStreamingServer[T], pool *pgxpool.Poo
 	}
 	ctx := strm.Context()
 	qry := mk(tbln, cols, where)
+	now := time.Now()
 	cnt := 0
-	log("service", "db_strm_select", qry, 0, nil)
+	//log("service", "db_strm_select", qry, 0, nil)
 	if tx, err := pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted}); err == nil {
 		if rows, err := tx.Query(ctx, qry); err == nil {
 			for rows.Next() {
 				cnt++
-				if cnt%5000 == 0 {
-					log("service", "db_strm_select", "%s: read %d rows", 0, nil, tbln, cnt)
+				if cnt%100000 == 0 {
+					log("service", "db_strm_select", "%s: read %d rows", time.Since(now), nil, tbln, cnt)
 				}
+				pgx.RowToAddrOfStructByNameLax[T](rows)
 				if obj, err := pgx.RowToAddrOfStructByNameLax[T](rows); err == nil {
 					strm.SendMsg(obj)
 				} else {
 					tx.Rollback(ctx)
-					log("service", "db_strm_select", "%s: error1", 0, err, tbln)
+					log("service", "db_strm_select", "%s: cannot map returned data to object", 0, err, tbln)
 					return err
 				}
 			}
@@ -110,13 +112,14 @@ func db_strm_select[T any](strm grpc.ServerStreamingServer[T], pool *pgxpool.Poo
 			tx.Commit(ctx)
 		} else {
 			tx.Rollback(ctx)
-			log("service", "db_strm_select", "%s: error2", 0, err, tbln)
+			log("service", "db_strm_select", "%s: error in query [%s]", 0, err, tbln, qry)
 			return err
 		}
 	} else {
-		log("service", "db_strm_select", "%s: error3", 0, err, tbln)
+		log("service", "db_strm_select", "%s: cannot create transaction", 0, err, tbln)
 		return err
 	}
+	log("service", "db_strm_select", "%s: read %d rows - done", time.Since(now), nil, tbln, cnt)
     return nil
 }
 

@@ -64,13 +64,13 @@ func (srv* Server) getEnv() {
 }
 
 func (srv *Server) load(stop chan any) {
-	srv.ca.clms = new_cache(srv.getClaims(	stop, 10000, 5))
-	srv.ca.esp1 = new_cache(srv.getESP1(	stop,  10000, 5))
-	srv.ca.ents = new_cache(srv.getEntities(stop,  10000, 5))
-	srv.ca.ledg = new_cache(srv.getLedger(	stop,  10000, 5))
-	srv.ca.ndcs = new_cache(srv.getNDCs(	stop,  10000, 5))
-	srv.ca.phms = new_cache(srv.getPharms(	stop,  10000, 5))
-	srv.ca.spis = new_cache(srv.getSPIs(	stop,  10000, 5))
+	srv.ca.clms = new_cache(srv.getClaims(	stop, 100000, 5))
+	srv.ca.esp1 = new_cache(srv.getESP1(	stop, 100000, 5))
+	srv.ca.ents = new_cache(srv.getEntities(stop, 100000, 5))
+	srv.ca.ledg = new_cache(srv.getLedger(	stop, 100000, 5))
+	srv.ca.ndcs = new_cache(srv.getNDCs(	stop, 100000, 5))
+	srv.ca.phms = new_cache(srv.getPharms(	stop, 100000, 5))
+	srv.ca.spis = new_cache(srv.getSPIs(	stop, 100000, 5))
 	srv.spis.load(srv.ca.spis)
 	srv.ca.done = true
 }

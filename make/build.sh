@@ -1,12 +1,14 @@
 #!/bin/bash
 
-#make.sh {build} {client|server|service} {staging|prod} {descr} {name} {xxxx}"
-#make.sh build  whch   envr    desc   name    xxxx"
+#make.sh {build} {client|server|service} {staging|prod} {descr} {name} {manu}"
+#make.sh build  whch   envr    desc   name    manu"
 #        1      2      3       4      5       6
-#make.sh build  client staging 'desc' teva    manu"
-#make.sh build  client prod    'desc' teva    manu"
-#make.sh build  client staging 'desc' amgen"
-#make.sh build  server staging 'desc' brg     v1.1"
+#make.sh build  client staging 'desc' teva    teva"
+#make.sh build  client prod    'desc' teva    teva"   # is a manu
+#make.sh build  client prod    'desc' modeln  bayer"  # is a proc
+#make.sh build  client staging 'desc' amgen   amgen"
+#make.sh build  server staging 'cntr' brg     bayer"  # is a proc (but brg can access all)
+#make.sh build  server staging 'cntr' brg     brg"    # is a manu (but brg can access all)
 
 #make.sh {deploy} {client|server|service} {staging|prod} {descr} {name} {readme}"
 #make.sh deploy whch   envr    desc      name    readme"
@@ -38,9 +40,9 @@ port=""           # port embedded in X509 certificate
 comd="$1"   # Build or deploy
 whch="$2"   # Server, client or service
 envr="$3"   # Dev, devint, staging, prod, etc.
-desc="$4"   # Description - embedded in all apps, and in client/deploy (binary)
+desc="$4"   # Description - embedded in all apps, and in client/deploy (binary) (for servers it's the container id/version/name)
 name="$5"   # Identity, like brg or amgen
-xxxx="$6"   # Interpreted by application (for rebate client, it's manu or proc, for servers it's the container id/version/name)
+manu="$6"   # Manufacturer. If the same as name/$5, then the type is manu, else type is proc.
 
 vers="$(date '+%s')"
 hash=$(git rev-parse --short HEAD)
@@ -50,7 +52,6 @@ cfg="op://Configuration/deployments/${envr}"
 
 type=""
 cntr=""
-manu=""
 prfx=${appl}_${whch}
 phrs="$(op read ${all}/SSS_PASSPHRASE)"
 salt="$(op read ${all}/SSS_SALT_ENCR_B64)"
@@ -65,17 +66,21 @@ mycr=""
 cacr=""
 
 if [ "$whch" == "client" ]; then
-  type=$xxxx
-  manu=$name
+  if [ "$manu" == "$name" ]; then
+    type="manu"
+  else
+    type="proc"
+    manu=""
+  fi
 elif [ "$whch" == "server" ]; then
   host="$srvh"
   port="$srvp"
-  cntr=$xxxx
+  cntr=$desc
 elif [ "$whch" == "service" ]; then
   host="$svch"
   port="$svcp"
   name="brg"
-  cntr=$xxxx
+  cntr=$desc
 fi
 
 echo "comd=$comd"
@@ -83,7 +88,6 @@ echo "whch=$whch"
 echo "envr=$envr"
 echo "desc=$desc"
 echo "name=$name"
-echo "xxxx=$xxxx"
 echo "appl=$appl"
 echo "nspc=$nspc"
 echo "srvh=$srvh"

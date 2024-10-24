@@ -8,6 +8,8 @@ import (
 func options() {
     name = strings.ToLower(X509cname())
     
+    flag.BoolVar(&doVers, "version",  false, "Print application details and exit")
+
     if strings.EqualFold(appl, "client") {
         flag.BoolVar(&doVers, "version",  false, "Print application details and exit")
         flag.BoolVar(&doPing, "ping",     false, "Ping the server and exit")
@@ -23,8 +25,12 @@ func options() {
             flag.StringVar(&test, "test",  "",   "Test directory")
         }
     } else if strings.EqualFold(appl, "server") {
-        flag.BoolVar(&doVers, "version",  false, "Print application details and exit")
         flag.BoolVar(&doPing, "ping",     false, "Ping the server and exit")
+        
+        if strings.EqualFold(name, "brg") {
+            flag.StringVar(&manu, "manu", manu, "Manufacturer name")
+            flag.StringVar(&name, "proc", name, "Run as processor name")
+        }
 
     } else if strings.EqualFold(appl, "service") {
         flag.BoolVar(&doVers, "version",  false, "Print application details and exit")

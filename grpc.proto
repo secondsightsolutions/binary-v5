@@ -148,7 +148,7 @@ message ESP1PharmNDC {
 }
 
 message Eligibility {
-    int64  elid   = 1;   // id
+    int64  id   = 1;     // id
     string i340   = 2;   // id_340b
     string phid   = 3;   // pharmacy_id
     string manu   = 4;   // manufacturer

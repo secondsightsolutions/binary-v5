@@ -18,97 +18,96 @@ func (s *binaryV5SvcServer) Ping(context.Context, *Req) (*Res, error) {
 }
 func (s *binaryV5SvcServer) GetSPIs(req *Req, strm grpc.ServerStreamingServer[SPI]) error {
     cols := map[string]string{
-        "ncpdp_provider_id":        "ncp",
-        "national_provider_id":     "npi",
-        "dea_registration_id":      "dea",
-        "store_number":             "sto",
-        "legal_business_name":      "lbn",
-        "status_code_340b":         "cde",
-        "chain_name":               "chn",
+        "ncp":  "COALESCE(ncpdp_provider_id, '')",
+        "npi":  "COALESCE(national_provider_id, '')",
+        "dea":  "COALESCE(dea_registration_id, '')",
+        "sto":  "COALESCE(store_number, '')",
+        "lbn":  "COALESCE(legal_business_name, '')",
+        "cde":  "COALESCE(status_code_340b, '')",
+        "chn":  "COALESCE(chain_name, '')",
     }
     return db_strm_select(strm, service.pools["esp"], "ncpdp_providers", cols, "")
 }
 func (s *binaryV5SvcServer) GetNDCs(req *Req, strm grpc.ServerStreamingServer[NDC]) error {
     cols := map[string]string{
-        "item":         "ndc",
-        "product_name": "name",
-        "network":      "netw",
+        "ndc":  "COALESCE(item, '')",
+        "name": "COALESCE(product_name, '')",
+        "netw": "COALESCE(network, '')",
     }
     return db_strm_select(strm, service.pools["esp"], "ndcs", cols, fmt.Sprintf("manufacturer_name = '%s'", req.Manu))
 }
 func (s *binaryV5SvcServer) GetEntities(req *Req, strm grpc.ServerStreamingServer[Entity]) error {
     cols := map[string]string{
-        "id_340b":                                          "i340",
-        "state":                                            "state",
-        "COALESCE(EXTRACT(EPOCH FROM TIMESTAMP TO_DATE(participating_start_date, 'YYYY-MM-DD')), 0)":  "strt",
-        "COALESCE(EXTRACT(EPOCH FROM TIMESTAMP TO_DATE(term_date, 'YYYY-MM-DD')), 0)":                 "term",
+        "i340": "COALESCE(id_340b, '')",
+        "state":"COALESCE(state, '')",
+        "strt": "COALESCE(TRUNC(EXTRACT(EPOCH FROM participating_start_date::timestamp) *1000000, 0), 0)",
+        "term": "COALESCE(TRUNC(EXTRACT(EPOCH FROM term_date::timestamp)                *1000000, 0), 0)",
     }
-    // extract(epoch from timestamp '2014-01-28 00:00:00')
     return db_strm_select(strm, service.pools["esp"], "covered_entities", cols, "")
 }
 func (s *binaryV5SvcServer) GetPharmacies(req *Req, strm grpc.ServerStreamingServer[Pharmacy]) error {
     cols := map[string]string{
-        "COALESCE(chain_name, '')":           "chnm",
-        "COALESCE(id_340b, '')":              "i340",
-        "COALESCE(pharmacy_id, '')":          "phid",
-        "COALESCE(dea_id, '')":               "dea",
-        "COALESCE(national_provider_id, '')": "npi",
-        "COALESCE(ncpdp_provider_id, '')":    "ncp",
-        "COALESCE(dea, '{}')":                  "deas",
-        "COALESCE(npi, '{}')":                  "npis",
-        "COALESCE(ncpdp, '{}')":                "ncps",
-        "COALESCE(pharmacy_state, '')":       "state",
+        "chnm": "COALESCE(chain_name, '')",
+        "i340": "COALESCE(id_340b, '')",
+        "phid": "COALESCE(pharmacy_id, '')",
+        "dea":  "COALESCE(dea_id, '')",
+        "npi":  "COALESCE(national_provider_id, '')",
+        "ncp":  "COALESCE(ncpdp_provider_id, '')",
+        "deas": "COALESCE(dea, '{}')",
+        "npis": "COALESCE(npi, '{}')",
+        "ncps": "COALESCE(ncpdp, '{}')",
+        "state":"COALESCE(pharmacy_state, '')",
     }
     return db_strm_select(strm, service.pools["esp"], "contracted_pharmacies", cols, "")
 }
 func (s *binaryV5SvcServer) GetESP1Pharms(req *Req, strm grpc.ServerStreamingServer[ESP1PharmNDC]) error {
     cols := map[string]string{
-        "service_provider_id":  "spid",
-        "ndc":                  "ndc",
-        "start":                "strt",
-        "term":                 "term",
+        "spid": "service_provider_id",
+        "ndc":  "ndc",
+        "strt": "COALESCE(TRUNC(EXTRACT(EPOCH FROM start::timestamp)*1000000, 0), 0)",
+        "term": "COALESCE(TRUNC(EXTRACT(EPOCH FROM term::timestamp) *1000000, 0), 0)",
     }
     return db_strm_select(strm, service.pools["citus"], "esp1_providers", cols, fmt.Sprintf("manufacturer = '%s'", req.Manu))
 }
 func (s *binaryV5SvcServer) GetClaims(req *Req, strm grpc.ServerStreamingServer[Claim]) error {
     cols := map[string]string{
-        "id":                       "clid",
-        "chain_name":               "chnm",
-        "claim_conforms_flag":      "cnfm",
-        "created_at":               "doc",
-        "formatted_dop":            "dop",
-        "formatted_dos":            "dos",
-        "date_prescribed":          "hdop",
-        "date_of_service":          "dos",
-        "formatted_rx_number":      "hfrx",
-        "rx_number":                "hrxn",
-        "contracted_entity_id":     "i340",
-        "rbt_hdos_auth":            "lauth",
-        "rbt_hdos_owner":           "lownr",
-        "rbt_rrid":                 "lscid",
-        "manufacturer":             "manu",
-        "ndc":                      "ndc",
-        "network":                  "netw",
-        "product_name":             "prnm",
-        "quantity":                 "qty",
-        "short_id":                 "shid",
-        "service_provider_id":      "spid",
-        "prescriber_id":            "prid",
-        "eligible_at_submission":   "elig",
-        "suspended_at_submission":  "susp",
-        "in_house_pharmacy_ids":    "ihph",
+        "clid": "COALESCE(id, '')",
+        "chnm": "COALESCE(chain_name, '')",
+        "cnfm": "COALESCE(claim_conforms_flag, true)",
+        "doc":  "COALESCE(TRUNC(EXTRACT(EPOCH FROM created_at)   *1000000, 0), 0)",
+        "dop":  "COALESCE(TRUNC(EXTRACT(EPOCH FROM formatted_dop)*1000000, 0), 0)",
+        "dos":  "COALESCE(TRUNC(EXTRACT(EPOCH FROM formatted_dos)*1000000, 0), 0)",
+        "hdop": "COALESCE(date_prescribed, '')",
+        "hdos": "COALESCE(date_of_service, '')",
+        "hfrx": "COALESCE(formatted_rx_number, '')",
+        "hrxn": "COALESCE(rx_number, '')",
+        "i340": "COALESCE(contracted_entity_id, '')",
+        "lauth":"COALESCE(rbt_hdos_auth, '')",
+        "lownr":"COALESCE(rbt_hdos_owner, '')",
+        "lscid":"COALESCE(rbt_rrid, -1)",
+        "manu": "COALESCE(manufacturer, '')",
+        "ndc":  "COALESCE(ndc, '')",
+        "netw": "COALESCE(network, '')",
+        "prnm": "COALESCE(product_name, '')",
+        "qty":  "COALESCE(quantity, 0)",
+        "shid": "COALESCE(short_id, '')",
+        "spid": "COALESCE(service_provider_id, '')",
+        "prid": "COALESCE(prescriber_id, '')",
+        "elig": "COALESCE(eligible_at_submission, true)",
+        "susp": "COALESCE(suspended_submission, false)",
+        "ihph": "COALESCE(in_house_pharmacy_ids, '{}')",
     }
     return db_strm_select(strm, service.pools["citus"], "submission_rows", cols, fmt.Sprintf("manufacturer = '%s'", req.Manu))
 }
 func (s *binaryV5SvcServer) GetEligibilityLedger(req *Req, strm grpc.ServerStreamingServer[Eligibility]) error {
     cols := map[string]string{
-        "elid":         "id",
-        "id_340b":      "i340",
-        "pharmacy_id":  "phid",
-        "manufacturer": "manu",
-        "network":      "netw",
-        "start_at":     "strt",
-        "end_at":       "term",
+        "id":   "id",
+        "i340": "id_340b",
+        "phid": "pharmacy_id",
+        "manu": "manufacturer",
+        "netw": "network",
+        "strt": "COALESCE(TRUNC(EXTRACT(EPOCH FROM start_at)*1000000, 0), 0)",
+        "term": "COALESCE(TRUNC(EXTRACT(EPOCH FROM end_at)  *1000000, 0), 0)",
     }
     return db_strm_select(strm, service.pools["citus"], "eligibility_ledger", cols, fmt.Sprintf("manufacturer = '%s'", req.Manu))
 }
