@@ -16,11 +16,16 @@ func (s *binaryV5SrvServer) Ping(ctx context.Context, in *Req) (*Res, error) {
 }
 
 func (s *binaryV5SrvServer) Start(ctx context.Context, req *StartReq) (*StartRes, error) {
-    getPolicy(req.Manu)
+    
     return nil, nil
 }
 
 func (s *binaryV5SrvServer) Scrub(strm grpc.ClientStreamingServer[Rebate, Metrics]) error {
+    for {
+        if msg, err := strm.Recv(); err == nil {
+            
+        }
+    }
     return nil
 }
 

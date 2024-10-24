@@ -8,9 +8,21 @@ import (
     _ "embed"
 )
 
+type Client struct {
+	srv BinaryV5SrvClient
+}
+var client *Client
+
 func client_main(wg *sync.WaitGroup, stop chan any) {
     defer wg.Done()
+
+	client = &Client{}
+	client.connect()
+
     memoryWatch(stop)
+
+	client.start()
+	
     <-stop
 }
 
@@ -29,8 +41,8 @@ func exit(sc *Scrub, code int, msg string, args ...any) {
 		mesg = fmt.Sprintf(msg, nargs...)
 		fmt.Println(mesg)
 	}
-    // if sc != nil {
-    //     update_scrub(sc, mesg)
-    // }
+    if sc != nil {
+        fmt.Println("scrub exit")
+    }
 	os.Exit(code)
 }

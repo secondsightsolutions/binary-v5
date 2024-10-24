@@ -3,7 +3,7 @@ CREATE TABLE atlas.scrubs (
     scid bigserial primary key
 );
 
-CREATE TABLE atlas.scrub_rebates (
+CREATE TABLE atlas.rebates (
     seq   bigserial,
     scid  bigint not null,
     rbid  bigint not null,
@@ -23,31 +23,31 @@ CREATE TABLE atlas.scrub_rebates (
     col50 text not null default '',
     CONSTRAINT PRIMARY KEY (scid, rbid)
 );
-CREATE INDEX ON atlas.scrub_rebates(seq);
-CREATE INDEX ON atlas.scrub_rebates(scid);
-CREATE INDEX ON atlas.scrub_rebates(scid, indx);
+CREATE INDEX ON atlas.rebates(seq);
+CREATE INDEX ON atlas.rebates(scid);
+CREATE INDEX ON atlas.rebates(scid, indx);
 
-CREATE TABLE atlas.scrub_claims (
+CREATE TABLE atlas.claim_uses (
     seq   bigserial,
     scid  bigint not null,
     shrt  text not null,
     excl  text not null default '',
     CONSTRAINT PRIMARY KEY (scid, shrt)
 );
-CREATE INDEX ON atlas.scrub_claims(seq);
-CREATE INDEX ON atlas.scrub_claims(scid);
-CREATE INDEX ON atlas.scrub_claims(shrt);
-CREATE INDEX ON atlas.scrub_claims(scid, shrt);
+CREATE INDEX ON atlas.claim_uses(seq);
+CREATE INDEX ON atlas.claim_uses(scid);
+CREATE INDEX ON atlas.claim_uses(shrt);
+CREATE INDEX ON atlas.claim_uses(scid, shrt);
 
-CREATE TABLE atlas.scrub_rebate_meta (
+CREATE TABLE atlas.rebate_meta (
     seq   bigserial,
     scid  bigint not null primary key,
     col1  text not null default '',
     col2  text not null default '',
     col50 text not null default ''
 );
-CREATE INDEX ON atlas.scrub_rebate_meta(seq);
-CREATE INDEX ON atlas.scrub_rebate_meta(scid);
+CREATE INDEX ON atlas.rebate_meta(seq);
+CREATE INDEX ON atlas.rebate_meta(scid);
 
 CREATE TABLE atlas.claims (
     shrt text primary key,
@@ -70,20 +70,20 @@ CREATE TABLE atlas.claims (
     ihph []text not null default '{}'
 );
 
-CREATE TABLE atlas.scrub_rebate_claims (
+CREATE TABLE atlas.rebate_claims (
     seq  bigserial,
     scid bigint not null,
     rbid bigint not null,
     shrt text not null,
     CONSTRAINT PRIMARY KEY (scid, rbid, shrt)
 );
-CREATE INDEX ON atlas.scrub_rebate_claims(seq);
+CREATE INDEX ON atlas.rebate_claims(seq);
 
 CREATE TABLE atlas.sync (
     claims              timestamp not null default '2000-01-01',
     scrubs              bigint not null default 0,
-    scrub_rebates       bigint not null default 0,
-    scrub_claims        bigint not null default 0,
-    scrub_rebate_meta   bigint not null default 0,
-    scrub_rebate_claims bigint not null default 0
+    rebates       bigint not null default 0,
+    claim_uses        bigint not null default 0,
+    rebate_meta   bigint not null default 0,
+    rebate_claims bigint not null default 0
 );

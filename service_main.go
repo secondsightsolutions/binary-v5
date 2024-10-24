@@ -38,16 +38,16 @@ func service_main(wg *sync.WaitGroup, stop chan any) {
 	service = &Service{srv: &binaryV5SvcServer{}, pools: map[string]*pgxpool.Pool{}}
 	
 	service.getEnv()
-	service.pools["citus"]  = db_pool(service.cit_db_host, service.cit_db_port, service.cit_db_name, service.cit_db_user, service.cit_db_pass, "", true)
-	service.pools["binary"] = db_pool(service.rbt_db_host, service.rbt_db_port, service.rbt_db_name, service.rbt_db_user, service.rbt_db_pass, "", true)
-	service.pools["esp"]    = db_pool(service.esp_db_host, service.esp_db_port, service.esp_db_name, service.esp_db_user, service.esp_db_pass, "", true)
+	service.pools["citus"]  = db_pool(service.cit_db_host, service.cit_db_port, service.cit_db_name, service.cit_db_user, service.cit_db_pass, true)
+	service.pools["binary"] = db_pool(service.rbt_db_host, service.rbt_db_port, service.rbt_db_name, service.rbt_db_user, service.rbt_db_pass, true)
+	service.pools["esp"]    = db_pool(service.esp_db_host, service.esp_db_port, service.esp_db_name, service.esp_db_user, service.esp_db_pass, true)
 	
 	svcWGrp := &sync.WaitGroup{}
 	svcWGrp.Add(2)
 	go run_database_ping(svcWGrp, stop, 60, service.pools)
 	go run_grpc_services(svcWGrp, stop, "service", svcp, RegisterBinaryV5SvcServer, service.srv)
-	//go run_save_to_azure(svcWGrp, stop, 5, azac, azky)
-	//go run_save_to_datab(svcWGrp, stop, 5, azac, azky, service.pools)
+	go run_save_to_azure(svcWGrp, stop, 5, azac, azky)
+	go run_save_to_datab(svcWGrp, stop, 5, azac, azky, service.pools)
 	svcWGrp.Wait()
 }
 

@@ -15,7 +15,7 @@ func TestAmgen(t *testing.T) {
 	fin  = "rebates.csv"
 	fout = "results.csv"
 	auth = "1234"
-	host = "127.0.0.1"
-	port = "23459"
+	srvh = "127.0.0.1"
+	srvp = 23460
     main()
 }

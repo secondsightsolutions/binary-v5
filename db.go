@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	reflect "reflect"
 	"strings"
 	"time"
 
@@ -15,7 +16,7 @@ import (
 	grpc "google.golang.org/grpc"
 )
 
-func db_pool(host, port, name, user, pass, tag string, tls bool) *pgxpool.Pool {
+func db_pool(host, port, name, user, pass string, tls bool) *pgxpool.Pool {
 	strt := time.Now()
 	cs := []string{}
 	cs = append(cs, fmt.Sprintf("%s=%s", "host", host))
@@ -37,37 +38,37 @@ func db_pool(host, port, name, user, pass, tag string, tls bool) *pgxpool.Pool {
 	}
 }
 
-func db_strm_insert[T,R any](strm grpc.ClientStreamingServer[T,R], pool *pgxpool.Pool, tbln string, cols []string, toSlice func(any) []any, cnt int) error {
-	ctx  := strm.Context()
-	tblI := pgx.Identifier{tbln}
-	rows := make([][]any, 0, cnt)
-    if tx, err := pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted}); err == nil {
-		defer tx.Commit(ctx)
-        for {
-            if obj, err := strm.Recv(); err == nil {
-				rows = append(rows, toSlice(obj))
-				if len(rows) == cnt {
-					csrc := pgx.CopyFromRows(rows)
-					if _, err := tx.CopyFrom(ctx, tblI, cols, csrc); err == nil {
-						rows = make([][]any, 0, cnt)
-					} else {
-						tx.Rollback(ctx)
-						return err
-					}
-				}
-            } else {
-                if err != io.EOF {
-					tx.Rollback(ctx)
-					return err
-				}
-                break
-            }
-        }
-		return nil
-	} else {
-		return err
-	}
-}
+// func db_strm_insert[T,R any](strm grpc.ClientStreamingServer[T,R], pool *pgxpool.Pool, tbln string, cols []string, toSlice func(any) []any, cnt int) error {
+// 	ctx  := strm.Context()
+// 	tblI := pgx.Identifier{tbln}
+// 	rows := make([][]any, 0, cnt)
+//     if tx, err := pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted}); err == nil {
+// 		defer tx.Commit(ctx)
+//         for {
+//             if obj, err := strm.Recv(); err == nil {
+// 				rows = append(rows, toSlice(obj))
+// 				if len(rows) == cnt {
+// 					csrc := pgx.CopyFromRows(rows)
+// 					if _, err := tx.CopyFrom(ctx, tblI, cols, csrc); err == nil {
+// 						rows = make([][]any, 0, cnt)
+// 					} else {
+// 						tx.Rollback(ctx)
+// 						return err
+// 					}
+// 				}
+//             } else {
+//                 if err != io.EOF {
+// 					tx.Rollback(ctx)
+// 					return err
+// 				}
+//                 break
+//             }
+//         }
+// 		return nil
+// 	} else {
+// 		return err
+// 	}
+// }
 
 func db_strm_select[T any](strm grpc.ServerStreamingServer[T], pool *pgxpool.Pool, tbln string, cols map[string]string, where string) error {
 	mk := func(tbln string, cols map[string]string, where string) string {
@@ -121,6 +122,71 @@ func db_strm_select[T any](strm grpc.ServerStreamingServer[T], pool *pgxpool.Poo
 	}
 	log("service", "db_strm_select", "%s: read %d rows - done", time.Since(now), nil, tbln, cnt)
     return nil
+}
+
+func db_strm_insert[T,R any](strm grpc.ClientStreamingServer[T,R], pool *pgxpool.Pool, tbln string, colMap map[string]string, batch int) error {
+	mk := func(list []any) string {
+		cols := make([]string, 0, len(colMap))
+		for col := range colMap {
+			cols = append(cols, col)
+		}
+		var sb bytes.Buffer
+		sb.WriteString(fmt.Sprintf("INSERT INTO %s ", tbln))
+		sb.WriteString(fmt.Sprintf("( %s )", strings.Join(cols, ", ")))
+		sb.WriteString(" VALUES ")
+		for _, obj := range list {
+			sb.WriteString(" ( ")
+			for i, col := range cols {
+				fn := colMap[col]
+				vs := reflect.ValueOf(&obj).MethodByName(fn).Call([]reflect.Value{})
+				v0 := vs[0]
+				sv := ""
+				if v0.Kind() == reflect.String {
+					sv = fmt.Sprintf("'%s'", v0.String())
+				} else if v0.CanFloat() {
+					sv = fmt.Sprintf("%f", v0.Float())
+				} else if v0.CanInt() {
+					sv = fmt.Sprintf("%d", v0.Int())
+				} else if v0.CanUint() {
+					sv = fmt.Sprintf("%d", v0.Uint())
+				} else if v0.Kind() == reflect.Bool {
+					sv = fmt.Sprintf("'%v'", v0.Bool())
+				}
+				sb.WriteString(sv)
+				if i < len(cols)-1 {
+					sb.WriteString(", ")
+				}
+			}
+			sb.WriteString(" ) ")
+		}
+		return sb.String()
+	}
+	ctx := strm.Context()
+	list := []any{}
+	if tx, err := pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted}); err == nil {
+		for {
+			if obj, err := strm.Recv(); err == nil {
+				list = append(list, obj)
+				if len(list) == batch {
+					qry := mk(list)
+					list = []any{}
+					if _, err := tx.Exec(ctx, qry); err != nil {
+						tx.Rollback(ctx)
+						return err
+					}
+				}
+			} else if err == io.EOF {
+				if len(list) > 0 {
+					qry := mk(list)
+					if _, err := tx.Exec(ctx, qry); err != nil {
+						tx.Rollback(ctx)
+						return err
+					}
+				}
+			}
+		}
+		
+	}
 }
 
 func db_updates(ctx context.Context, pool *pgxpool.Pool, file string) error {

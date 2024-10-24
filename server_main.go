@@ -12,6 +12,11 @@ type Server struct {
     svc  BinaryV5SvcClient
 	srv  BinaryV5SrvServer
     pools map[string]*pgxpool.Pool
+	db_host	string
+    db_port string
+    db_name string
+    db_user string
+    db_pass string
 	ca   CA
 	spis *SPIs
 	done bool
@@ -22,10 +27,12 @@ func server_main(wg *sync.WaitGroup, stop chan any) {
 	defer wg.Done()
 
 	server = &Server{srv: &binaryV5SrvServer{}, pools: map[string]*pgxpool.Pool{}, spis: newSPIs()}
-    
+    	
     server.getEnv()
 	server.connect()
     server.load(stop)
+
+	server.pools["binary"] = db_pool(server.db_host, server.db_port, server.db_name, server.db_user, server.db_pass, true)
 
 	if server.done {
 		return
@@ -61,6 +68,12 @@ func run_services_ping(wg *sync.WaitGroup, stop chan any, intv int, server *Serv
 }
 
 func (srv* Server) getEnv() {
+	setIf(&srv.db_host, "SRV_DB_HOST")
+	setIf(&srv.db_port, "SRV_DB_PORT")
+	setIf(&srv.db_name, "SRV_DB_NAME")
+	setIf(&srv.db_user, "SRV_DB_USER")
+	setIf(&srv.db_pass, "SRV_DB_PASS")
+	//setIf(&srv.environment, "BIN_ENVR")
 }
 
 func (srv *Server) load(stop chan any) {

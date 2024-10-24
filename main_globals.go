@@ -63,6 +63,8 @@ var (
 	scid int64  // scrub id
 	auth string
 	name string
+	plcy string
+	hdrs []string
 	fin  string
 	fout string
 

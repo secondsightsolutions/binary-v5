@@ -3,7 +3,6 @@ package main
 import (
 	context "context"
 	"fmt"
-	"io"
 
 	grpc "google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
@@ -112,19 +111,19 @@ func (s *binaryV5SvcServer) GetEligibilityLedger(req *Req, strm grpc.ServerStrea
     return db_strm_select(strm, service.pools["citus"], "eligibility_ledger", cols, fmt.Sprintf("manufacturer = '%s'", req.Manu))
 }
 func (s *binaryV5SvcServer) Start(ctx context.Context, req *StartReq) (*StartRes, error) {
-    return &StartRes{ScrubId: 0}, nil
+    return &StartRes{Scid: 0}, nil
 }
 func (s *binaryV5SvcServer) AddRebates(strm grpc.ClientStreamingServer[RebateRec, Res]) error {
-    toSlice := func(obj any) []string {
-        rbt  := obj.(*RebateRec)
-        vals := make([]string, 4)
-        vals[0] = rbt.Scid
-        vals[1] = rbt.Rnum
-        vals[2] = rbt.Status
-        vals[3] = rbt.Fprt
-        return vals
+    cols := map[string]string{
+        "id":   "id",
+        "i340": "id_340b",
+        "phid": "pharmacy_id",
+        "manu": "manufacturer",
+        "netw": "network",
+        "strt": "COALESCE(TRUNC(EXTRACT(EPOCH FROM start_at)*1000000, 0), 0)",
+        "term": "COALESCE(TRUNC(EXTRACT(EPOCH FROM end_at)  *1000000, 0), 0)",
     }
-    return scrubStreamExec[RebateRec](strm, "binary", "rbtbin.rebates", "insert", []string{"scrub_id", "rnum", "status", "fprt"}, toSlice, nil, nil)
+    return db_strm_insert(strm, service.pools["binary"], "rebates", cols, 10000)
 }
 func (s *binaryV5SvcServer) AddClaims(strm grpc.ClientStreamingServer[ClaimRec, Res]) error {
     toSlice := func(obj any) []string {
@@ -203,62 +202,62 @@ func (s *binaryV5SvcServer) Done(ctx context.Context, m *Metrics) (*Res, error) 
     sd.close("to_azure")
     return &Res{}, nil
 }
-func scrubStreamExec[Q any](strm grpc.ClientStreamingServer[Q, Res], pool, tbln, oper string, cols []string, vals func(any)[]string, upds, whr func(any)map[string]string) error {
-    scid := ""
-    root := "fm_scrub"
-    manu := ""
-    proc := ""
-    if md, ok := metadata.FromIncomingContext(strm.Context()); ok {
-        scid = meta(md, "scid")
-        manu = meta(md, "manu")
-        proc = meta(md, "proc")
-    }
-    sd := scrubDir(scid, root, manu, proc)
-    if sf, err := sd.scrubFile(pool, oper, tbln, cols); err == nil {
-        for {
-            if msg, err := strm.Recv(); err == nil {
-                if oper == "insert" {
-                    sf.insert(vals(msg))
-                } else {
-                    sf.update(upds(msg), whr(msg))
-                }
-            } else if err == io.EOF {
-                return nil
-            } else {
-                return err
-            }
-        }
-    } else {
-        return err
-    }
-}
-func scrubExec[Q any](ctx context.Context, msg Q, pool, tbln, oper string, cols []string, vals func(any)[]string, upds, whr func(any)map[string]string) error {
-    scid := ""
-    root := "fm_scrub"
-    manu := ""
-    proc := ""
-    if md, ok := metadata.FromIncomingContext(ctx); ok {
-        scid = meta(md, "scid")
-        manu = meta(md, "manu")
-        proc = meta(md, "proc")
-    }
-    sd := scrubDir(scid, root, manu, proc)
-    if sf, err := sd.scrubFile(pool, oper, tbln, cols); err == nil {
-        for {
-            if oper == "insert" {
-                sf.insert(vals(msg))
-            } else {
-                sf.update(upds(msg), whr(msg))
-            }
-        }
-    } else {
-        return err
-    }
-}
-func meta(md metadata.MD, name string) string {
-    vals := md.Get(name)
-    if len(vals) > 0 {
-        return vals[0]
-    }
-    return ""
-}
+// func scrubStreamExec[Q any](strm grpc.ClientStreamingServer[Q, Res], pool, tbln, oper string, cols []string, vals func(any)[]string, upds, whr func(any)map[string]string) error {
+//     scid := ""
+//     root := "fm_scrub"
+//     manu := ""
+//     proc := ""
+//     if md, ok := metadata.FromIncomingContext(strm.Context()); ok {
+//         scid = meta(md, "scid")
+//         manu = meta(md, "manu")
+//         proc = meta(md, "proc")
+//     }
+//     sd := scrubDir(scid, root, manu, proc)
+//     if sf, err := sd.scrubFile(pool, oper, tbln, cols); err == nil {
+//         for {
+//             if msg, err := strm.Recv(); err == nil {
+//                 if oper == "insert" {
+//                     sf.insert(vals(msg))
+//                 } else {
+//                     sf.update(upds(msg), whr(msg))
+//                 }
+//             } else if err == io.EOF {
+//                 return nil
+//             } else {
+//                 return err
+//             }
+//         }
+//     } else {
+//         return err
+//     }
+// }
+// func scrubExec[Q any](ctx context.Context, msg Q, pool, tbln, oper string, cols []string, vals func(any)[]string, upds, whr func(any)map[string]string) error {
+//     scid := ""
+//     root := "fm_scrub"
+//     manu := ""
+//     proc := ""
+//     if md, ok := metadata.FromIncomingContext(ctx); ok {
+//         scid = meta(md, "scid")
+//         manu = meta(md, "manu")
+//         proc = meta(md, "proc")
+//     }
+//     sd := scrubDir(scid, root, manu, proc)
+//     if sf, err := sd.scrubFile(pool, oper, tbln, cols); err == nil {
+//         for {
+//             if oper == "insert" {
+//                 sf.insert(vals(msg))
+//             } else {
+//                 sf.update(upds(msg), whr(msg))
+//             }
+//         }
+//     } else {
+//         return err
+//     }
+// }
+// func meta(md metadata.MD, name string) string {
+//     vals := md.Get(name)
+//     if len(vals) > 0 {
+//         return vals[0]
+//     }
+//     return ""
+// }

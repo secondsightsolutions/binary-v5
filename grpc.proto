@@ -7,69 +7,76 @@ option go_package = "github.com/secondsightsolutions/binary-v5/main";
 
 package main;
 
-
-message Rebate {
-    int32   indx = 1;
-    string  stat = 2;
-    string  hrxn = 3;
-    string  fspd = 4;
-    string  fndc = 5;
-    string  spmt = 6;   // SPI match type: exact, xwalk, stack, chain
-    string  errc = 7;
-    string  errm = 8;
-    map<string,string> flds = 10;
+message AtlasRebate {
+    int64  seq  = 1;
+    int64  scid = 2;
+    int64  rbid = 3;
+    int64  indx = 4;
+    string rxn  = 5;
+    string hrxn = 6;
+    string ndc  = 7;
+    string spid = 8;
+    string prid = 9;
+    string dos  = 10;
+    string stat = 11;
+    string excl = 12;
+    string errc = 13;
+    string errm = 14;
+    string col1 = 21;
+    string col2 = 22;
+    string col50= 70;
+}
+message AtlasRebateMeta {
+    int64  seq  = 1;
+    int64  scid = 2;
+    string col1 = 11;
+    string col2 = 12;
+    string col50= 60;
+}
+message AtlasClaimUse {
+    int64  seq  = 1;
+    int64  scid = 2;
+    string shrt = 3;
+    string excl = 4;
+}
+message AtlasRebateClaim {
+    int64  seq  = 1;
+    int64  scid = 2;
+    int64  rbid = 3;
+    string shrt = 4;
+}
+message AtlasClaim {
+    string shrt = 1;
+    string i340 = 2;
+    string ndc  = 3;
+    string spid = 4;
+    string prid = 5;
+    string hrxn = 6;
+    string hfrx = 7;
+    string hdos = 8;
+    string hdop = 9;
+    int64  doc  = 10;
+    int64  dos  = 11;
+    int64  dop  = 12;
+    string netw = 13;
+    string prnm = 14;
+    string chnm = 15;
+    bool   elig = 16;
+    bool   susp = 17;
+    repeated string ihph = 18;
 }
 
-message Claim {
-    string clid   = 1;   // id
-    string manu   = 2;   // manufacturer
-    string spid   = 3;   // service_provider_id
-    string hrxn   = 4;   // rx_number
-    string hfrx   = 5;   // formatted_rx_number
-    string ndc    = 6;   // ndc
-    string i340   = 7;   // id_340b
-    string shid   = 8;   // short_id - Short unique identifier string used as a claim-id for customers to see.
-    string hdos   = 9;   // date_of_service
-    string hdop   = 10;  // date_prescribed
-    int64  dos    = 11;  // formatted_dos
-    int64  doc    = 12;  // created_at
-    int64  dop    = 13;  // formatted_dop
-    double qty    = 14;  // quantity
-    string netw   = 15;  // network
-    string chnm   = 16;  // chain_name
-    //string phtp   = 17;  // Pharmacy type (1CP, WO, NCP, ...)
-    string prnm   = 18;  // product_name
-    string prid   = 19;  // prescriber_id
-    bool   cnfm   = 20;  // claim_conforms_flag
-    bool   elig   = 21;  // eligible_at_submission
-    bool   susp   = 22;  // suspended_at_submission
-    repeated int64 ihph = 23; // in_house_pharmacy_ids
-    string excl   = 25;  // exclusion reason - will have a value only in test mode.
-    int64  lscid  = 26;  // rbt_rrid - scrub id of lock owner
-    string lhdos  = 27;  // rbt_hdos - hashed dos of first rebate using this claim
-    string lownr  = 28;  // rbt_hdos_owner - name of processor who set this lock
-    string lauth  = 29;  // rbt_hdos_auth - auth token used to set this lock
-    
-    map<int64,Rebate>  rbts = 50;
-    map<string,string> xtra = 51;
-    bool   valid = 52;
-    bool   match = 53;
-    
-    //string rbid   = 80;
-    //string ceid   = 8;   // contracted_entity_id
-    //string phid   = 9;   // pharmacy_id
-    //string dea    = 10;  // dea
-    //string guid   = 11;  // submission_guid
-    //string hdpr   = 13;  // date_prescribed
-    //string winv   = 14;  // wholesaler_invoice_number
-    //double wacp  = 15;   // wac_price
-    //string spiq   = 17;  // service_provider_id_qualifier
-    //string priq   = 18;  // prescriber_id_qualifier
-    //bool   isih   = 23;  // Entity has in-house pharmacy
-    //bool   isgr   = 24;  // Entity is grantee
-    //bool   dupl   = 24;  // duplicate
-    //bool   stage  = 25;  // staging
-    //int64  upat   = 27;  // updated_at
+message TitanScrub {
+    string manu = 1;
+    int64  scid = 2;
+
+}
+message TitanRebate {
+    int64  scid = 1;
+    int64  rbid = 2;
+    string stat = 3;
+    string errc = 4;
+    string errm = 5;
 }
 
 message Entity {
@@ -164,25 +171,6 @@ message Req {
 }
 message Res {
 }
-message RebateRec {
-    string scid   = 1;
-    string rnum   = 2;
-    string status = 3;
-    string fprt   = 4;
-}
-message ClaimRec {
-    string scid   = 1;
-    string clid   = 2;
-    string excl   = 3;
-}
-message ClaimUpdate {
-    string scid   = 1;
-    string clid   = 2;
-    string lscid  = 3;  // rbt_rrid - scrub id of lock owner
-    string lhdos  = 4;  // rbt_hdos - hashed dos of first rebate using this claim
-    string lownr  = 5;  // rbt_hdos_owner - name of processor who set this lock
-    string lauth  = 6;  // rbt_hdos_auth - auth token used to set this lock
-}
 
 message StartReq {
     string auth = 1;
@@ -198,9 +186,9 @@ message StartReq {
     string cmdl = 11;
 }
 message StartRes {
-    int64   scrubId         = 1;
+    int64   scid = 1;
 }
-message Metrics {
+message TitanMetrics {
     int32   rbt_total     = 1;
     int32   rbt_valid     = 2;
     int32   rbt_matched   = 3;
