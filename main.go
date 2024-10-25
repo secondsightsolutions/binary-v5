@@ -8,6 +8,12 @@ import (
 	"syscall"
 )
 
+var (
+    srvp int = 23460
+	svcp int = 23461
+
+)
+
 func main() {
     var wg sync.WaitGroup
 
@@ -15,30 +21,29 @@ func main() {
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
     
-    //dflts()
     getEnv()
     CryptInit(cert, cacr, "", pkey, salt, phrs)
-    options()
+    opts := options()
 
-    if doPing {
+    if opts.runPing {
         ping()
         exit(nil, 0, "")
-    } else if doVers {
+    } else if opts.runVers {
         version()
         exit(nil, 0, "")
     }
     
-    if runClient {
+    if opts.runClient {
         wg.Add(1)
-        go client_main(&wg, stop)
+        go run_client(&wg, opts, stop)
     }
-    if runServer {
+    if opts.runAtlas {
         wg.Add(1)
-        go server_main(&wg, stop)
+        go run_atlas(&wg, opts, stop)
     }
-    if runService {
+    if opts.runTitan {
         wg.Add(1)
-        go service_main(&wg, stop)
+        go run_titan(&wg, opts, stop)
     }
     <-sigs
     close(stop)
@@ -57,7 +62,6 @@ func getEnv() {
     setIf(&svch,    "BIN_SVCH")
     setIf(&desc,    "BIN_DESC")
     setIf(&envr,    "BIN_ENVR")
-    setIf(&auth,	"BIN_AUTH")
 }
 
 func setIf(envVar *string, envName string) {

@@ -21,11 +21,6 @@ func (s *binaryV5SrvServer) Start(ctx context.Context, req *StartReq) (*StartRes
 }
 
 func (s *binaryV5SrvServer) Scrub(strm grpc.ClientStreamingServer[Rebate, Metrics]) error {
-    for {
-        if msg, err := strm.Recv(); err == nil {
-            
-        }
-    }
     return nil
 }
 

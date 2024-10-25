@@ -140,7 +140,7 @@ func db_strm_insert[T,R any](strm grpc.ClientStreamingServer[T,R], pool *pgxpool
 				fn := colMap[col]
 				vs := reflect.ValueOf(&obj).MethodByName(fn).Call([]reflect.Value{})
 				v0 := vs[0]
-				sv := ""
+				sv := "''"
 				if v0.Kind() == reflect.String {
 					sv = fmt.Sprintf("'%s'", v0.String())
 				} else if v0.CanFloat() {
@@ -185,8 +185,8 @@ func db_strm_insert[T,R any](strm grpc.ClientStreamingServer[T,R], pool *pgxpool
 				}
 			}
 		}
-		
 	}
+	return nil
 }
 
 func db_updates(ctx context.Context, pool *pgxpool.Pool, file string) error {

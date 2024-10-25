@@ -26,19 +26,19 @@ func (clt *Client) connect() {
 }
 
 func (clt *Client) start() int64 {
-    md  := metadata.New(map[string]string{"auth": auth, "vers": vers, "manu": manu})
+    md  := metadata.New(map[string]string{"auth": clt.opts.auth, "vers": vers, "manu": manu})
     ctx := metadata.NewOutgoingContext(context.Background(), md)
     req := &StartReq{
-    	Auth: auth,
+    	Auth: clt.opts.auth,
     	Manu: manu,
-    	Plcy: plcy,
-    	Name: name,
+    	Plcy: clt.opts.policy,
+    	Name: clt.opts.name,
     	Vers: vers,
     	Desc: desc,
     	Hash: hash,
     	Host: srvh,
     	Type: appl,
-    	Hdrs: strings.Join(hdrs,   ","),
+    	Hdrs: strings.Join(clt.hdrs,   ","),
     	Cmdl: strings.Join(os.Args, " "),
     }
     if res, err := clt.srv.Start(ctx, req); err == nil {
@@ -50,7 +50,7 @@ func (clt *Client) start() int64 {
 
 func (clt *Client) scrub(rbts chan *Rebate) {
     var strm grpc.ClientStreamingClient[Rebate, Metrics]
-    md  := metadata.New(map[string]string{"auth": auth, "vers": vers, "manu": manu, "scid": fmt.Sprintf("%d", scid)})
+    md  := metadata.New(map[string]string{"auth": clt.opts.auth, "vers": vers, "manu": manu, "scid": fmt.Sprintf("%d", clt.scid)})
     ctx := metadata.NewOutgoingContext(context.Background(), md)
 	for rbt := range rbts {
         for strm == nil {

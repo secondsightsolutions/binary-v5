@@ -24,7 +24,7 @@ type cache struct {
     sync.Mutex
     views map[string]*view  // Each view is an indexed representation of the set of elements.
     rows  []*row            // All elements in this table.
-    sfile *scrub_file       // If we were loaded via a scrub_file.
+    //sfile *scrub_file       // If we were loaded via a scrub_file.
 }
 type view struct {
     rows map[string][]*row
@@ -140,7 +140,7 @@ func (v *view) find(full string) []*row {
     return fnd
 }
 
-func sort_lists(keyn, keyf string, keyl int, desc bool, lists ...[]*row) []*row {
+func sort_lists(keyn, keyf string, desc bool, lists ...[]*row) []*row {
     all := []*row{}
     set := map[int]any{}
     for _, list := range lists {                    // Look at each list passed in.

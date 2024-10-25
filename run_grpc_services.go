@@ -12,7 +12,7 @@ import (
 )
 
 
-func run_grpc_services[T any](wg *sync.WaitGroup, stop chan any, name string, port int, regis func(grpc.ServiceRegistrar, T), srv T) {
+func run_grpc_server[T any](wg *sync.WaitGroup, stop chan any, name string, port int, regis func(grpc.ServiceRegistrar, T), srv T) {
     defer wg.Done()
 
     cfg := &tls.Config{

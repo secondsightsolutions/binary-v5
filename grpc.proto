@@ -72,11 +72,12 @@ message TitanScrub {
 
 }
 message TitanRebate {
-    int64  scid = 1;
-    int64  rbid = 2;
-    string stat = 3;
-    string errc = 4;
-    string errm = 5;
+    string manu = 1;
+    int64  scid = 2;
+    int64  rbid = 3;
+    string stat = 4;
+    string errc = 5;
+    string errm = 6;
 }
 
 message Entity {

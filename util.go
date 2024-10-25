@@ -197,7 +197,7 @@ func CheckRange(t1, t2 *time.Time, bef, aft int) string {
 	return ""
 }
 func CheckSPI(sc *Scrub, spiA, spiB string, chains, stacks bool) (bool, string) {
-	return server.spis.match(spiA, spiB, chains, stacks)
+	return atlas.spis.match(spiA, spiB, chains, stacks)
 }
 
 var ScreenLevel = struct {

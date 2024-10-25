@@ -2,7 +2,6 @@ package main
 
 import (
 	_ "embed"
-	"strings"
 )
 
 // Values that can be injected at build time
@@ -57,38 +56,3 @@ var (
 	//go:embed embed/azky.txt
 	azky string
 )
-
-var (
-	test string	// test directory
-	scid int64  // scrub id
-	auth string
-	name string
-	plcy string
-	hdrs []string
-	fin  string
-	fout string
-
-	doPing bool
-	doVers bool
-	Http   bool
-
-	runClient  bool
-	runServer  bool
-	runService bool
-
-	srvp int = 23460
-	svcp int = 23461
-)
-
-func init() {
-    switch strings.ToLower(appl) {
-    case "client":
-        runClient = true
-    case "server":
-        runServer = true
-    case "service":
-        runService = true
-    default:
-		runClient = true
-    }
-}

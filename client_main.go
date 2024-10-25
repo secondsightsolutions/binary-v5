@@ -9,14 +9,18 @@ import (
 )
 
 type Client struct {
-	srv BinaryV5SrvClient
+	test string	// test directory
+	scid int64  // scrub id
+	hdrs []string
+	opts *Opts
+	srv  BinaryV5SrvClient
 }
 var client *Client
 
-func client_main(wg *sync.WaitGroup, stop chan any) {
+func run_client(wg *sync.WaitGroup, opts *Opts, stop chan any) {
     defer wg.Done()
 
-	client = &Client{}
+	client = &Client{opts: opts}
 	client.connect()
 
     memoryWatch(stop)
