@@ -5,12 +5,16 @@ CREATE TABLE atlas.scrubs (
     plcy text not null,
     name text not null,
     vers text not null,
-    desc text not null,
+    dscr text not null,
     hash text not null,
     host text not null,
     appl text not null,
     hdrs text not null,
-    cmdl text not null
+    cmdl text not null,
+    created timestamp not null default now(),
+    ready   timestamp,
+    started timestamp,
+    done    timestamp
 );
 
 CREATE TABLE atlas.rebates (
@@ -30,8 +34,15 @@ CREATE TABLE atlas.rebates (
     errm  text not null default '',
     col1  text not null default '',
     col2  text not null default '',
-    col50 text not null default '',
-    CONSTRAINT PRIMARY KEY (scid, rbid)
+    col3  text not null default '',
+    col4  text not null default '',
+    col5  text not null default '',
+    col6  text not null default '',
+    col7  text not null default '',
+    col8  text not null default '',
+    col9  text not null default '',
+    col10 text not null default '',
+    CONSTRAINT rebates_pk PRIMARY KEY (scid, rbid)
 );
 CREATE INDEX ON atlas.rebates(seq);
 CREATE INDEX ON atlas.rebates(scid);
@@ -42,7 +53,7 @@ CREATE TABLE atlas.claim_uses (
     scid  bigint not null,
     shrt  text not null,
     excl  text not null default '',
-    CONSTRAINT PRIMARY KEY (scid, shrt)
+    CONSTRAINT claim_uses_pk PRIMARY KEY (scid, shrt)
 );
 CREATE INDEX ON atlas.claim_uses(seq);
 CREATE INDEX ON atlas.claim_uses(scid);
@@ -54,7 +65,14 @@ CREATE TABLE atlas.rebate_meta (
     scid  bigint not null primary key,
     col1  text not null default '',
     col2  text not null default '',
-    col50 text not null default ''
+    col3  text not null default '',
+    col4  text not null default '',
+    col5  text not null default '',
+    col6  text not null default '',
+    col7  text not null default '',
+    col8  text not null default '',
+    col9  text not null default '',
+    col10 text not null default ''
 );
 CREATE INDEX ON atlas.rebate_meta(seq);
 CREATE INDEX ON atlas.rebate_meta(scid);
@@ -64,15 +82,15 @@ CREATE TABLE atlas.rebate_claims (
     scid bigint not null,
     rbid bigint not null,
     shrt text not null,
-    CONSTRAINT PRIMARY KEY (scid, rbid, shrt)
+    CONSTRAINT rebate_claims_pk PRIMARY KEY (scid, rbid, shrt)
 );
 CREATE INDEX ON atlas.rebate_claims(seq);
 
 CREATE TABLE atlas.sync (
-    claims              timestamp not null default '2000-01-01',
-    scrubs              bigint not null default 0,
+    claims        timestamp not null default '2000-01-01',
+    scrubs        bigint not null default 0,
     rebates       bigint not null default 0,
-    claim_uses        bigint not null default 0,
+    claim_uses    bigint not null default 0,
     rebate_meta   bigint not null default 0,
     rebate_claims bigint not null default 0
 );
@@ -95,5 +113,5 @@ CREATE TABLE atlas.claims (
     chnm text not null default '',
     elig bool not null default true,
     susp bool not null default false,
-    ihph []text not null default '{}'
+    ihph text array not null default '{}'
 );

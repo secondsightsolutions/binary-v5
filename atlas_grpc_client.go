@@ -26,30 +26,30 @@ func (atlas *Atlas) connect() {
 func ping() {
 }
 
-func (atlas *Atlas) getESP1(stop chan any, batch, retry int) []any {
-	return cache_load(stop, &atlas.done, batch, "esp1", atlas.opts.auth, atlas.titan.GetESP1Pharms)
+func (atlas *Atlas) getESP1(stop chan any, batch int) []any {
+	return read_stream(stop, &atlas.done, batch, "esp1", atlas.opts.auth, atlas.titan.GetESP1Pharms)
 }
-func (atlas *Atlas) getEntities(stop chan any, batch, retry int) []any {
-	return cache_load(stop, &atlas.done, batch, "entities", atlas.opts.auth, atlas.titan.GetEntities)
+func (atlas *Atlas) getEntities(stop chan any, batch int) []any {
+	return read_stream(stop, &atlas.done, batch, "entities", atlas.opts.auth, atlas.titan.GetEntities)
 }
-func (atlas *Atlas) getLedger(stop chan any, batch, retry int) []any {
-	return cache_load(stop, &atlas.done, batch, "ledger", atlas.opts.auth, atlas.titan.GetEligibilityLedger)
+func (atlas *Atlas) getLedger(stop chan any, batch int) []any {
+	return read_stream(stop, &atlas.done, batch, "ledger", atlas.opts.auth, atlas.titan.GetEligibilityLedger)
 }
-func (atlas *Atlas) getNDCs(stop chan any, batch, retry int) []any {
-	return cache_load(stop, &atlas.done, batch, "ndcs", atlas.opts.auth, atlas.titan.GetNDCs)
+func (atlas *Atlas) getNDCs(stop chan any, batch int) []any {
+	return read_stream(stop, &atlas.done, batch, "ndcs", atlas.opts.auth, atlas.titan.GetNDCs)
 }
-func (atlas *Atlas) getPharms(stop chan any, batch, retry int) []any {
-	return cache_load(stop, &atlas.done, batch, "pharms", atlas.opts.auth, atlas.titan.GetPharmacies)
+func (atlas *Atlas) getPharms(stop chan any, batch int) []any {
+	return read_stream(stop, &atlas.done, batch, "pharms", atlas.opts.auth, atlas.titan.GetPharmacies)
 }
-func (atlas *Atlas) getSPIs(stop chan any, batch, retry int) []any {
-	return cache_load(stop, &atlas.done, batch, "spis", atlas.opts.auth, atlas.titan.GetSPIs)
+func (atlas *Atlas) getSPIs(stop chan any, batch int) []any {
+	return read_stream(stop, &atlas.done, batch, "spis", atlas.opts.auth, atlas.titan.GetSPIs)
 }
 
-func cache_load[T any](stop chan any, done *bool, batch int, name, auth string, f func(context.Context, *Req, ...grpc.CallOption) (grpc.ServerStreamingClient[T], error)) []any {
+func read_stream[T any](stop chan any, done *bool, batch int, name, auth string, f func(context.Context, *Req, ...grpc.CallOption) (grpc.ServerStreamingClient[T], error)) []any {
 	if *done {
 		return nil
 	}
-	title := "cache_load"
+	title := "read_stream"
 	req := &Req{Auth: auth, Vers: vers, Manu: manu}
 
 	// Stay in this outer loop until either we successfully read all rows from server, or we are stopped.

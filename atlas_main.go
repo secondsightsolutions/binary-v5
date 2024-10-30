@@ -39,14 +39,25 @@ func run_atlas(wg *sync.WaitGroup, opts *Opts, stop chan any) {
     if atlas.done {
         return
     }
-    srvWGrp := &sync.WaitGroup{}
-    srvWGrp.Add(3)
-    go run_datab_ping(srvWGrp, stop, 60, "atlas", nil)
-    go run_titan_ping(srvWGrp, stop, 60, atlas)
-    go run_grpc_server(srvWGrp, stop, "atlas", srvp, RegisterAtlasServer, atlas.atlas)
-    srvWGrp.Wait()
+    atlasWG := &sync.WaitGroup{}
+    atlasWG.Add(4)
+    go run_datab_ping(atlasWG, stop, 60, "atlas", nil)
+    go run_titan_ping(atlasWG, stop, 60, atlas)
+    go run_grpc_server(atlasWG, stop, "atlas", srvp, RegisterAtlasServer, atlas.atlas)
+    go run_atlas_sync(atlasWG, stop)
+    atlasWG.Wait()
 }
 
+func run_atlas_sync(wg *sync.WaitGroup, stop chan any) {
+    defer wg.Done()
+    for {
+        select {
+        case <-time.After(60*time.Second):
+        case <-stop:
+            return
+        }
+    }
+}
 func run_titan_ping(wg *sync.WaitGroup, stop chan any, intv int, atlas *Atlas) {
     defer wg.Done()
     pingService := func() {
@@ -79,13 +90,13 @@ func (srv *Atlas) getEnv() {
 }
 
 func (srv *Atlas) load(stop chan any) {
-    //srv.ca.clms = new_cache(srv.getClaims(stop, 100000, 5))
-    srv.ca.esp1 = new_cache(srv.getESP1(    stop, 100000, 5))
-    srv.ca.ents = new_cache(srv.getEntities(stop, 100000, 5))
-    srv.ca.ledg = new_cache(srv.getLedger(  stop, 100000, 5))
-    srv.ca.ndcs = new_cache(srv.getNDCs(    stop, 100000, 5))
-    srv.ca.phms = new_cache(srv.getPharms(  stop, 100000, 5))
-    srv.ca.spis = new_cache(srv.getSPIs(    stop, 100000, 5))
+    //srv.ca.clms = new_cache(srv.getClaims(stop, 100000))
+    srv.ca.esp1 = new_cache(srv.getESP1(    stop, 100000))
+    srv.ca.ents = new_cache(srv.getEntities(stop, 100000))
+    srv.ca.ledg = new_cache(srv.getLedger(  stop, 100000))
+    srv.ca.ndcs = new_cache(srv.getNDCs(    stop, 100000))
+    srv.ca.phms = new_cache(srv.getPharms(  stop, 100000))
+    srv.ca.spis = new_cache(srv.getSPIs(    stop, 100000))
     srv.spis.load(srv.ca.spis)
     srv.ca.done = true
 }
