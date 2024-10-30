@@ -19,171 +19,171 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	BinaryV5Srv_Start_FullMethodName = "/main.BinaryV5Srv/Start"
-	BinaryV5Srv_Scrub_FullMethodName = "/main.BinaryV5Srv/Scrub"
-	BinaryV5Srv_Done_FullMethodName  = "/main.BinaryV5Srv/Done"
+	Atlas_Ping_FullMethodName     = "/main.Atlas/Ping"
+	Atlas_NewScrub_FullMethodName = "/main.Atlas/NewScrub"
+	Atlas_Rebates_FullMethodName  = "/main.Atlas/Rebates"
 )
 
-// BinaryV5SrvClient is the client API for BinaryV5Srv service.
+// AtlasClient is the client API for Atlas service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-type BinaryV5SrvClient interface {
-	Start(ctx context.Context, in *StartReq, opts ...grpc.CallOption) (*StartRes, error)
-	Scrub(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[Rebate, Metrics], error)
-	Done(ctx context.Context, in *DoneReq, opts ...grpc.CallOption) (*ScrubRes, error)
+type AtlasClient interface {
+	Ping(ctx context.Context, in *Req, opts ...grpc.CallOption) (*Res, error)
+	NewScrub(ctx context.Context, in *Scrub, opts ...grpc.CallOption) (*ScrubRes, error)
+	Rebates(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[Rebate, Res], error)
 }
 
-type binaryV5SrvClient struct {
+type atlasClient struct {
 	cc grpc.ClientConnInterface
 }
 
-func NewBinaryV5SrvClient(cc grpc.ClientConnInterface) BinaryV5SrvClient {
-	return &binaryV5SrvClient{cc}
+func NewAtlasClient(cc grpc.ClientConnInterface) AtlasClient {
+	return &atlasClient{cc}
 }
 
-func (c *binaryV5SrvClient) Start(ctx context.Context, in *StartReq, opts ...grpc.CallOption) (*StartRes, error) {
+func (c *atlasClient) Ping(ctx context.Context, in *Req, opts ...grpc.CallOption) (*Res, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(StartRes)
-	err := c.cc.Invoke(ctx, BinaryV5Srv_Start_FullMethodName, in, out, cOpts...)
+	out := new(Res)
+	err := c.cc.Invoke(ctx, Atlas_Ping_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *binaryV5SrvClient) Scrub(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[Rebate, Metrics], error) {
+func (c *atlasClient) NewScrub(ctx context.Context, in *Scrub, opts ...grpc.CallOption) (*ScrubRes, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &BinaryV5Srv_ServiceDesc.Streams[0], BinaryV5Srv_Scrub_FullMethodName, cOpts...)
+	out := new(ScrubRes)
+	err := c.cc.Invoke(ctx, Atlas_NewScrub_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &grpc.GenericClientStream[Rebate, Metrics]{ClientStream: stream}
+	return out, nil
+}
+
+func (c *atlasClient) Rebates(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[Rebate, Res], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &Atlas_ServiceDesc.Streams[0], Atlas_Rebates_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[Rebate, Res]{ClientStream: stream}
 	return x, nil
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type BinaryV5Srv_ScrubClient = grpc.ClientStreamingClient[Rebate, Metrics]
+type Atlas_RebatesClient = grpc.ClientStreamingClient[Rebate, Res]
 
-func (c *binaryV5SrvClient) Done(ctx context.Context, in *DoneReq, opts ...grpc.CallOption) (*ScrubRes, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ScrubRes)
-	err := c.cc.Invoke(ctx, BinaryV5Srv_Done_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-// BinaryV5SrvServer is the server API for BinaryV5Srv service.
-// All implementations must embed UnimplementedBinaryV5SrvServer
+// AtlasServer is the server API for Atlas service.
+// All implementations must embed UnimplementedAtlasServer
 // for forward compatibility.
-type BinaryV5SrvServer interface {
-	Start(context.Context, *StartReq) (*StartRes, error)
-	Scrub(grpc.ClientStreamingServer[Rebate, Metrics]) error
-	Done(context.Context, *DoneReq) (*ScrubRes, error)
-	mustEmbedUnimplementedBinaryV5SrvServer()
+type AtlasServer interface {
+	Ping(context.Context, *Req) (*Res, error)
+	NewScrub(context.Context, *Scrub) (*ScrubRes, error)
+	Rebates(grpc.ClientStreamingServer[Rebate, Res]) error
+	mustEmbedUnimplementedAtlasServer()
 }
 
-// UnimplementedBinaryV5SrvServer must be embedded to have
+// UnimplementedAtlasServer must be embedded to have
 // forward compatible implementations.
 //
 // NOTE: this should be embedded by value instead of pointer to avoid a nil
 // pointer dereference when methods are called.
-type UnimplementedBinaryV5SrvServer struct{}
+type UnimplementedAtlasServer struct{}
 
-func (UnimplementedBinaryV5SrvServer) Start(context.Context, *StartReq) (*StartRes, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Start not implemented")
+func (UnimplementedAtlasServer) Ping(context.Context, *Req) (*Res, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Ping not implemented")
 }
-func (UnimplementedBinaryV5SrvServer) Scrub(grpc.ClientStreamingServer[Rebate, Metrics]) error {
-	return status.Errorf(codes.Unimplemented, "method Scrub not implemented")
+func (UnimplementedAtlasServer) NewScrub(context.Context, *Scrub) (*ScrubRes, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method NewScrub not implemented")
 }
-func (UnimplementedBinaryV5SrvServer) Done(context.Context, *DoneReq) (*ScrubRes, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Done not implemented")
+func (UnimplementedAtlasServer) Rebates(grpc.ClientStreamingServer[Rebate, Res]) error {
+	return status.Errorf(codes.Unimplemented, "method Rebates not implemented")
 }
-func (UnimplementedBinaryV5SrvServer) mustEmbedUnimplementedBinaryV5SrvServer() {}
-func (UnimplementedBinaryV5SrvServer) testEmbeddedByValue()                     {}
+func (UnimplementedAtlasServer) mustEmbedUnimplementedAtlasServer() {}
+func (UnimplementedAtlasServer) testEmbeddedByValue()               {}
 
-// UnsafeBinaryV5SrvServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to BinaryV5SrvServer will
+// UnsafeAtlasServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to AtlasServer will
 // result in compilation errors.
-type UnsafeBinaryV5SrvServer interface {
-	mustEmbedUnimplementedBinaryV5SrvServer()
+type UnsafeAtlasServer interface {
+	mustEmbedUnimplementedAtlasServer()
 }
 
-func RegisterBinaryV5SrvServer(s grpc.ServiceRegistrar, srv BinaryV5SrvServer) {
-	// If the following call pancis, it indicates UnimplementedBinaryV5SrvServer was
+func RegisterAtlasServer(s grpc.ServiceRegistrar, srv AtlasServer) {
+	// If the following call pancis, it indicates UnimplementedAtlasServer was
 	// embedded by pointer and is nil.  This will cause panics if an
 	// unimplemented method is ever invoked, so we test this at initialization
 	// time to prevent it from happening at runtime later due to I/O.
 	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
 		t.testEmbeddedByValue()
 	}
-	s.RegisterService(&BinaryV5Srv_ServiceDesc, srv)
+	s.RegisterService(&Atlas_ServiceDesc, srv)
 }
 
-func _BinaryV5Srv_Start_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(StartReq)
+func _Atlas_Ping_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Req)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(BinaryV5SrvServer).Start(ctx, in)
+		return srv.(AtlasServer).Ping(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: BinaryV5Srv_Start_FullMethodName,
+		FullMethod: Atlas_Ping_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(BinaryV5SrvServer).Start(ctx, req.(*StartReq))
+		return srv.(AtlasServer).Ping(ctx, req.(*Req))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _BinaryV5Srv_Scrub_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(BinaryV5SrvServer).Scrub(&grpc.GenericServerStream[Rebate, Metrics]{ServerStream: stream})
+func _Atlas_NewScrub_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Scrub)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AtlasServer).NewScrub(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Atlas_NewScrub_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AtlasServer).NewScrub(ctx, req.(*Scrub))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Atlas_Rebates_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(AtlasServer).Rebates(&grpc.GenericServerStream[Rebate, Res]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type BinaryV5Srv_ScrubServer = grpc.ClientStreamingServer[Rebate, Metrics]
+type Atlas_RebatesServer = grpc.ClientStreamingServer[Rebate, Res]
 
-func _BinaryV5Srv_Done_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(DoneReq)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(BinaryV5SrvServer).Done(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: BinaryV5Srv_Done_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(BinaryV5SrvServer).Done(ctx, req.(*DoneReq))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-// BinaryV5Srv_ServiceDesc is the grpc.ServiceDesc for BinaryV5Srv service.
+// Atlas_ServiceDesc is the grpc.ServiceDesc for Atlas service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
-var BinaryV5Srv_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "main.BinaryV5Srv",
-	HandlerType: (*BinaryV5SrvServer)(nil),
+var Atlas_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "main.Atlas",
+	HandlerType: (*AtlasServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "Start",
-			Handler:    _BinaryV5Srv_Start_Handler,
+			MethodName: "Ping",
+			Handler:    _Atlas_Ping_Handler,
 		},
 		{
-			MethodName: "Done",
-			Handler:    _BinaryV5Srv_Done_Handler,
+			MethodName: "NewScrub",
+			Handler:    _Atlas_NewScrub_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
-			StreamName:    "Scrub",
-			Handler:       _BinaryV5Srv_Scrub_Handler,
+			StreamName:    "Rebates",
+			Handler:       _Atlas_Rebates_Handler,
 			ClientStreams: true,
 		},
 	},
@@ -191,61 +191,61 @@ var BinaryV5Srv_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	BinaryV5Svc_Ping_FullMethodName                 = "/main.BinaryV5Svc/Ping"
-	BinaryV5Svc_GetSPIs_FullMethodName              = "/main.BinaryV5Svc/GetSPIs"
-	BinaryV5Svc_GetNDCs_FullMethodName              = "/main.BinaryV5Svc/GetNDCs"
-	BinaryV5Svc_GetEntities_FullMethodName          = "/main.BinaryV5Svc/GetEntities"
-	BinaryV5Svc_GetPharmacies_FullMethodName        = "/main.BinaryV5Svc/GetPharmacies"
-	BinaryV5Svc_GetESP1Pharms_FullMethodName        = "/main.BinaryV5Svc/GetESP1Pharms"
-	BinaryV5Svc_GetClaims_FullMethodName            = "/main.BinaryV5Svc/GetClaims"
-	BinaryV5Svc_GetEligibilityLedger_FullMethodName = "/main.BinaryV5Svc/GetEligibilityLedger"
-	BinaryV5Svc_Start_FullMethodName                = "/main.BinaryV5Svc/Start"
-	BinaryV5Svc_AddRebates_FullMethodName           = "/main.BinaryV5Svc/AddRebates"
-	BinaryV5Svc_AddClaims_FullMethodName            = "/main.BinaryV5Svc/AddClaims"
-	BinaryV5Svc_UpdateClaims_FullMethodName         = "/main.BinaryV5Svc/UpdateClaims"
-	BinaryV5Svc_Done_FullMethodName                 = "/main.BinaryV5Svc/Done"
+	Titan_Ping_FullMethodName                 = "/main.Titan/Ping"
+	Titan_GetSPIs_FullMethodName              = "/main.Titan/GetSPIs"
+	Titan_GetNDCs_FullMethodName              = "/main.Titan/GetNDCs"
+	Titan_GetEntities_FullMethodName          = "/main.Titan/GetEntities"
+	Titan_GetPharmacies_FullMethodName        = "/main.Titan/GetPharmacies"
+	Titan_GetESP1Pharms_FullMethodName        = "/main.Titan/GetESP1Pharms"
+	Titan_GetEligibilityLedger_FullMethodName = "/main.Titan/GetEligibilityLedger"
+	Titan_NewScrub_FullMethodName             = "/main.Titan/NewScrub"
+	Titan_Rebates_FullMethodName              = "/main.Titan/Rebates"
+	Titan_ClaimsUsed_FullMethodName           = "/main.Titan/ClaimsUsed"
+	Titan_RebateClaims_FullMethodName         = "/main.Titan/RebateClaims"
+	Titan_ScrubDone_FullMethodName            = "/main.Titan/ScrubDone"
+	Titan_SyncClaims_FullMethodName           = "/main.Titan/SyncClaims"
 )
 
-// BinaryV5SvcClient is the client API for BinaryV5Svc service.
+// TitanClient is the client API for Titan service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-type BinaryV5SvcClient interface {
+type TitanClient interface {
 	Ping(ctx context.Context, in *Req, opts ...grpc.CallOption) (*Res, error)
 	GetSPIs(ctx context.Context, in *Req, opts ...grpc.CallOption) (grpc.ServerStreamingClient[SPI], error)
 	GetNDCs(ctx context.Context, in *Req, opts ...grpc.CallOption) (grpc.ServerStreamingClient[NDC], error)
 	GetEntities(ctx context.Context, in *Req, opts ...grpc.CallOption) (grpc.ServerStreamingClient[Entity], error)
 	GetPharmacies(ctx context.Context, in *Req, opts ...grpc.CallOption) (grpc.ServerStreamingClient[Pharmacy], error)
 	GetESP1Pharms(ctx context.Context, in *Req, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ESP1PharmNDC], error)
-	GetClaims(ctx context.Context, in *Req, opts ...grpc.CallOption) (grpc.ServerStreamingClient[Claim], error)
 	GetEligibilityLedger(ctx context.Context, in *Req, opts ...grpc.CallOption) (grpc.ServerStreamingClient[Eligibility], error)
-	Start(ctx context.Context, in *StartReq, opts ...grpc.CallOption) (*StartRes, error)
-	AddRebates(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[RebateRec, Res], error)
-	AddClaims(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[ClaimRec, Res], error)
-	UpdateClaims(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[ClaimUpdate, Res], error)
-	Done(ctx context.Context, in *Metrics, opts ...grpc.CallOption) (*Res, error)
+	NewScrub(ctx context.Context, in *Scrub, opts ...grpc.CallOption) (*Res, error)
+	Rebates(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[TitanRebate, Res], error)
+	ClaimsUsed(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[ClaimUse, Res], error)
+	RebateClaims(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[RebateClaim, Res], error)
+	ScrubDone(ctx context.Context, in *Metrics, opts ...grpc.CallOption) (*Res, error)
+	SyncClaims(ctx context.Context, in *SyncReq, opts ...grpc.CallOption) (grpc.ServerStreamingClient[Claim], error)
 }
 
-type binaryV5SvcClient struct {
+type titanClient struct {
 	cc grpc.ClientConnInterface
 }
 
-func NewBinaryV5SvcClient(cc grpc.ClientConnInterface) BinaryV5SvcClient {
-	return &binaryV5SvcClient{cc}
+func NewTitanClient(cc grpc.ClientConnInterface) TitanClient {
+	return &titanClient{cc}
 }
 
-func (c *binaryV5SvcClient) Ping(ctx context.Context, in *Req, opts ...grpc.CallOption) (*Res, error) {
+func (c *titanClient) Ping(ctx context.Context, in *Req, opts ...grpc.CallOption) (*Res, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Res)
-	err := c.cc.Invoke(ctx, BinaryV5Svc_Ping_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, Titan_Ping_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *binaryV5SvcClient) GetSPIs(ctx context.Context, in *Req, opts ...grpc.CallOption) (grpc.ServerStreamingClient[SPI], error) {
+func (c *titanClient) GetSPIs(ctx context.Context, in *Req, opts ...grpc.CallOption) (grpc.ServerStreamingClient[SPI], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &BinaryV5Svc_ServiceDesc.Streams[0], BinaryV5Svc_GetSPIs_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &Titan_ServiceDesc.Streams[0], Titan_GetSPIs_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -260,11 +260,11 @@ func (c *binaryV5SvcClient) GetSPIs(ctx context.Context, in *Req, opts ...grpc.C
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type BinaryV5Svc_GetSPIsClient = grpc.ServerStreamingClient[SPI]
+type Titan_GetSPIsClient = grpc.ServerStreamingClient[SPI]
 
-func (c *binaryV5SvcClient) GetNDCs(ctx context.Context, in *Req, opts ...grpc.CallOption) (grpc.ServerStreamingClient[NDC], error) {
+func (c *titanClient) GetNDCs(ctx context.Context, in *Req, opts ...grpc.CallOption) (grpc.ServerStreamingClient[NDC], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &BinaryV5Svc_ServiceDesc.Streams[1], BinaryV5Svc_GetNDCs_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &Titan_ServiceDesc.Streams[1], Titan_GetNDCs_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -279,11 +279,11 @@ func (c *binaryV5SvcClient) GetNDCs(ctx context.Context, in *Req, opts ...grpc.C
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type BinaryV5Svc_GetNDCsClient = grpc.ServerStreamingClient[NDC]
+type Titan_GetNDCsClient = grpc.ServerStreamingClient[NDC]
 
-func (c *binaryV5SvcClient) GetEntities(ctx context.Context, in *Req, opts ...grpc.CallOption) (grpc.ServerStreamingClient[Entity], error) {
+func (c *titanClient) GetEntities(ctx context.Context, in *Req, opts ...grpc.CallOption) (grpc.ServerStreamingClient[Entity], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &BinaryV5Svc_ServiceDesc.Streams[2], BinaryV5Svc_GetEntities_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &Titan_ServiceDesc.Streams[2], Titan_GetEntities_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -298,11 +298,11 @@ func (c *binaryV5SvcClient) GetEntities(ctx context.Context, in *Req, opts ...gr
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type BinaryV5Svc_GetEntitiesClient = grpc.ServerStreamingClient[Entity]
+type Titan_GetEntitiesClient = grpc.ServerStreamingClient[Entity]
 
-func (c *binaryV5SvcClient) GetPharmacies(ctx context.Context, in *Req, opts ...grpc.CallOption) (grpc.ServerStreamingClient[Pharmacy], error) {
+func (c *titanClient) GetPharmacies(ctx context.Context, in *Req, opts ...grpc.CallOption) (grpc.ServerStreamingClient[Pharmacy], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &BinaryV5Svc_ServiceDesc.Streams[3], BinaryV5Svc_GetPharmacies_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &Titan_ServiceDesc.Streams[3], Titan_GetPharmacies_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -317,11 +317,11 @@ func (c *binaryV5SvcClient) GetPharmacies(ctx context.Context, in *Req, opts ...
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type BinaryV5Svc_GetPharmaciesClient = grpc.ServerStreamingClient[Pharmacy]
+type Titan_GetPharmaciesClient = grpc.ServerStreamingClient[Pharmacy]
 
-func (c *binaryV5SvcClient) GetESP1Pharms(ctx context.Context, in *Req, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ESP1PharmNDC], error) {
+func (c *titanClient) GetESP1Pharms(ctx context.Context, in *Req, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ESP1PharmNDC], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &BinaryV5Svc_ServiceDesc.Streams[4], BinaryV5Svc_GetESP1Pharms_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &Titan_ServiceDesc.Streams[4], Titan_GetESP1Pharms_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -336,30 +336,11 @@ func (c *binaryV5SvcClient) GetESP1Pharms(ctx context.Context, in *Req, opts ...
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type BinaryV5Svc_GetESP1PharmsClient = grpc.ServerStreamingClient[ESP1PharmNDC]
+type Titan_GetESP1PharmsClient = grpc.ServerStreamingClient[ESP1PharmNDC]
 
-func (c *binaryV5SvcClient) GetClaims(ctx context.Context, in *Req, opts ...grpc.CallOption) (grpc.ServerStreamingClient[Claim], error) {
+func (c *titanClient) GetEligibilityLedger(ctx context.Context, in *Req, opts ...grpc.CallOption) (grpc.ServerStreamingClient[Eligibility], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &BinaryV5Svc_ServiceDesc.Streams[5], BinaryV5Svc_GetClaims_FullMethodName, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &grpc.GenericClientStream[Req, Claim]{ClientStream: stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type BinaryV5Svc_GetClaimsClient = grpc.ServerStreamingClient[Claim]
-
-func (c *binaryV5SvcClient) GetEligibilityLedger(ctx context.Context, in *Req, opts ...grpc.CallOption) (grpc.ServerStreamingClient[Eligibility], error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &BinaryV5Svc_ServiceDesc.Streams[6], BinaryV5Svc_GetEligibilityLedger_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &Titan_ServiceDesc.Streams[5], Titan_GetEligibilityLedger_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -374,376 +355,395 @@ func (c *binaryV5SvcClient) GetEligibilityLedger(ctx context.Context, in *Req, o
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type BinaryV5Svc_GetEligibilityLedgerClient = grpc.ServerStreamingClient[Eligibility]
+type Titan_GetEligibilityLedgerClient = grpc.ServerStreamingClient[Eligibility]
 
-func (c *binaryV5SvcClient) Start(ctx context.Context, in *StartReq, opts ...grpc.CallOption) (*StartRes, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(StartRes)
-	err := c.cc.Invoke(ctx, BinaryV5Svc_Start_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *binaryV5SvcClient) AddRebates(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[RebateRec, Res], error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &BinaryV5Svc_ServiceDesc.Streams[7], BinaryV5Svc_AddRebates_FullMethodName, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &grpc.GenericClientStream[RebateRec, Res]{ClientStream: stream}
-	return x, nil
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type BinaryV5Svc_AddRebatesClient = grpc.ClientStreamingClient[RebateRec, Res]
-
-func (c *binaryV5SvcClient) AddClaims(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[ClaimRec, Res], error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &BinaryV5Svc_ServiceDesc.Streams[8], BinaryV5Svc_AddClaims_FullMethodName, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &grpc.GenericClientStream[ClaimRec, Res]{ClientStream: stream}
-	return x, nil
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type BinaryV5Svc_AddClaimsClient = grpc.ClientStreamingClient[ClaimRec, Res]
-
-func (c *binaryV5SvcClient) UpdateClaims(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[ClaimUpdate, Res], error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &BinaryV5Svc_ServiceDesc.Streams[9], BinaryV5Svc_UpdateClaims_FullMethodName, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &grpc.GenericClientStream[ClaimUpdate, Res]{ClientStream: stream}
-	return x, nil
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type BinaryV5Svc_UpdateClaimsClient = grpc.ClientStreamingClient[ClaimUpdate, Res]
-
-func (c *binaryV5SvcClient) Done(ctx context.Context, in *Metrics, opts ...grpc.CallOption) (*Res, error) {
+func (c *titanClient) NewScrub(ctx context.Context, in *Scrub, opts ...grpc.CallOption) (*Res, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Res)
-	err := c.cc.Invoke(ctx, BinaryV5Svc_Done_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, Titan_NewScrub_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-// BinaryV5SvcServer is the server API for BinaryV5Svc service.
-// All implementations must embed UnimplementedBinaryV5SvcServer
+func (c *titanClient) Rebates(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[TitanRebate, Res], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &Titan_ServiceDesc.Streams[6], Titan_Rebates_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[TitanRebate, Res]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type Titan_RebatesClient = grpc.ClientStreamingClient[TitanRebate, Res]
+
+func (c *titanClient) ClaimsUsed(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[ClaimUse, Res], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &Titan_ServiceDesc.Streams[7], Titan_ClaimsUsed_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[ClaimUse, Res]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type Titan_ClaimsUsedClient = grpc.ClientStreamingClient[ClaimUse, Res]
+
+func (c *titanClient) RebateClaims(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[RebateClaim, Res], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &Titan_ServiceDesc.Streams[8], Titan_RebateClaims_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[RebateClaim, Res]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type Titan_RebateClaimsClient = grpc.ClientStreamingClient[RebateClaim, Res]
+
+func (c *titanClient) ScrubDone(ctx context.Context, in *Metrics, opts ...grpc.CallOption) (*Res, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Res)
+	err := c.cc.Invoke(ctx, Titan_ScrubDone_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *titanClient) SyncClaims(ctx context.Context, in *SyncReq, opts ...grpc.CallOption) (grpc.ServerStreamingClient[Claim], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &Titan_ServiceDesc.Streams[9], Titan_SyncClaims_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[SyncReq, Claim]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type Titan_SyncClaimsClient = grpc.ServerStreamingClient[Claim]
+
+// TitanServer is the server API for Titan service.
+// All implementations must embed UnimplementedTitanServer
 // for forward compatibility.
-type BinaryV5SvcServer interface {
+type TitanServer interface {
 	Ping(context.Context, *Req) (*Res, error)
 	GetSPIs(*Req, grpc.ServerStreamingServer[SPI]) error
 	GetNDCs(*Req, grpc.ServerStreamingServer[NDC]) error
 	GetEntities(*Req, grpc.ServerStreamingServer[Entity]) error
 	GetPharmacies(*Req, grpc.ServerStreamingServer[Pharmacy]) error
 	GetESP1Pharms(*Req, grpc.ServerStreamingServer[ESP1PharmNDC]) error
-	GetClaims(*Req, grpc.ServerStreamingServer[Claim]) error
 	GetEligibilityLedger(*Req, grpc.ServerStreamingServer[Eligibility]) error
-	Start(context.Context, *StartReq) (*StartRes, error)
-	AddRebates(grpc.ClientStreamingServer[RebateRec, Res]) error
-	AddClaims(grpc.ClientStreamingServer[ClaimRec, Res]) error
-	UpdateClaims(grpc.ClientStreamingServer[ClaimUpdate, Res]) error
-	Done(context.Context, *Metrics) (*Res, error)
-	mustEmbedUnimplementedBinaryV5SvcServer()
+	NewScrub(context.Context, *Scrub) (*Res, error)
+	Rebates(grpc.ClientStreamingServer[TitanRebate, Res]) error
+	ClaimsUsed(grpc.ClientStreamingServer[ClaimUse, Res]) error
+	RebateClaims(grpc.ClientStreamingServer[RebateClaim, Res]) error
+	ScrubDone(context.Context, *Metrics) (*Res, error)
+	SyncClaims(*SyncReq, grpc.ServerStreamingServer[Claim]) error
+	mustEmbedUnimplementedTitanServer()
 }
 
-// UnimplementedBinaryV5SvcServer must be embedded to have
+// UnimplementedTitanServer must be embedded to have
 // forward compatible implementations.
 //
 // NOTE: this should be embedded by value instead of pointer to avoid a nil
 // pointer dereference when methods are called.
-type UnimplementedBinaryV5SvcServer struct{}
+type UnimplementedTitanServer struct{}
 
-func (UnimplementedBinaryV5SvcServer) Ping(context.Context, *Req) (*Res, error) {
+func (UnimplementedTitanServer) Ping(context.Context, *Req) (*Res, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Ping not implemented")
 }
-func (UnimplementedBinaryV5SvcServer) GetSPIs(*Req, grpc.ServerStreamingServer[SPI]) error {
+func (UnimplementedTitanServer) GetSPIs(*Req, grpc.ServerStreamingServer[SPI]) error {
 	return status.Errorf(codes.Unimplemented, "method GetSPIs not implemented")
 }
-func (UnimplementedBinaryV5SvcServer) GetNDCs(*Req, grpc.ServerStreamingServer[NDC]) error {
+func (UnimplementedTitanServer) GetNDCs(*Req, grpc.ServerStreamingServer[NDC]) error {
 	return status.Errorf(codes.Unimplemented, "method GetNDCs not implemented")
 }
-func (UnimplementedBinaryV5SvcServer) GetEntities(*Req, grpc.ServerStreamingServer[Entity]) error {
+func (UnimplementedTitanServer) GetEntities(*Req, grpc.ServerStreamingServer[Entity]) error {
 	return status.Errorf(codes.Unimplemented, "method GetEntities not implemented")
 }
-func (UnimplementedBinaryV5SvcServer) GetPharmacies(*Req, grpc.ServerStreamingServer[Pharmacy]) error {
+func (UnimplementedTitanServer) GetPharmacies(*Req, grpc.ServerStreamingServer[Pharmacy]) error {
 	return status.Errorf(codes.Unimplemented, "method GetPharmacies not implemented")
 }
-func (UnimplementedBinaryV5SvcServer) GetESP1Pharms(*Req, grpc.ServerStreamingServer[ESP1PharmNDC]) error {
+func (UnimplementedTitanServer) GetESP1Pharms(*Req, grpc.ServerStreamingServer[ESP1PharmNDC]) error {
 	return status.Errorf(codes.Unimplemented, "method GetESP1Pharms not implemented")
 }
-func (UnimplementedBinaryV5SvcServer) GetClaims(*Req, grpc.ServerStreamingServer[Claim]) error {
-	return status.Errorf(codes.Unimplemented, "method GetClaims not implemented")
-}
-func (UnimplementedBinaryV5SvcServer) GetEligibilityLedger(*Req, grpc.ServerStreamingServer[Eligibility]) error {
+func (UnimplementedTitanServer) GetEligibilityLedger(*Req, grpc.ServerStreamingServer[Eligibility]) error {
 	return status.Errorf(codes.Unimplemented, "method GetEligibilityLedger not implemented")
 }
-func (UnimplementedBinaryV5SvcServer) Start(context.Context, *StartReq) (*StartRes, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Start not implemented")
+func (UnimplementedTitanServer) NewScrub(context.Context, *Scrub) (*Res, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method NewScrub not implemented")
 }
-func (UnimplementedBinaryV5SvcServer) AddRebates(grpc.ClientStreamingServer[RebateRec, Res]) error {
-	return status.Errorf(codes.Unimplemented, "method AddRebates not implemented")
+func (UnimplementedTitanServer) Rebates(grpc.ClientStreamingServer[TitanRebate, Res]) error {
+	return status.Errorf(codes.Unimplemented, "method Rebates not implemented")
 }
-func (UnimplementedBinaryV5SvcServer) AddClaims(grpc.ClientStreamingServer[ClaimRec, Res]) error {
-	return status.Errorf(codes.Unimplemented, "method AddClaims not implemented")
+func (UnimplementedTitanServer) ClaimsUsed(grpc.ClientStreamingServer[ClaimUse, Res]) error {
+	return status.Errorf(codes.Unimplemented, "method ClaimsUsed not implemented")
 }
-func (UnimplementedBinaryV5SvcServer) UpdateClaims(grpc.ClientStreamingServer[ClaimUpdate, Res]) error {
-	return status.Errorf(codes.Unimplemented, "method UpdateClaims not implemented")
+func (UnimplementedTitanServer) RebateClaims(grpc.ClientStreamingServer[RebateClaim, Res]) error {
+	return status.Errorf(codes.Unimplemented, "method RebateClaims not implemented")
 }
-func (UnimplementedBinaryV5SvcServer) Done(context.Context, *Metrics) (*Res, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Done not implemented")
+func (UnimplementedTitanServer) ScrubDone(context.Context, *Metrics) (*Res, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ScrubDone not implemented")
 }
-func (UnimplementedBinaryV5SvcServer) mustEmbedUnimplementedBinaryV5SvcServer() {}
-func (UnimplementedBinaryV5SvcServer) testEmbeddedByValue()                     {}
+func (UnimplementedTitanServer) SyncClaims(*SyncReq, grpc.ServerStreamingServer[Claim]) error {
+	return status.Errorf(codes.Unimplemented, "method SyncClaims not implemented")
+}
+func (UnimplementedTitanServer) mustEmbedUnimplementedTitanServer() {}
+func (UnimplementedTitanServer) testEmbeddedByValue()               {}
 
-// UnsafeBinaryV5SvcServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to BinaryV5SvcServer will
+// UnsafeTitanServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to TitanServer will
 // result in compilation errors.
-type UnsafeBinaryV5SvcServer interface {
-	mustEmbedUnimplementedBinaryV5SvcServer()
+type UnsafeTitanServer interface {
+	mustEmbedUnimplementedTitanServer()
 }
 
-func RegisterBinaryV5SvcServer(s grpc.ServiceRegistrar, srv BinaryV5SvcServer) {
-	// If the following call pancis, it indicates UnimplementedBinaryV5SvcServer was
+func RegisterTitanServer(s grpc.ServiceRegistrar, srv TitanServer) {
+	// If the following call pancis, it indicates UnimplementedTitanServer was
 	// embedded by pointer and is nil.  This will cause panics if an
 	// unimplemented method is ever invoked, so we test this at initialization
 	// time to prevent it from happening at runtime later due to I/O.
 	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
 		t.testEmbeddedByValue()
 	}
-	s.RegisterService(&BinaryV5Svc_ServiceDesc, srv)
+	s.RegisterService(&Titan_ServiceDesc, srv)
 }
 
-func _BinaryV5Svc_Ping_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Titan_Ping_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(Req)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(BinaryV5SvcServer).Ping(ctx, in)
+		return srv.(TitanServer).Ping(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: BinaryV5Svc_Ping_FullMethodName,
+		FullMethod: Titan_Ping_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(BinaryV5SvcServer).Ping(ctx, req.(*Req))
+		return srv.(TitanServer).Ping(ctx, req.(*Req))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _BinaryV5Svc_GetSPIs_Handler(srv interface{}, stream grpc.ServerStream) error {
+func _Titan_GetSPIs_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(Req)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(BinaryV5SvcServer).GetSPIs(m, &grpc.GenericServerStream[Req, SPI]{ServerStream: stream})
+	return srv.(TitanServer).GetSPIs(m, &grpc.GenericServerStream[Req, SPI]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type BinaryV5Svc_GetSPIsServer = grpc.ServerStreamingServer[SPI]
+type Titan_GetSPIsServer = grpc.ServerStreamingServer[SPI]
 
-func _BinaryV5Svc_GetNDCs_Handler(srv interface{}, stream grpc.ServerStream) error {
+func _Titan_GetNDCs_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(Req)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(BinaryV5SvcServer).GetNDCs(m, &grpc.GenericServerStream[Req, NDC]{ServerStream: stream})
+	return srv.(TitanServer).GetNDCs(m, &grpc.GenericServerStream[Req, NDC]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type BinaryV5Svc_GetNDCsServer = grpc.ServerStreamingServer[NDC]
+type Titan_GetNDCsServer = grpc.ServerStreamingServer[NDC]
 
-func _BinaryV5Svc_GetEntities_Handler(srv interface{}, stream grpc.ServerStream) error {
+func _Titan_GetEntities_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(Req)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(BinaryV5SvcServer).GetEntities(m, &grpc.GenericServerStream[Req, Entity]{ServerStream: stream})
+	return srv.(TitanServer).GetEntities(m, &grpc.GenericServerStream[Req, Entity]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type BinaryV5Svc_GetEntitiesServer = grpc.ServerStreamingServer[Entity]
+type Titan_GetEntitiesServer = grpc.ServerStreamingServer[Entity]
 
-func _BinaryV5Svc_GetPharmacies_Handler(srv interface{}, stream grpc.ServerStream) error {
+func _Titan_GetPharmacies_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(Req)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(BinaryV5SvcServer).GetPharmacies(m, &grpc.GenericServerStream[Req, Pharmacy]{ServerStream: stream})
+	return srv.(TitanServer).GetPharmacies(m, &grpc.GenericServerStream[Req, Pharmacy]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type BinaryV5Svc_GetPharmaciesServer = grpc.ServerStreamingServer[Pharmacy]
+type Titan_GetPharmaciesServer = grpc.ServerStreamingServer[Pharmacy]
 
-func _BinaryV5Svc_GetESP1Pharms_Handler(srv interface{}, stream grpc.ServerStream) error {
+func _Titan_GetESP1Pharms_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(Req)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(BinaryV5SvcServer).GetESP1Pharms(m, &grpc.GenericServerStream[Req, ESP1PharmNDC]{ServerStream: stream})
+	return srv.(TitanServer).GetESP1Pharms(m, &grpc.GenericServerStream[Req, ESP1PharmNDC]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type BinaryV5Svc_GetESP1PharmsServer = grpc.ServerStreamingServer[ESP1PharmNDC]
+type Titan_GetESP1PharmsServer = grpc.ServerStreamingServer[ESP1PharmNDC]
 
-func _BinaryV5Svc_GetClaims_Handler(srv interface{}, stream grpc.ServerStream) error {
+func _Titan_GetEligibilityLedger_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(Req)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(BinaryV5SvcServer).GetClaims(m, &grpc.GenericServerStream[Req, Claim]{ServerStream: stream})
+	return srv.(TitanServer).GetEligibilityLedger(m, &grpc.GenericServerStream[Req, Eligibility]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type BinaryV5Svc_GetClaimsServer = grpc.ServerStreamingServer[Claim]
+type Titan_GetEligibilityLedgerServer = grpc.ServerStreamingServer[Eligibility]
 
-func _BinaryV5Svc_GetEligibilityLedger_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(Req)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(BinaryV5SvcServer).GetEligibilityLedger(m, &grpc.GenericServerStream[Req, Eligibility]{ServerStream: stream})
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type BinaryV5Svc_GetEligibilityLedgerServer = grpc.ServerStreamingServer[Eligibility]
-
-func _BinaryV5Svc_Start_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(StartReq)
+func _Titan_NewScrub_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Scrub)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(BinaryV5SvcServer).Start(ctx, in)
+		return srv.(TitanServer).NewScrub(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: BinaryV5Svc_Start_FullMethodName,
+		FullMethod: Titan_NewScrub_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(BinaryV5SvcServer).Start(ctx, req.(*StartReq))
+		return srv.(TitanServer).NewScrub(ctx, req.(*Scrub))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _BinaryV5Svc_AddRebates_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(BinaryV5SvcServer).AddRebates(&grpc.GenericServerStream[RebateRec, Res]{ServerStream: stream})
+func _Titan_Rebates_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(TitanServer).Rebates(&grpc.GenericServerStream[TitanRebate, Res]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type BinaryV5Svc_AddRebatesServer = grpc.ClientStreamingServer[RebateRec, Res]
+type Titan_RebatesServer = grpc.ClientStreamingServer[TitanRebate, Res]
 
-func _BinaryV5Svc_AddClaims_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(BinaryV5SvcServer).AddClaims(&grpc.GenericServerStream[ClaimRec, Res]{ServerStream: stream})
+func _Titan_ClaimsUsed_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(TitanServer).ClaimsUsed(&grpc.GenericServerStream[ClaimUse, Res]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type BinaryV5Svc_AddClaimsServer = grpc.ClientStreamingServer[ClaimRec, Res]
+type Titan_ClaimsUsedServer = grpc.ClientStreamingServer[ClaimUse, Res]
 
-func _BinaryV5Svc_UpdateClaims_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(BinaryV5SvcServer).UpdateClaims(&grpc.GenericServerStream[ClaimUpdate, Res]{ServerStream: stream})
+func _Titan_RebateClaims_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(TitanServer).RebateClaims(&grpc.GenericServerStream[RebateClaim, Res]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type BinaryV5Svc_UpdateClaimsServer = grpc.ClientStreamingServer[ClaimUpdate, Res]
+type Titan_RebateClaimsServer = grpc.ClientStreamingServer[RebateClaim, Res]
 
-func _BinaryV5Svc_Done_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Titan_ScrubDone_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(Metrics)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(BinaryV5SvcServer).Done(ctx, in)
+		return srv.(TitanServer).ScrubDone(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: BinaryV5Svc_Done_FullMethodName,
+		FullMethod: Titan_ScrubDone_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(BinaryV5SvcServer).Done(ctx, req.(*Metrics))
+		return srv.(TitanServer).ScrubDone(ctx, req.(*Metrics))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-// BinaryV5Svc_ServiceDesc is the grpc.ServiceDesc for BinaryV5Svc service.
+func _Titan_SyncClaims_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(SyncReq)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(TitanServer).SyncClaims(m, &grpc.GenericServerStream[SyncReq, Claim]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type Titan_SyncClaimsServer = grpc.ServerStreamingServer[Claim]
+
+// Titan_ServiceDesc is the grpc.ServiceDesc for Titan service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
-var BinaryV5Svc_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "main.BinaryV5Svc",
-	HandlerType: (*BinaryV5SvcServer)(nil),
+var Titan_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "main.Titan",
+	HandlerType: (*TitanServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
 			MethodName: "Ping",
-			Handler:    _BinaryV5Svc_Ping_Handler,
+			Handler:    _Titan_Ping_Handler,
 		},
 		{
-			MethodName: "Start",
-			Handler:    _BinaryV5Svc_Start_Handler,
+			MethodName: "NewScrub",
+			Handler:    _Titan_NewScrub_Handler,
 		},
 		{
-			MethodName: "Done",
-			Handler:    _BinaryV5Svc_Done_Handler,
+			MethodName: "ScrubDone",
+			Handler:    _Titan_ScrubDone_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
 			StreamName:    "GetSPIs",
-			Handler:       _BinaryV5Svc_GetSPIs_Handler,
+			Handler:       _Titan_GetSPIs_Handler,
 			ServerStreams: true,
 		},
 		{
 			StreamName:    "GetNDCs",
-			Handler:       _BinaryV5Svc_GetNDCs_Handler,
+			Handler:       _Titan_GetNDCs_Handler,
 			ServerStreams: true,
 		},
 		{
 			StreamName:    "GetEntities",
-			Handler:       _BinaryV5Svc_GetEntities_Handler,
+			Handler:       _Titan_GetEntities_Handler,
 			ServerStreams: true,
 		},
 		{
 			StreamName:    "GetPharmacies",
-			Handler:       _BinaryV5Svc_GetPharmacies_Handler,
+			Handler:       _Titan_GetPharmacies_Handler,
 			ServerStreams: true,
 		},
 		{
 			StreamName:    "GetESP1Pharms",
-			Handler:       _BinaryV5Svc_GetESP1Pharms_Handler,
-			ServerStreams: true,
-		},
-		{
-			StreamName:    "GetClaims",
-			Handler:       _BinaryV5Svc_GetClaims_Handler,
+			Handler:       _Titan_GetESP1Pharms_Handler,
 			ServerStreams: true,
 		},
 		{
 			StreamName:    "GetEligibilityLedger",
-			Handler:       _BinaryV5Svc_GetEligibilityLedger_Handler,
+			Handler:       _Titan_GetEligibilityLedger_Handler,
 			ServerStreams: true,
 		},
 		{
-			StreamName:    "AddRebates",
-			Handler:       _BinaryV5Svc_AddRebates_Handler,
+			StreamName:    "Rebates",
+			Handler:       _Titan_Rebates_Handler,
 			ClientStreams: true,
 		},
 		{
-			StreamName:    "AddClaims",
-			Handler:       _BinaryV5Svc_AddClaims_Handler,
+			StreamName:    "ClaimsUsed",
+			Handler:       _Titan_ClaimsUsed_Handler,
 			ClientStreams: true,
 		},
 		{
-			StreamName:    "UpdateClaims",
-			Handler:       _BinaryV5Svc_UpdateClaims_Handler,
+			StreamName:    "RebateClaims",
+			Handler:       _Titan_RebateClaims_Handler,
 			ClientStreams: true,
+		},
+		{
+			StreamName:    "SyncClaims",
+			Handler:       _Titan_SyncClaims_Handler,
+			ServerStreams: true,
 		},
 	},
 	Metadata: "grpc.proto",

@@ -1,6 +1,16 @@
 
 CREATE TABLE atlas.scrubs (
-    scid bigserial primary key
+    scid bigserial primary key,
+    auth text not null,
+    plcy text not null,
+    name text not null,
+    vers text not null,
+    desc text not null,
+    hash text not null,
+    host text not null,
+    appl text not null,
+    hdrs text not null,
+    cmdl text not null
 );
 
 CREATE TABLE atlas.rebates (
@@ -49,6 +59,24 @@ CREATE TABLE atlas.rebate_meta (
 CREATE INDEX ON atlas.rebate_meta(seq);
 CREATE INDEX ON atlas.rebate_meta(scid);
 
+CREATE TABLE atlas.rebate_claims (
+    seq  bigserial,
+    scid bigint not null,
+    rbid bigint not null,
+    shrt text not null,
+    CONSTRAINT PRIMARY KEY (scid, rbid, shrt)
+);
+CREATE INDEX ON atlas.rebate_claims(seq);
+
+CREATE TABLE atlas.sync (
+    claims              timestamp not null default '2000-01-01',
+    scrubs              bigint not null default 0,
+    rebates       bigint not null default 0,
+    claim_uses        bigint not null default 0,
+    rebate_meta   bigint not null default 0,
+    rebate_claims bigint not null default 0
+);
+
 CREATE TABLE atlas.claims (
     shrt text primary key,
     i340 text not null,
@@ -68,22 +96,4 @@ CREATE TABLE atlas.claims (
     elig bool not null default true,
     susp bool not null default false,
     ihph []text not null default '{}'
-);
-
-CREATE TABLE atlas.rebate_claims (
-    seq  bigserial,
-    scid bigint not null,
-    rbid bigint not null,
-    shrt text not null,
-    CONSTRAINT PRIMARY KEY (scid, rbid, shrt)
-);
-CREATE INDEX ON atlas.rebate_claims(seq);
-
-CREATE TABLE atlas.sync (
-    claims              timestamp not null default '2000-01-01',
-    scrubs              bigint not null default 0,
-    rebates       bigint not null default 0,
-    claim_uses        bigint not null default 0,
-    rebate_meta   bigint not null default 0,
-    rebate_claims bigint not null default 0
 );

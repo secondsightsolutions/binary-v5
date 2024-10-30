@@ -1,36 +1,58 @@
 package main
 
 import (
+	_ "embed"
 	"fmt"
 	"os"
 	"strings"
 	"sync"
-    _ "embed"
+	"time"
 )
 
-type Client struct {
-	test string	// test directory
-	scid int64  // scrub id
-	hdrs []string
-	opts *Opts
-	srv  BinaryV5SrvClient
+type Shell struct {
+	opts  *Opts
+	file  *rebate_file
+	scid  int64 // scrub id
+	atlas AtlasClient
 }
-var client *Client
 
-func run_client(wg *sync.WaitGroup, opts *Opts, stop chan any) {
-    defer wg.Done()
+var shell *Shell
 
-	client = &Client{opts: opts}
-	client.connect()
+func run_shell(wg *sync.WaitGroup, opts *Opts, stop chan any) {
+	defer wg.Done()
 
-    memoryWatch(stop)
+	//memoryWatch(stop)
 
-	client.start()
+	shell = &Shell{opts: opts}
+	shell.connect()
 	
-    <-stop
+	for {
+		if err := shell.newScrub(); err != nil {
+			log("shell", "run_shell", "cannot create scrub", 0, err)
+			time.Sleep(time.Duration(10)*time.Second)
+			shell.connect()
+		} else {
+			break
+		}
+	}
+	shell.file = new_rebate_file(opts)
+	
+	for {
+		if rbtc, err := shell.file.read(); err != nil {
+			log("shell", "run_shell", "cannot read file %s", 0, err, shell.file.path)
+			break
+		} else {
+			if err := shell.rebates(stop, rbtc); err != nil {
+				time.Sleep(time.Duration(10)*time.Second)
+				shell.connect()
+			} else {
+				break
+			}
+		}
+	}
 }
 
-func exit(sc *Scrub, code int, msg string, args ...any) {
+func exit(sc *scrub, code int, msg string, args ...any) {
 	nargs := []any{}
 	for _, arg := range args {
 		if sarg, ok := arg.(string); ok {
@@ -45,8 +67,8 @@ func exit(sc *Scrub, code int, msg string, args ...any) {
 		mesg = fmt.Sprintf(msg, nargs...)
 		fmt.Println(mesg)
 	}
-    if sc != nil {
-        fmt.Println("scrub exit")
-    }
+	if sc != nil {
+		fmt.Println("scrub exit")
+	}
 	os.Exit(code)
 }

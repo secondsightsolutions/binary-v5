@@ -7,45 +7,61 @@ option go_package = "github.com/secondsightsolutions/binary-v5/main";
 
 package main;
 
-message AtlasRebate {
-    int64  seq  = 1;
-    int64  scid = 2;
-    int64  rbid = 3;
-    int64  indx = 4;
-    string rxn  = 5;
-    string hrxn = 6;
-    string ndc  = 7;
-    string spid = 8;
-    string prid = 9;
-    string dos  = 10;
-    string stat = 11;
-    string excl = 12;
-    string errc = 13;
-    string errm = 14;
+message Scrub {
+    string auth = 1;
+    string manu = 2;
+    string plcy = 3;
+    string name = 4;
+    string vers = 5;
+    string desc = 6;
+    string hash = 7;
+    string host = 8;
+    string appl = 9;
+    string hdrs = 10;
+    string cmdl = 11;
+    int64  scid = 12;
     string col1 = 21;
     string col2 = 22;
     string col50= 70;
 }
-message AtlasRebateMeta {
-    int64  seq  = 1;
-    int64  scid = 2;
-    string col1 = 11;
-    string col2 = 12;
-    string col50= 60;
+message Rebate {
+    int64  seq  = 1;    // sync sequence number
+    int64  scid = 2;    // scrub id
+    int64  rbid = 3;    // rebate id - generated row number
+    int64  indx = 4;    // index - sort order
+    string rxn  = 5;
+    string hrxn = 6;
+    string ndc  = 7;
+    string spid = 8;    // service provider id
+    string prid = 9;    // prescriber provider id
+    string dos  = 10;   // date of service
+    string stat = 11;
+    string excl = 12;
+    string errc = 13;
+    string errm = 14;
+    string spmt = 15;   // service provider match type: exact, xwalk, stack, chain
+    string fspd = 16;   // formatted spid
+    string fndc = 17;   // formatted ndc
+    string frxn = 18;   // formatted rxn
+    string fprd = 19;   // formatted prid
+    string col1 = 21;
+    string col2 = 22;
+    string col50= 70;
 }
-message AtlasClaimUse {
+message ClaimUse {
     int64  seq  = 1;
     int64  scid = 2;
     string shrt = 3;
     string excl = 4;
 }
-message AtlasRebateClaim {
+message RebateClaim {
     int64  seq  = 1;
     int64  scid = 2;
     int64  rbid = 3;
     string shrt = 4;
 }
-message AtlasClaim {
+
+message Claim {
     string shrt = 1;
     string i340 = 2;
     string ndc  = 3;
@@ -63,14 +79,11 @@ message AtlasClaim {
     string chnm = 15;
     bool   elig = 16;
     bool   susp = 17;
-    repeated string ihph = 18;
+    bool   cnfm = 18;
+    string excl = 19;
+    repeated string ihph = 20;
 }
 
-message TitanScrub {
-    string manu = 1;
-    int64  scid = 2;
-
-}
 message TitanRebate {
     string manu = 1;
     int64  scid = 2;
@@ -88,7 +101,6 @@ message Entity {
 
     repeated Designation desigs = 10;
 }
-
 message Pharmacy {
     string i340 = 1;
     string phid = 2;
@@ -101,13 +113,11 @@ message Pharmacy {
     repeated string npis = 8;
     repeated string deas = 9;
 }
-
 message NDC {
     string ndc  = 1;
     string name = 2;
     string netw = 3;
 }
-
 message SPI {
     string ncp = 1;
     string npi = 2;
@@ -118,7 +128,6 @@ message SPI {
     string chn = 7;
     string cde = 8;   // NCPDP 340b status code
 }
-
 message Designation {
     string manu = 1;
     string i340 = 2;
@@ -137,7 +146,6 @@ message Designation {
 
     map<string,string> xtra = 11;
 }
-
 message LDN {
     string manu = 1;
     string netw = 2;
@@ -147,14 +155,12 @@ message LDN {
 
     map<string,string> xtra = 10;
 }
-
 message ESP1PharmNDC {
     string  spid  = 1;
     string  ndc   = 2;
     int64   strt  = 3;
     int64   term  = 4;
 }
-
 message Eligibility {
     int64  id   = 1;     // id
     string i340   = 2;   // id_340b
@@ -167,29 +173,20 @@ message Eligibility {
 
 message Req {
     string auth = 1;
-    string ver  = 2;
+    string vers = 2;
     string manu = 3;
 }
 message Res {
 }
-
-message StartReq {
-    string auth = 1;
-    string manu = 2;
-    string plcy = 3;
-    string name = 4;
-    string vers = 5;
-    string desc = 6;
-    string hash = 7;
-    string host = 8;
-    string type = 9;
-    string hdrs = 10;
-    string cmdl = 11;
+message SyncReq {
+    string manu = 1;
+    int64  last = 2;
+    int64  mill = 3;
 }
-message StartRes {
+message ScrubRes {
     int64   scid = 1;
 }
-message TitanMetrics {
+message Metrics {
     int32   rbt_total     = 1;
     int32   rbt_valid     = 2;
     int32   rbt_matched   = 3;
@@ -214,31 +211,26 @@ message TitanMetrics {
     int32   dos_aft_dof   = 22;
 }
 
-message ScrubRes {
-    string text = 1;
-}
-message DoneReq {
-}
-
-service BinaryV5Srv {
-    rpc Start(StartReq)                     returns (StartRes) {}
-    rpc Scrub(stream Rebate)                returns (Metrics) {}
-    rpc Done(DoneReq)                       returns (ScrubRes) {}
+service Atlas {
+    rpc Ping(Req)                           returns (Res) {}
+    rpc NewScrub(Scrub)                     returns (ScrubRes) {}
+    rpc Rebates(stream Rebate)              returns (Res) {}
 }
 
-service BinaryV5Svc {
+service Titan {
     rpc Ping(Req)                           returns (Res) {}
     rpc GetSPIs(Req)                        returns (stream SPI) {}
     rpc GetNDCs(Req)                        returns (stream NDC) {}
     rpc GetEntities(Req)                    returns (stream Entity) {}
     rpc GetPharmacies(Req)                  returns (stream Pharmacy) {}
     rpc GetESP1Pharms(Req)                  returns (stream ESP1PharmNDC) {}
-    rpc GetClaims(Req)                      returns (stream Claim) {}
     rpc GetEligibilityLedger(Req)           returns (stream Eligibility) {}
 
-    rpc Start(StartReq)                     returns (StartRes) {}
-    rpc AddRebates(stream RebateRec)        returns (Res) {}
-    rpc AddClaims(stream ClaimRec)          returns (Res) {}
-    rpc UpdateClaims(stream ClaimUpdate)    returns (Res) {}
-    rpc Done(Metrics)                       returns (Res) {}
+    rpc NewScrub(Scrub)                     returns (Res) {}
+    rpc Rebates(stream TitanRebate)         returns (Res) {}
+    rpc ClaimsUsed(stream ClaimUse)         returns (Res) {}
+    rpc RebateClaims(stream RebateClaim)    returns (Res) {}
+    rpc ScrubDone(Metrics)                  returns (Res) {}
+
+    rpc SyncClaims(SyncReq)                 returns (stream Claim) {}
 }

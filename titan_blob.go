@@ -11,7 +11,6 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blockblob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azqueue"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func run_save_to_azure(wg *sync.WaitGroup, stop chan any, intv int, account, key string) {
@@ -20,17 +19,6 @@ func run_save_to_azure(wg *sync.WaitGroup, stop chan any, intv int, account, key
 		select {
 		case <-time.After(time.Duration(intv) * time.Second):
 			saveToAzure(account, key)
-		case <-stop:
-			return
-		}
-	}
-}
-func run_save_to_datab(wg *sync.WaitGroup, stop chan any, intv int, account, key string, pools map[string]*pgxpool.Pool) {
-	defer wg.Done()
-	for {
-		select {
-		case <-time.After(time.Duration(intv) * time.Second):
-			saveToDatabase(account, key, pools)
 		case <-stop:
 			return
 		}
@@ -164,18 +152,18 @@ func saveToAzure(account, key string) {
                 }
                 client.CreateContainer(context.Background(), container, nil)
                 if _, err := client.UploadFile(context.Background(), container, blob, fd, opts); err != nil {
-					log("service", "blob upload", "acct=%s cntr=%s blob=%s file=%s: upload file failed", time.Since(strt), err, account, container, blob, full)
+					log("titan", "blob upload", "acct=%s cntr=%s blob=%s file=%s: upload file failed", time.Since(strt), err, account, container, blob, full)
                     return err
                 }
             } else {
-                log("service", "blob upload", "acct=%s cntr=%s blob=%s file=%s: create az client failed", time.Since(strt), err, account, container, blob, full)
+                log("titan", "blob upload", "acct=%s cntr=%s blob=%s file=%s: create az client failed", time.Since(strt), err, account, container, blob, full)
                 return err
             }
         } else {
-            log("service", "blob upload", "acct=%s cntr=%s blob=%s file=%s: open local file failed", time.Since(strt), err, account, container, blob, full)
+            log("titan", "blob upload", "acct=%s cntr=%s blob=%s file=%s: open local file failed", time.Since(strt), err, account, container, blob, full)
             return err
         }
-        log("service", "blob upload", "acct=%s cntr=%s blob=%s file=%s: upload file succeeded", time.Since(strt), nil, account, container, blob, full)
+        log("titan", "blob upload", "acct=%s cntr=%s blob=%s file=%s: upload file succeeded", time.Since(strt), nil, account, container, blob, full)
         return nil
     }
     sendMessage := func(cntr, blob string) error {
@@ -218,169 +206,23 @@ func saveToAzure(account, key string) {
                 msgF++
             }
 			if err := os.Remove(full); err != nil {
-				log("service", "SaveToAzure", "failed to remove file (%s)", time.Since(strt), err, full)
+				log("titan", "SaveToAzure", "failed to remove file (%s)", time.Since(strt), err, full)
 			}
 		} else {
-			log("service", "SaveToAzure", "blob upload failed (%s)", time.Since(strt), err, full)
+			log("titan", "SaveToAzure", "blob upload failed (%s)", time.Since(strt), err, full)
             blbF++
             keep[dir] = nil    // At least one upload failed. Do not delete the parent directory (below)
         }
 	}
-    log("service", "SaveToAzure", "blob upload status - good (%d) fail (%d)", time.Since(strt), nil, blbP, blbF)
-    log("service", "SaveToAzure", "msgs upload status - good (%d) fail (%d)", time.Since(strt), nil, msgP, msgF)
+    log("titan", "SaveToAzure", "blob upload status - good (%d) fail (%d)", time.Since(strt), nil, blbP, blbF)
+    log("titan", "SaveToAzure", "msgs upload status - good (%d) fail (%d)", time.Since(strt), nil, msgP, msgF)
 	for dir := range dirs {
         if _,ok := keep[dir];!ok {  // Only remove dirs that have not been marked for keeping (os.Remove would probably fail anyway...)
             strt := time.Now()
             full := root + "/" + dir
             if err := os.Remove(full); err != nil {
-                log("service", "SaveToAzure", "failed to remove directory (%s)", time.Since(strt), err, full)
+                log("titan", "SaveToAzure", "failed to remove directory (%s)", time.Since(strt), err, full)
             }
         }
 	}
-    return
-}
-
-func saveToDatabase(account, key string, pools map[string]*pgxpool.Pool) error {
-    setBlobSaved := func(cntr, blob string) error {
-        strt := time.Now()
-        if bc, err := newBlockBlobClient(account, key, cntr, blob); err == nil {
-            if resp, err := bc.GetTags(context.Background(), nil); err == nil {
-                tags := map[string]string{}
-                for _, tag := range resp.BlobTagSet {
-                    tags[*tag.Key] = *tag.Value
-                }
-                tags["indb"] = "true"
-                if _, err := bc.SetTags(context.Background(), tags, nil); err != nil {
-                    log("service", "SaveToDatabase", "acct=%s cntr=%s blob=%s: set blob tags failed", time.Since(strt), err, account, cntr, blob)
-                    return err
-                }
-            } else {
-                log("service", "SaveToDatabase", "acct=%s cntr=%s blob=%s: get blob tags failed", time.Since(strt), err, account, cntr, blob)
-                return err
-            }
-            if props, err := bc.GetProperties(context.Background(), nil); err == nil { 
-                meta := map[string]*string{}
-                now  := fmt.Sprintf("%d", time.Now().Unix())
-                for k,vp := range props.Metadata {
-                    meta[k] = vp
-                }
-                meta["Dbat"] = &now
-                if _, err := bc.SetMetadata(context.Background(), meta, nil); err != nil {
-                    log("service", "SaveToDatabase", "acct=%s cntr=%s blob=%s: set blob metadata failed", time.Since(strt), err, account, cntr, blob)
-                }
-            } else {
-                log("service", "SaveToDatabase", "acct=%s cntr=%s blob=%s: get blob metadata failed", time.Since(strt), err, account, cntr, blob)
-                return err
-            }
-        } else {
-            log("service", "SaveToDatabase", "acct=%s cntr=%s blob=%s: create blob client failed", time.Since(strt), err, account, cntr, blob)
-            return err
-        }
-        return nil
-    }
-    downloadBlob := func(account, key, container, blob, file string) error {
-        strt := time.Now()
-        if fd, err := os.Create(file); err == nil {
-            if client, err := newBlobClient(account, key); err == nil {
-                opts := &azblob.DownloadFileOptions{
-                    BlockSize:      4096,
-                    Concurrency:    4,
-                }
-                if _, err := client.DownloadFile(context.Background(), container, blob, fd, opts); err == nil {
-                    log("service", "SaveToDatabase", "acct=%s cntr=%s blob=%s downloaded file", time.Since(strt), nil, account, container, blob)
-                    return nil
-                }
-                log("service", "SaveToDatabase", "acct=%s cntr=%s blob=%s: download blob failed", time.Since(strt), err, account, container, blob)
-                return err
-            } else {
-                log("service", "SaveToDatabase", "acct=%s cntr=%s blob=%s: create az client failed", time.Since(strt), err, account, container, blob)
-                return err
-            }
-        } else {
-            log("service", "SaveToDatabase", "acct=%s cntr=%s blob=%s file=%s: create local file failed", time.Since(strt), err, account, container, blob, file)
-            return err
-        }
-    }
-    getMetadata := func(account, key, full string) (map[string]string, string, string, error) {
-        strt := time.Now()
-        meta := map[string]string{}
-        toks := strings.SplitN(full, "/", 2)
-        if len(toks) != 2 {
-            return nil, "", "", fmt.Errorf("badly formatted blob name")
-        }
-        cntr := toks[0]
-        blob := toks[1]
-        if bc, err := newBlockBlobClient(account, key, cntr, blob); err == nil {
-            if props, err := bc.GetProperties(context.Background(), nil); err == nil {
-                for k,vp := range props.Metadata {
-                    meta[k] = *vp
-                }
-            } else {
-                log("service", "SaveToDatabase", "acct=%s cntr=%s blob=%s: get blob metadata failed", time.Since(strt), err, account, cntr, blob)
-                return nil, cntr, blob, err
-            }
-        } else {
-            log("service", "SaveToDatabase", "acct=%s cntr=%s blob=%s: create blob client failed", time.Since(strt), err, account, cntr, blob)
-            return nil, cntr, blob, err
-        }
-        return meta, cntr, blob, nil
-    }
-    insertRows := func(ctx context.Context, pool *pgxpool.Pool, tbln, file string) error {
-        return db_copyfrom(ctx, pool, tbln, file, 100000)
-    }
-    updateRows := func(ctx context.Context, pool *pgxpool.Pool, file string) error {
-        return db_updates(ctx, pool, file)
-    }
-    
-    os.Mkdir("to_datab", os.ModePerm)   // Okay if it fails (means it already exists, most likely).
-    strt := time.Now()
-    if q, err := newQueueClient(account, key, "todb"); err == nil {
-        vto  := int32(60*30)    // 30 minute timeout.
-        opts := &azqueue.DequeueMessageOptions{VisibilityTimeout: &vto}
-        for {
-            strt := time.Now()
-            if resp, err := q.DequeueMessage(context.Background(), opts); err == nil {
-                if len(resp.Messages) == 0 {
-                    break
-                }
-                for _, msg := range resp.Messages {     // Should only be one message here. One at a time.
-                    full := string(*msg.MessageText)
-                    log("service", "SaveToDatabase", "read message with %s", time.Since(strt), nil, full)
-                    if meta, cntr, blob, err := getMetadata(account, key, full); err == nil {
-                        pln  := meta["Pool"]    // Apparently the AZ SDK capitalizes the first letter!
-                        oper := meta["Oper"]
-                        tbln := meta["Tbln"]
-						pool := pools[pln]
-                        if strings.HasSuffix(tbln, "attempts") {
-                            q.DeleteMessage(context.Background(), *msg.MessageID, *msg.PopReceipt, nil)
-                            continue
-                        }
-                        file := "to_datab/_downloaded"  // Since we only deal with one blob at a time, we just need the one file.
-                        if err := downloadBlob(account, key, cntr, blob, file); err == nil {
-							if oper == "insert" {
-								err = insertRows(context.Background(), pool, tbln, file)
-							} else {
-								err = updateRows(context.Background(), pool, file)
-							}
-							if err == nil {
-								// Delete message from queue if we were able to insert to database successfully.
-								setBlobSaved(cntr, blob)
-								q.DeleteMessage(context.Background(), *msg.MessageID, *msg.PopReceipt, nil)
-							}
-							// If we didn't insert to database, then just leave the message. It's visibility will stay hidden for
-							// five minutes, after which we will try again (because the message becomes visible again).
-							// The invisible message(s) is basically the DLQ, but managed automatically by the infra.
-							// The TTL on the message itself is seven days. So we have seven days to fix the problem before losing the data.
-							log("service", "SaveToDatabase", "acct=%s cntr=%s blob=%s oper=%s: completed", time.Since(strt), err, account, cntr, blob, oper)
-							os.Remove(file)
-                        }
-                    }
-                }
-            }
-        }
-    } else {
-		log("service", "SaveToDatabase", "acct=%s cannot create queue client", time.Since(strt), err, account)
-        return err
-    }
-    return nil
 }

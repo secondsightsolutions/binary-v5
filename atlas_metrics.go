@@ -4,11 +4,11 @@ import (
 )
 
 
-func (s *Scrub) update_rbt(rbt *Rebate) {
+func (s *scrub) update_rbt(rbt *Rebate) {
     s.lckM.Lock()
     defer s.lckM.Unlock()
     s.metr.RbtTotal++
-    switch rbt.Flds[Fields.Stat] {
+    switch rbt.Stat {
     case "matched":
         s.metr.RbtMatched++
     case "nomatch":
@@ -23,13 +23,13 @@ func (s *Scrub) update_rbt(rbt *Rebate) {
     }
 }
 
-func (s *Scrub) update_rbt_clm(rbt *Rebate, clm *Claim) {
+func (s *scrub) update_rbt_clm(rbt *Rebate, clm *Claim) {
     doc := clm.Doc
     dof := clm.Hdos
     s.lckM.Lock()
     defer s.lckM.Unlock()
     if clm != nil {
-        if diff, err := dates.Compare(rbt.Flds[Fields.Dos], doc); err == nil {
+        if diff, err := dates.Compare(rbt.Dos, doc); err == nil {
             if diff == 0 {
                 s.metr.DosEquDoc++
             } else if diff < 0 {
@@ -38,7 +38,7 @@ func (s *Scrub) update_rbt_clm(rbt *Rebate, clm *Claim) {
                 s.metr.DosAftDoc++
             }
         }
-        if diff, err := dates.Compare(rbt.Flds[Fields.Dos], dof); err == nil {
+        if diff, err := dates.Compare(rbt.Dos, dof); err == nil {
             if diff == 0 {
                 s.metr.DosEquDof++
             } else if diff < 0 {
@@ -50,7 +50,7 @@ func (s *Scrub) update_rbt_clm(rbt *Rebate, clm *Claim) {
     }
 }
 
-func (s *Scrub) update_spi_counts(which string) {
+func (s *scrub) update_spi_counts(which string) {
     s.lckM.Lock()
     defer s.lckM.Unlock()
     switch which {

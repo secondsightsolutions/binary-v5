@@ -6,65 +6,77 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
 	grpc "google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 )
 
-func (clt *Client) connect() {
-	tgt := fmt.Sprintf("%s:%d", svch, svcp)
+func (clt *Shell) connect() {
+	tgt := fmt.Sprintf("%s:%d", srvh, srvp)
 	cfg := &tls.Config{
 		Certificates: []tls.Certificate{TLSCert},
 		RootCAs:      X509pool,
 	}
 	crd := credentials.NewTLS(cfg)
 	if conn, err := grpc.NewClient(tgt, grpc.WithTransportCredentials(crd)); err == nil {
-		clt.srv = NewBinaryV5SrvClient(conn)
+		clt.atlas = NewAtlasClient(conn)
+	} else {
+		log("shell", "connect", "cannot connect to atlas", 0, err)
 	}
 }
 
-func (clt *Client) start() int64 {
-    md  := metadata.New(map[string]string{"auth": clt.opts.auth, "vers": vers, "manu": manu})
-    ctx := metadata.NewOutgoingContext(context.Background(), md)
-    req := &StartReq{
-    	Auth: clt.opts.auth,
-    	Manu: manu,
-    	Plcy: clt.opts.policy,
-    	Name: clt.opts.name,
-    	Vers: vers,
-    	Desc: desc,
-    	Hash: hash,
-    	Host: srvh,
-    	Type: appl,
-    	Hdrs: strings.Join(clt.hdrs,   ","),
-    	Cmdl: strings.Join(os.Args, " "),
-    }
-    if res, err := clt.srv.Start(ctx, req); err == nil {
-        return res.Scid
-    } else {
-        return -1
-    }
-}
-
-func (clt *Client) scrub(rbts chan *Rebate) {
-    var strm grpc.ClientStreamingClient[Rebate, Metrics]
-    md  := metadata.New(map[string]string{"auth": clt.opts.auth, "vers": vers, "manu": manu, "scid": fmt.Sprintf("%d", clt.scid)})
-    ctx := metadata.NewOutgoingContext(context.Background(), md)
-	for rbt := range rbts {
-        for strm == nil {
-            var err error
-            if strm, err = clt.srv.Scrub(ctx); err != nil {
-                time.Sleep(time.Duration(1)*time.Second)
-            }
-        }
-        if err := strm.Send(rbt); err != nil {
-            strm = nil
-        }
+func (clt *Shell) newScrub() error {
+	md := metadata.New(map[string]string{"auth": clt.opts.auth, "vers": vers, "manu": manu})
+	ctx := metadata.NewOutgoingContext(context.Background(), md)
+	req := &Scrub{
+		Auth: clt.opts.auth,
+		Manu: manu,
+		Plcy: clt.opts.policy,
+		Name: clt.opts.name,
+		Vers: vers,
+		Desc: desc,
+		Hash: hash,
+		Host: srvh,
+		Appl: appl,
+		Hdrs: "", // TODO: send these in the update
+		Cmdl: strings.Join(os.Args, " "),
+	}
+	if res, err := clt.atlas.NewScrub(ctx, req); err == nil {
+		clt.scid = res.Scid
+		return nil
+	} else {
+		return err
 	}
 }
 
-func (clt *Client) done() {
+func (clt *Shell) rebates(stop chan any, rbts chan *Rebate) error {
+	md  := metadata.New(map[string]string{"auth": clt.opts.auth, "vers": vers, "manu": manu, "scid": fmt.Sprintf("%d", clt.scid)})
+	ctx := metadata.NewOutgoingContext(context.Background(), md)
+	c,f := context.WithCancel(ctx)
+	
+	if strm, err := clt.atlas.Rebates(c); err == nil {
+		for rbt := range rbts {
+			select {
+			case <-stop:
+				f()
+				return nil
+			default:
+				if err := strm.Send(rbt); err != nil {
+					f()
+					return err
+				}
+			}
+		}
+		strm.CloseSend()
+		f()
+	} else {
+		f()
+		return err
+	}
+	return nil
+}
+
+func (clt *Shell) done() {
 
 }

@@ -7,11 +7,11 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func run_datab_ping(wg *sync.WaitGroup, stop chan any, intv int, pools map[string]*pgxpool.Pool) {
+func run_datab_ping(wg *sync.WaitGroup, stop chan any, intv int, appl string, pools map[string]*pgxpool.Pool) {
 	defer wg.Done()
 	pingDBs := func(pools map[string]*pgxpool.Pool) {
 		for name, pool := range pools {
-			pingDB("service", name, pool)
+			pingDB(appl, name, pool)
 		}
 	}
 	pingDBs(pools)

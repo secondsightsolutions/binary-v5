@@ -2,11 +2,14 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"strconv"
 	"strings"
 	"time"
+
+	"google.golang.org/grpc/metadata"
 )
 
 var prefDateFmts = map[string]any{}
@@ -196,7 +199,7 @@ func CheckRange(t1, t2 *time.Time, bef, aft int) string {
 	}
 	return ""
 }
-func CheckSPI(sc *Scrub, spiA, spiB string, chains, stacks bool) (bool, string) {
+func CheckSPI(sc *scrub, spiA, spiB string, chains, stacks bool) (bool, string) {
 	return atlas.spis.match(spiA, spiB, chains, stacks)
 }
 
@@ -368,4 +371,23 @@ func log(app, title, msg string, dur time.Duration, err error, args ...any) {
 		str = fmt.Sprintf("%s - %s", str, errS)
 	}
 	fmt.Println(str)
+}
+
+func getMetaGRPC(ctx context.Context) (name, auth, vers, manu, scid string) {
+	val := func(md metadata.MD, name string) string {
+		if vals, ok := md[name]; ok {
+			if len(vals) > 0 {
+				return vals[0]
+			}
+		}
+		return ""
+	}
+	if md, ok := metadata.FromIncomingContext(ctx); ok {
+		name = val(md, "name")
+		auth = val(md, "auth")
+		vers = val(md, "vers")
+		manu = val(md, "manu")
+		scid = val(md, "scid")
+	}
+	return
 }

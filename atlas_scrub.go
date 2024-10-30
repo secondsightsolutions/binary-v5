@@ -9,7 +9,7 @@ import (
 	"sync"
 )
 
-type Scrub struct {
+type scrub struct {
 	ca   CA
 	scid int64
 	sr   *scrub_req
@@ -50,14 +50,14 @@ type rbt_sort struct {
 	rbt *Rebate
 }
 
-func new_scrub(scid int64, manu string) *Scrub {
-	sc := &Scrub{
-		scid: scid,
-		sr:   &scrub_req{manu: manu, files: map[string]*scrub_file{}},
-		atts: NewAttempts(),
-		metr: &Metrics{},
-		plcy: GetPolicy(manu),
-	}
+// func new_scrub(scid int64, manu string) *Scrub {
+// 	sc := &Scrub{
+// 		scid: scid,
+// 		sr:   &scrub_req{manu: manu, files: map[string]*scrub_file{}},
+// 		atts: NewAttempts(),
+// 		metr: &Metrics{},
+// 		plcy: GetPolicy(manu),
+// 	}
 	// sc.sr.files["rebates"]  = &scrub_file{name: "rebates", csep: ",", hdrm: "rxnum=rxn;hrxnum=hrxn"}
 	// sc.sr.files["claims"]   = &scrub_file{name: "claims",   pool: "citus",  tbln: "submission_rows"}
 	// sc.sr.files["ndcs"]     = &scrub_file{name: "ndcs",     pool: "esp",    tbln: "ndcs"}
@@ -66,10 +66,10 @@ func new_scrub(scid int64, manu string) *Scrub {
 	// sc.sr.files["ents"]     = &scrub_file{name: "ents",     pool: "esp",    tbln: "covered_entities"}
 	// sc.sr.files["elig"]     = &scrub_file{name: "elig",     pool: "esp",    tbln: "eligibility_ledger"}
 	// sc.sr.files["esp1"]     = &scrub_file{name: "esp1",     pool: "esp",    tbln: "esp1_providers"}
-	return sc
-}
+// 	return sc
+// }
 
-func (sc *Scrub) run() {
+func (sc *scrub) run() {
 	wgrp := sync.WaitGroup{}
 	wgrp.Add(4)
 	chn1 := make(chan *Rebate, 100000) // Connects rebate reader/workers to the rebate re-sorter.
@@ -84,9 +84,9 @@ func (sc *Scrub) run() {
 	wgrp.Wait()
 }
 
-func (sc *Scrub) read_rebates(wgrp *sync.WaitGroup, out chan *Rebate) {
-	hashIndex := func(indx int32, modulo int) int {
-		return int(indx % int32(modulo))
+func (sc *scrub) read_rebates(wgrp *sync.WaitGroup, out chan *Rebate) {
+	hashIndex := func(indx int64, modulo int) int {
+		return int(indx % int64(modulo))
 	}
 	hashString := func(str string, modulo int) int {
 		max := 18 // Can only fit ~20 hex digits into an int64, so let's not overflow the int64 when we parse.
@@ -112,13 +112,13 @@ func (sc *Scrub) read_rebates(wgrp *sync.WaitGroup, out chan *Rebate) {
 		go sc.read_rebates_worker(cgrp, chns[a], out)
 	}
 	// Now that all rebate worker threads are started, feed them rebates.
-	indx := int32(0)
+	indx := int64(0)
 	sc.sr.slot = strings.ToLower(sc.sr.slot)
 	for rbt := range sc.rbtC {
 		rbt.Indx = indx
 		slot := hashIndex(indx, thrs)
 		if sc.sr.slot != "" {
-			slot = hashString(rbt.Flds[sc.sr.slot], thrs)
+			slot = hashString(rbt.GetRxn(), thrs)	// TODO: fix this! Field should be dynamic!
 		}
 		chns[slot] <- rbt
 	}
@@ -130,7 +130,7 @@ func (sc *Scrub) read_rebates(wgrp *sync.WaitGroup, out chan *Rebate) {
 	close(out) // Tell the next step in the pipe (the sort thread) that no more data coming.
 	wgrp.Done()
 }
-func (sc *Scrub) read_rebates_worker(wgrp *sync.WaitGroup, in, out chan *Rebate) {
+func (sc *scrub) read_rebates_worker(wgrp *sync.WaitGroup, in, out chan *Rebate) {
 	for rbt := range in {
 		sc.plcy.scrubRebate(sc, rbt)
 		sc.update_rbt(rbt)
@@ -138,13 +138,13 @@ func (sc *Scrub) read_rebates_worker(wgrp *sync.WaitGroup, in, out chan *Rebate)
 	}
 	wgrp.Done()
 }
-func (sc *Scrub) sort_rebates(wgrp *sync.WaitGroup, in, out chan *Rebate) {
+func (sc *scrub) sort_rebates(wgrp *sync.WaitGroup, in, out chan *Rebate) {
 	// The sort thread. Reads the common scrub output channel written by input workers.
 	// Re-sort the rebates and write to the result writer input channel.
 	sortQ := []*rbt_sort{}
 	last := -1
 	for rbt := range in {
-		i64, _ := strconv.ParseInt(rbt.Flds["indx"], 10, 64)
+		i64 := rbt.Indx
 		num := int(i64)
 		rsort := &rbt_sort{num: num, rbt: rbt}
 		sortQ = append(sortQ, rsort)                  // Just put it onto our outbound queue.
@@ -168,7 +168,7 @@ func (sc *Scrub) sort_rebates(wgrp *sync.WaitGroup, in, out chan *Rebate) {
 	close(out) // Tell the next step in the pipe (the result writer thread) no more data coming.
 	wgrp.Done()
 }
-func (sc *Scrub) send_rebates(wgrp *sync.WaitGroup, in, out chan *Rebate) {
+func (sc *scrub) send_rebates(wgrp *sync.WaitGroup, in, out chan *Rebate) {
 	// pool  := sc.sr.files["rebates"].pool
 	// tbln  := sc.sr.files["rebates"].tbln
 	// do,di := putData(pool, tbln, "insert")  // do - data out (send to grpc), di - data in (back from grpc)
@@ -204,7 +204,7 @@ func (sc *Scrub) send_rebates(wgrp *sync.WaitGroup, in, out chan *Rebate) {
 done:
 	wgrp.Done()
 }
-func (sc *Scrub) save_rebates(wgrp *sync.WaitGroup, in chan *Rebate) {
+func (sc *scrub) save_rebates(wgrp *sync.WaitGroup, in chan *Rebate) {
 	if fd, err := os.Create(sc.sr.outf); err == nil {
 		w := bufio.NewWriter(fd)
 		hdrs := strings.Join(sc.hdrs, ",")

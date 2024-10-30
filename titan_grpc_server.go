@@ -7,14 +7,14 @@ import (
 	grpc "google.golang.org/grpc"
 )
 
-type binaryV5SvcServer struct {
-	UnimplementedBinaryV5SvcServer
+type titanServer struct {
+	UnimplementedTitanServer
 }
 
-func (s *binaryV5SvcServer) Ping(context.Context, *Req) (*Res, error) {
+func (s *titanServer) Ping(context.Context, *Req) (*Res, error) {
 	return &Res{}, nil
 }
-func (s *binaryV5SvcServer) GetSPIs(req *Req, strm grpc.ServerStreamingServer[SPI]) error {
+func (s *titanServer) GetSPIs(req *Req, strm grpc.ServerStreamingServer[SPI]) error {
 	cols := map[string]string{
 		"ncp": "COALESCE(ncpdp_provider_id, '')",
 		"npi": "COALESCE(national_provider_id, '')",
@@ -26,7 +26,7 @@ func (s *binaryV5SvcServer) GetSPIs(req *Req, strm grpc.ServerStreamingServer[SP
 	}
 	return db_strm_select(strm, titan.pools["esp"], "ncpdp_providers", cols, "")
 }
-func (s *binaryV5SvcServer) GetNDCs(req *Req, strm grpc.ServerStreamingServer[NDC]) error {
+func (s *titanServer) GetNDCs(req *Req, strm grpc.ServerStreamingServer[NDC]) error {
 	cols := map[string]string{
 		"ndc":  "COALESCE(item, '')",
 		"name": "COALESCE(product_name, '')",
@@ -34,7 +34,7 @@ func (s *binaryV5SvcServer) GetNDCs(req *Req, strm grpc.ServerStreamingServer[ND
 	}
 	return db_strm_select(strm, titan.pools["esp"], "ndcs", cols, fmt.Sprintf("manufacturer_name = '%s'", req.Manu))
 }
-func (s *binaryV5SvcServer) GetEntities(req *Req, strm grpc.ServerStreamingServer[Entity]) error {
+func (s *titanServer) GetEntities(req *Req, strm grpc.ServerStreamingServer[Entity]) error {
 	cols := map[string]string{
 		"i340":  "COALESCE(id_340b, '')",
 		"state": "COALESCE(state, '')",
@@ -43,7 +43,7 @@ func (s *binaryV5SvcServer) GetEntities(req *Req, strm grpc.ServerStreamingServe
 	}
 	return db_strm_select(strm, titan.pools["esp"], "covered_entities", cols, "")
 }
-func (s *binaryV5SvcServer) GetPharmacies(req *Req, strm grpc.ServerStreamingServer[Pharmacy]) error {
+func (s *titanServer) GetPharmacies(req *Req, strm grpc.ServerStreamingServer[Pharmacy]) error {
 	cols := map[string]string{
 		"chnm":  "COALESCE(chain_name, '')",
 		"i340":  "COALESCE(id_340b, '')",
@@ -58,7 +58,7 @@ func (s *binaryV5SvcServer) GetPharmacies(req *Req, strm grpc.ServerStreamingSer
 	}
 	return db_strm_select(strm, titan.pools["esp"], "contracted_pharmacies", cols, "")
 }
-func (s *binaryV5SvcServer) GetESP1Pharms(req *Req, strm grpc.ServerStreamingServer[ESP1PharmNDC]) error {
+func (s *titanServer) GetESP1Pharms(req *Req, strm grpc.ServerStreamingServer[ESP1PharmNDC]) error {
 	cols := map[string]string{
 		"spid": "service_provider_id",
 		"ndc":  "ndc",
@@ -67,7 +67,90 @@ func (s *binaryV5SvcServer) GetESP1Pharms(req *Req, strm grpc.ServerStreamingSer
 	}
 	return db_strm_select(strm, titan.pools["citus"], "esp1_providers", cols, fmt.Sprintf("manufacturer = '%s'", req.Manu))
 }
-func (s *binaryV5SvcServer) GetClaims(req *Req, strm grpc.ServerStreamingServer[Claim]) error {
+func (s *titanServer) GetEligibilityLedger(req *Req, strm grpc.ServerStreamingServer[Eligibility]) error {
+	cols := map[string]string{
+		"id":   "id",
+		"i340": "id_340b",
+		"phid": "pharmacy_id",
+		"manu": "manufacturer",
+		"netw": "network",
+		"strt": "COALESCE(TRUNC(EXTRACT(EPOCH FROM start_at)*1000000, 0), 0)",
+		"term": "COALESCE(TRUNC(EXTRACT(EPOCH FROM end_at)  *1000000, 0), 0)",
+	}
+	return db_strm_select(strm, titan.pools["citus"], "eligibility_ledger", cols, fmt.Sprintf("manufacturer = '%s'", req.Manu))
+}
+
+// set locks
+
+func (s *titanServer) NewScrub(ctx context.Context, scr *Scrub) (*Res, error) {
+	cols := map[string]string{
+		"manu": "GetManu",
+		"scid": "GetScid",
+		"rbid": "GetRbid",
+		"stat": "GetStat",
+		"errc": "GetErrc",
+		"errm": "GetErrm",
+	}
+	_, err := db_insert(ctx, scr, titan.pools["titan"], "titan.scrubs", cols, "")
+	return &Res{}, err
+}
+func (s *titanServer) Rebates(strm grpc.ClientStreamingServer[TitanRebate, Res]) error {
+	cols := map[string]string{
+		"manu": "GetManu",
+		"scid": "GetScid",
+		"rbid": "GetRbid",
+		"stat": "GetStat",
+		"fprt": "GetFprt",
+	}
+	return db_strm_insert(strm, titan.pools["titan"], "titan.rebates", cols, 10000)
+}
+func (s *titanServer) ClaimsUsed(strm grpc.ClientStreamingServer[ClaimUse, Res]) error {
+	cols := map[string]string{
+		"scid": "GetScid",
+		"shrt": "GetShrt",
+		"excl": "GetExcl",
+	}
+	return db_strm_insert(strm, titan.pools["titan"], "titan.claim_uses", cols, 10000)
+}
+func (s *titanServer) RebateClaims(strm grpc.ClientStreamingServer[RebateClaim, Res]) error {
+	cols := map[string]string{
+		"scid": "GetScid",
+		"rbid": "GetRbid",
+		"shrt": "GetShrt",
+	}
+	return db_strm_insert(strm, titan.pools["titan"], "titan.rebate_claims", cols, 10000)
+}
+func (s *titanServer) ScrubDone(ctx context.Context, m *Metrics) (*Res, error) {
+	cols := map[string]string{
+		"rbt_total":	"GetRbtTotal",
+		"rbt_valid":  	"GetRbtValid",
+		"rbt_matched":	"GetRbtMatched",
+		"rbt_nomatch":	"GetRbtNomatch",
+		"rbt_passed":	"GetRbtPassed",
+		"rbt_failed":	"GetRbtFailed",
+		"clm_total":	"GetClmTotal",
+		"clm_valid":	"GetClmValid",
+		"clm_matched":	"GetClmMatched",
+		"clm_nomatch":	"GetClmNomatch",
+		"clm_invalid":	"GetClmInvalid",
+		"spi_exact":	"GetSpiExact",
+		"spi_cross":	"GetSpiCross",
+		"spi_stack":	"GetSpiStack",
+		"spi_chain":	"GetSpiChain",
+		"dos_equ_doc":	"GetDosEquDoc",
+		"dos_bef_doc":	"GetDosBefDoc",
+		"dos_equ_dof":	"GetDosEquDof",
+		"dos_bef_dof":	"GetDosBefDof",
+		"dos_aft_dof":	"GetDosAftDof",
+	}
+	_, _, _, manu, scid := getMetaGRPC(ctx)
+	whr := map[string]string{
+		"manu": manu,
+		"scid": scid,
+	}
+	return &Res{}, db_update(ctx, m, titan.pools["titan"], "titan.scrubs", cols, whr)
+}
+func (s *titanServer) SyncClaims(req *SyncReq, strm grpc.ServerStreamingServer[Claim]) error {
 	cols := map[string]string{
 		"clid":  "COALESCE(id, '')",
 		"chnm":  "COALESCE(chain_name, '')",
@@ -95,47 +178,10 @@ func (s *binaryV5SvcServer) GetClaims(req *Req, strm grpc.ServerStreamingServer[
 		"susp":  "COALESCE(suspended_submission, false)",
 		"ihph":  "COALESCE(in_house_pharmacy_ids, '{}')",
 	}
-	return db_strm_select(strm, titan.pools["citus"], "submission_rows", cols, fmt.Sprintf("manufacturer = '%s'", req.Manu))
-}
-func (s *binaryV5SvcServer) GetEligibilityLedger(req *Req, strm grpc.ServerStreamingServer[Eligibility]) error {
-	cols := map[string]string{
-		"id":   "id",
-		"i340": "id_340b",
-		"phid": "pharmacy_id",
-		"manu": "manufacturer",
-		"netw": "network",
-		"strt": "COALESCE(TRUNC(EXTRACT(EPOCH FROM start_at)*1000000, 0), 0)",
-		"term": "COALESCE(TRUNC(EXTRACT(EPOCH FROM end_at)  *1000000, 0), 0)",
-	}
-	return db_strm_select(strm, titan.pools["citus"], "eligibility_ledger", cols, fmt.Sprintf("manufacturer = '%s'", req.Manu))
-}
-func (s *binaryV5SvcServer) Start(ctx context.Context, req *StartReq) (*StartRes, error) {
-	return &StartRes{Scid: 0}, nil
-}
-func (s *binaryV5SvcServer) AddRebates(strm grpc.ClientStreamingServer[RebateRec, Res]) error {
-	cols := map[string]string{
-		"manu": "getManu",
-		"scid": "getScid",
-		"shrt": "getShrt",
-		"excl": "getExcl",
-	}
-	return db_strm_insert(strm, titan.pools["titan"], "titan.rebates", cols, 10000)
-}
-func (s *binaryV5SvcServer) AddClaims(strm grpc.ClientStreamingServer[ClaimRec, Res]) error {
-	cols := map[string]string{
-		"manu": "getManu",
-		"scid": "getScid",
-		"rbid": "getRbid",
-		"stat": "getStat",
-		"errc": "getErrc",
-		"errm": "getErrm",
-	}
-	return db_strm_insert(strm, titan.pools["titan"], "titan.claims", cols, 10000)
-}
-// set locks
-
-func (s *binaryV5SvcServer) Done(ctx context.Context, m *Metrics) (*Res, error) {
-	
-	return &Res{}, nil
+	whr := fmt.Sprintf("manufacturer = '%s' AND COALESCE(TRUNC(EXTRACT(EPOCH FROM created_at)*1000000, 0), 0) < %d", req.Manu, req.Mill)
+	return db_strm_select(strm, titan.pools["citus"], "submission_rows", cols, whr)
 }
 
+func titanValidate(ctx context.Context) error {
+	return nil
+}

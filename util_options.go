@@ -13,10 +13,12 @@ type Opts struct {
     runTitan  bool
     name      string
     auth      string
+    hdrm      string
+    csep      string
     fileIn    string
     fileOut   string
     policy    string
-    testDir   string
+    test      string
 }
 
 func options() *Opts {
@@ -24,21 +26,22 @@ func options() *Opts {
     name := strings.ToLower(X509cname())
     flag.BoolVar(&opts.runVers, "version",  false, "Print application details and exit")
 
-    if strings.EqualFold(appl, "client") {
+    if strings.EqualFold(appl, "shell") {
         opts.runClient = true
-        flag.BoolVar(&opts.runVers,   "version", false,     "Print application details and exit")
         flag.BoolVar(&opts.runPing,   "ping",    false,     "Ping the server and exit")
         flag.StringVar(&opts.auth,    "auth",    "",        "Authorization token")
         flag.StringVar(&opts.fileIn,  "in",      "",        "Rebate input file")
         flag.StringVar(&opts.fileOut, "out",     "",        "Rebate output file")
         flag.StringVar(&opts.policy,  "policy",  "default", "Rebate output file")
+        flag.StringVar(&opts.hdrm,    "hdrs",    "",        "Header map (cust1:std1,cust2:std2,...)")
+        flag.StringVar(&opts.csep,    "csep",    ",",       "Rebate file column separator")
 
         if Type == "proc" || strings.EqualFold(name, "brg") {
             flag.StringVar(&manu, "manu", manu, "Manufacturer name")
         }
         if strings.EqualFold(name, "brg") {
             flag.StringVar(&opts.name, "proc",  name, "Run as processor name")
-            flag.StringVar(&opts.auth, "test",  "",   "Test directory")
+            flag.StringVar(&opts.test, "test",  "",   "Test directory")
         }
     } else if strings.EqualFold(appl, "atlas") {
         opts.runAtlas = true
@@ -60,9 +63,12 @@ func options() *Opts {
     }
     
     flag.Parse()
-    if appl == "client" {
+    if appl == "shell" {
         if manu == "" {
             exit(nil, 1, "missing manu")
+        }
+        if opts.fileIn == "" {
+            exit(nil, 2, "missing rebate file")
         }
     }
     return opts

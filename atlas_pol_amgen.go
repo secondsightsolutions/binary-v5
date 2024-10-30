@@ -1,14 +1,13 @@
 package main
 
 import (
-	"fmt"
 	"time"
 )
 
-func amgenPrepRebates(sc *Scrub) {
+func amgenPrepRebates(sc *scrub) {
 
 }
-func amgenPrepClaims(sc *Scrub) {
+func amgenPrepClaims(sc *scrub) {
 	dt509 := time.Date(2023, time.May,    9, 0, 0, 0, 0, time.UTC)
 	for _, row := range sc.ca.clms.rows {
 		clm := row.elem.(*Claim)
@@ -27,14 +26,14 @@ func amgenPrepClaims(sc *Scrub) {
 		}
 	}
 }
-func amgenScrubRebate(sc *Scrub, rbt *Rebate) {
+func amgenScrubRebate(sc *scrub, rbt *Rebate) {
 	chains := false
 	stacks := false
-	rbtTm  := ParseStrToTime(rbt.Flds[Fields.Dos])
+	rbtTm  := ParseStrToTime(rbt.Dos)
 	tm411  := time.Date(2023, time.April, 11, 0, 0, 0, 0, time.UTC)
 	tm509  := time.Date(2023, time.May,    9, 0, 0, 0, 0, time.UTC)
 
-	rxn    := rbt.Flds[Fields.Rxn]
+	rxn    := rbt.Rxn
 	hrxn,_ := Hash(rxn)
 	
 	clms1 := sc.ca.clms.Find(Fields.Rxn,  rxn)	// Copies of claims. Only do this if policy updates the claim.
@@ -100,6 +99,7 @@ func amgenScrubRebate(sc *Scrub, rbt *Rebate) {
 	}
 	rbt.Stat = "nomatch"
 }
-func amgenResult(sc *Scrub, rbt *Rebate) string {
-	return fmt.Sprintf("%s,%s,%s,%s", rbt.Stat, renderCols(sc.hdrs, rbt.Flds), rbt.Errc, rbt.Errm)
+func amgenResult(sc *scrub, rbt *Rebate) string {
+	//return fmt.Sprintf("%s,%s,%s,%s", rbt.Stat, renderCols(sc.hdrs, rbt.Flds), rbt.Errc, rbt.Errm)
+	return ""
 }
