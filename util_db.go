@@ -353,6 +353,20 @@ func db_max_seq(ctx context.Context, pool *pgxpool.Pool, tbln, coln string) (int
 		return 0, err
 	}
 }
+func db_count(ctx context.Context, pool *pgxpool.Pool, frmWhr string) (int64, error) {
+	if rows, err := pool.Query(ctx, fmt.Sprintf("SELECT COUNT(*) count %s ", frmWhr)); err == nil {
+		defer rows.Close()
+		var cnt int64
+		if rows.Next() {
+			err := rows.Scan(&cnt)
+			return cnt, err
+		} else {
+			return 0, nil
+		}
+	} else {
+		return 0, err
+	}
+}
 
 type dbFldMap struct {
 	flds []string

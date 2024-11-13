@@ -44,7 +44,7 @@ func run_atlas(wg *sync.WaitGroup, opts *Opts, stop chan any) {
     doneWG  := &sync.WaitGroup{}
     readyWG.Add(3)
     doneWG.Add(4)
-    go run_datab_ping(readyWG, doneWG, stop, 60, "atlas", nil)
+    go run_datab_ping(readyWG, doneWG, stop, 60, "atlas", atlas.pools)
     go run_titan_ping(readyWG, doneWG, stop, 60, atlas)
     go run_atlas_sync(readyWG, doneWG, stop, 60, atlas)
     readyWG.Wait()

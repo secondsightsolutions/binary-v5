@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -393,6 +394,21 @@ func getMetaGRPC(ctx context.Context) (name, auth, vers, manu, scid string) {
 		vers = val(md, "vers")
 		manu = val(md, "manu")
 		scid = val(md, "scid")
+	}
+	return
+}
+
+func getCreds(tlsInfo credentials.TLSInfo) (cn, ou string) {
+	for _, chain := range tlsInfo.State.VerifiedChains {
+		if len(chain) > 0 {
+			cn = chain[0].Subject.CommonName
+			ou = chain[0].Subject.OrganizationalUnit[0]
+			cn = strings.ToLower(cn)
+			ou = strings.ToLower(ou)
+			if len(cn) > 0 {
+				break
+			}
+		}
 	}
 	return
 }
