@@ -56,18 +56,26 @@ type seqs struct {
 	RebateClaims int64
 }
 
-func sync_to[T, R any](pool, tbln string, last int64, f func(context.Context, ...grpc.CallOption) (grpc.ClientStreamingClient[T, R], error)) {
+func sync_to[T, R any](pln, tbln, coln string, last int64, f func(context.Context, ...grpc.CallOption) (grpc.ClientStreamingClient[T, R], error)) {
 	strt := time.Now()
+	pool := atlas.pools[pln]
 	if strm, err := f(metaGRPC()); err == nil {
 		whr := fmt.Sprintf(" WHERE seq > %d ", last)
-		if cnt, err := db_select_strm_to_server[T, R](strm, atlas.pools[pool], tbln, nil, whr); err == nil {
+		if cnt, err := db_select_strm_to_server[T, R](strm, pool, tbln, nil, whr); err == nil {
 			log("atlas", "sync", "%s upload completed (%d rows)", time.Since(strt), nil, tbln, cnt)
+			if seq, err := db_max_seq(context.Background(), pool, tbln, "seq"); err == nil {
+				if _, err := db_exec(context.Background(), pool, fmt.Sprintf("UPDATE atlas.sync SET %s = %d", coln, seq)); err != nil {
+					log("atlas", "sync", "%s upload failed - failed to update last seq (%s) in sync table", time.Since(strt), err, tbln, coln)
+				}
+			} else {
+				log("atlas", "sync", "%s upload failed - failed to read last seq value in source table", time.Since(strt), err, tbln)
+			}
 		} else {
-			log("atlas", "sync", "%s upload failed", time.Since(strt), err, tbln)
+			log("atlas", "sync", "%s upload failed - failed to read from source table", time.Since(strt), err, tbln)
 		}
 		strm.CloseSend()
 	} else {
-		log("atlas", "sync", "%s upload failed", time.Since(strt), err, tbln)
+		log("atlas", "sync", "%s upload failed - failed to create stream connection to titan", time.Since(strt), err, tbln)
 	}
 }
 func (atlas *Atlas) sync() {
@@ -76,8 +84,8 @@ func (atlas *Atlas) sync() {
 		"doc": "COALESCE(MAX(doc), 0)",
 	}
 	if obj, err := db_select_one[last_claim](context.Background(), atlas.pools["atlas"], "atlas.claims", cols, ""); err == nil {
-		if strm, err := atlas.titan.SyncClaims(metaGRPC(), &SyncReq{Manu: manu, Last: obj.Doc}); err == nil {
-			if cnt, err := db_insert_strm_fm_server(strm, atlas.pools["atlas"], "atlas", "atlas.claims", nil, 5000); err == nil {
+		if strm, err := atlas.titan.SyncClaims(metaGRPC(), &SyncReq{Last: obj.Doc}); err == nil {
+			if cnt, err := db_insert_strm_fm_server(strm, atlas.pools["atlas"], "atlas.claims", nil, 5000); err == nil {
 				log("atlas", "sync", "claims download completed (%d rows)", time.Since(strt), nil, cnt)
 			} else {
 				log("atlas", "sync", "claims download failed", time.Since(strt), err)
@@ -93,10 +101,11 @@ func (atlas *Atlas) sync() {
 		if obj == nil {
 			obj = &seqs{}
 		}
-		sync_to("atlas", "atlas.rebates",       obj.Rebates,      atlas.titan.Rebates)
-		sync_to("atlas", "atlas.claims_used",   obj.ClaimUses,    atlas.titan.ClaimsUsed)
-		sync_to("atlas", "atlas.rebate_claims", obj.RebateClaims, atlas.titan.RebateClaims)
-		sync_to("atlas", "atlas.rebate_meta",   obj.RebateMeta,   atlas.titan.RebateMetas)
+		sync_to("atlas", "atlas.scrubs",        "scrubs",        obj.Scrubs,       atlas.titan.Scrubs)
+		sync_to("atlas", "atlas.rebates",       "rebates",       obj.Rebates,      atlas.titan.Rebates)
+		sync_to("atlas", "atlas.claims_used",   "claim_uses",    obj.ClaimUses,    atlas.titan.ClaimsUsed)
+		sync_to("atlas", "atlas.rebate_claims", "rebate_meta",   obj.RebateClaims, atlas.titan.RebateClaims)
+		sync_to("atlas", "atlas.rebate_meta",   "rebate_claims", obj.RebateMeta,   atlas.titan.RebateMetas)
 	} else {
 		log("atlas", "sync", "failed to read last seq values", time.Since(strt), err)
 		return

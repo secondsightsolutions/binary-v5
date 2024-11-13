@@ -231,9 +231,7 @@ message Req {
 message Res {
 }
 message SyncReq {
-    string manu = 1;
-    int64  last = 2;
-    int64  mill = 3;
+    int64  last = 1;
 }
 message ScrubRes {
     int64   scid = 1;
@@ -278,7 +276,7 @@ service Titan {
     rpc GetESP1Pharms(Req)                  returns (stream ESP1PharmNDC) {}
     rpc GetEligibilityLedger(Req)           returns (stream Eligibility) {}
 
-    rpc NewScrub(Scrub)                     returns (Res) {}
+    rpc Scrubs(stream Scrub)                returns (Res) {}
     rpc Rebates(stream TitanRebate)         returns (Res) {}
     rpc ClaimsUsed(stream ClaimUse)         returns (Res) {}
     rpc RebateClaims(stream RebateClaim)    returns (Res) {}

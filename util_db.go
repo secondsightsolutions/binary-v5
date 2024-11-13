@@ -192,7 +192,7 @@ func db_insert_strm_fm_client[T, R any](strm grpc.ClientStreamingServer[T, R], p
 		return cnt, err
 	}
 }
-func db_insert_strm_fm_server[T any](strm grpc.ServerStreamingClient[T], pool *pgxpool.Pool, appl, tbln string, colMap map[string]string, batch int) (int, error) {
+func db_insert_strm_fm_server[T any](strm grpc.ServerStreamingClient[T], pool *pgxpool.Pool, tbln string, colMap map[string]string, batch int) (int, error) {
 	ctx := strm.Context()
 	lst := []any{}
 	cnt := 0
@@ -332,6 +332,26 @@ func db_update(ctx context.Context, obj any, pool *pgxpool.Pool, tbln string, co
 		return err
 	}
 	return nil
+}
+
+func db_exec(ctx context.Context, pool *pgxpool.Pool, qry string) (int64, error) {
+	tag, err := pool.Exec(ctx, qry)
+	return tag.RowsAffected(), err
+}
+
+func db_max_seq(ctx context.Context, pool *pgxpool.Pool, tbln, coln string) (int64, error) {
+	if rows, err := pool.Query(ctx, fmt.Sprintf("SELECT COALESCE(MAX(%s), 0) seq FROM %s", coln, tbln)); err == nil {
+		defer rows.Close()
+		var seq int64
+		if rows.Next() {
+			err := rows.Scan(&seq)
+			return seq, err
+		} else {
+			return 0, nil
+		}
+	} else {
+		return 0, err
+	}
 }
 
 type dbFldMap struct {

@@ -190,9 +190,9 @@ func (s *titanServer) SyncClaims(req *SyncReq, strm grpc.ServerStreamingServer[C
 		"susp": "COALESCE(suspended_submission, false)",
 		"ihph": "COALESCE(in_house_pharmacy_ids, '{}')",
 	}
-	whr := fmt.Sprintf("manufacturer = '%s' AND COALESCE(TRUNC(EXTRACT(EPOCH FROM created_at)*1000000, 0), 0) >= %d", req.Manu, req.Last)
 	strt := time.Now()
 	_,_,_,manu,_ := getMetaGRPC(strm.Context())
+	whr := fmt.Sprintf("manufacturer = '%s' AND COALESCE(TRUNC(EXTRACT(EPOCH FROM created_at)*1000000, 0), 0) > %d", manu, req.Last)
 	cnt, err := db_select_strm_to_client(strm, titan.pools["citus"], "submission_rows", cols, whr)
 	log("titan", "SyncClaims", "download to atlas (%s) (%d rows)", time.Since(strt), err, manu, cnt)
 	return err
