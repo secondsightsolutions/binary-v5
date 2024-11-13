@@ -44,12 +44,16 @@ func run_titan(wg *sync.WaitGroup, opts *Opts, stop chan any) {
 	titan.pools["titan"] = db_pool(titan.rbt_db_host, titan.rbt_db_port, titan.rbt_db_name, titan.rbt_db_user, titan.rbt_db_pass, true)
 	titan.pools["esp"]   = db_pool(titan.esp_db_host, titan.esp_db_port, titan.esp_db_name, titan.esp_db_user, titan.esp_db_pass, true)
 
-	svcWGrp := &sync.WaitGroup{}
-	svcWGrp.Add(2)
-	go run_datab_ping(svcWGrp, stop, 60, "titan", titan.pools)
-	go run_grpc_server(svcWGrp, stop, "titan", svcp, RegisterTitanServer, titan.titan)
+	readyWG := &sync.WaitGroup{}
+	doneWG  := &sync.WaitGroup{}
+	readyWG.Add(1)
+	doneWG.Add(2)
+	go run_datab_ping(readyWG, doneWG, stop, 60, "titan", titan.pools)
+	readyWG.Wait()
+
+	go run_grpc_server(doneWG, stop, "titan", svcp, RegisterTitanServer, titan.titan)
 	//go run_save_to_azure(svcWGrp, stop, 5, azac, azky)
-	svcWGrp.Wait()
+	doneWG.Wait()
 }
 
 func (svc *Titan) getEnv() {

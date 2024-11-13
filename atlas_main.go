@@ -41,17 +41,23 @@ func run_atlas(wg *sync.WaitGroup, opts *Opts, stop chan any) {
     if atlas.done {
         return
     }
-    atlasWG := &sync.WaitGroup{}
-    atlasWG.Add(4)
-    go run_datab_ping(atlasWG, stop, 60, "atlas", nil)
-    go run_titan_ping(atlasWG, stop, 60, atlas)
-    go run_grpc_server(atlasWG, stop, "atlas", srvp, RegisterAtlasServer, atlas.atlas)
-    go run_atlas_sync(atlasWG, stop, 60, atlas)
-    atlasWG.Wait()
+    readyWG := &sync.WaitGroup{}
+    doneWG  := &sync.WaitGroup{}
+    readyWG.Add(3)
+    doneWG.Add(4)
+    go run_datab_ping(readyWG, doneWG, stop, 60, "atlas", nil)
+    go run_titan_ping(readyWG, doneWG, stop, 60, atlas)
+    go run_atlas_sync(readyWG, doneWG, stop, 60, atlas)
+    readyWG.Wait()
+
+    go run_grpc_server(doneWG, stop, "atlas", srvp, RegisterAtlasServer, atlas.atlas)
+    doneWG.Wait()
 }
 
-func run_atlas_sync(wg *sync.WaitGroup, stop chan any, intv int, atlas *Atlas) {
-    defer wg.Done()
+func run_atlas_sync(readyWG, doneWG *sync.WaitGroup, stop chan any, intv int, atlas *Atlas) {
+    defer doneWG.Done()
+    atlas.sync()
+    readyWG.Done()
     for {
         select {
         case <-time.After(time.Duration(intv)*time.Second):
@@ -62,8 +68,8 @@ func run_atlas_sync(wg *sync.WaitGroup, stop chan any, intv int, atlas *Atlas) {
         }
     }
 }
-func run_titan_ping(wg *sync.WaitGroup, stop chan any, intv int, atlas *Atlas) {
-    defer wg.Done()
+func run_titan_ping(readyWG, doneWG *sync.WaitGroup, stop chan any, intv int, atlas *Atlas) {
+    defer doneWG.Done()
     pingService := func() {
         started := time.Now()
         if _, err := atlas.titan.Ping(context.Background(), &Req{Auth: atlas.opts.auth, Vers: vers}); err == nil {
@@ -73,6 +79,7 @@ func run_titan_ping(wg *sync.WaitGroup, stop chan any, intv int, atlas *Atlas) {
         }
     }
     pingService()
+    readyWG.Done()
     durn := time.Duration(intv) * time.Second
     for {
         select {
