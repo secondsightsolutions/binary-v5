@@ -101,13 +101,13 @@ func (atlas *Atlas) getEnv() {
 }
 
 func (atlas *Atlas) load(stop chan any) {
-    //atlas.ca.clms = new_cache(atlas.getClaims(stop, 100000))
-    atlas.ca.esp1 = new_cache(atlas.getESP1(    stop, 100000))
-    atlas.ca.ents = new_cache(atlas.getEntities(stop, 100000))
-    atlas.ca.ledg = new_cache(atlas.getLedger(  stop, 100000))
-    atlas.ca.ndcs = new_cache(atlas.getNDCs(    stop, 100000))
-    atlas.ca.phms = new_cache(atlas.getPharms(  stop, 100000))
-    atlas.ca.spis = new_cache(atlas.getSPIs(    stop, 100000))
+    //atlas.ca.clms = new_cache(atlas.getClaims(stop))
+    atlas.ca.esp1 = new_cache(atlas.getESP1(    stop))
+    atlas.ca.ents = new_cache(atlas.getEntities(stop))
+    atlas.ca.ledg = new_cache(atlas.getLedger(  stop))
+    atlas.ca.ndcs = new_cache(atlas.getNDCs(    stop))
+    atlas.ca.phms = new_cache(atlas.getPharms(  stop))
+    atlas.ca.spis = new_cache(atlas.getSPIs(    stop))
     atlas.spis.load(atlas.ca.spis)
     atlas.ca.done = true
 }

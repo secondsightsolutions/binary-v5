@@ -100,7 +100,7 @@ func db_select_one[T any](ctx context.Context, pool *pgxpool.Pool, tbln string, 
 // 	}
 // }
 
-func db_strm_select_fm_server[T any](strm grpc.ServerStreamingServer[T], pool *pgxpool.Pool, tbln string, cols map[string]string, where string) (int, error) {
+func db_select_strm_to_client[T any](strm grpc.ServerStreamingServer[T], pool *pgxpool.Pool, tbln string, cols map[string]string, where string) (int, error) {
 	ctx := strm.Context()
 	qry := dyn_select(tbln, cols, where)
 	cnt := 0
@@ -128,7 +128,7 @@ func db_strm_select_fm_server[T any](strm grpc.ServerStreamingServer[T], pool *p
 	return cnt, nil
 }
 
-func db_strm_select_fm_client[T,R any](strm grpc.ClientStreamingClient[T,R], pool *pgxpool.Pool, tbln string, cols map[string]string, where string) (int, error) {
+func db_select_strm_to_server[T, R any](strm grpc.ClientStreamingClient[T, R], pool *pgxpool.Pool, tbln string, cols map[string]string, where string) (int, error) {
 	ctx := strm.Context()
 	qry := dyn_select(tbln, cols, where)
 	cnt := 0

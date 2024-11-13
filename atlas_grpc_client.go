@@ -26,43 +26,49 @@ func (atlas *Atlas) connect() {
 func ping() {
 }
 
-func (atlas *Atlas) getESP1(stop chan any, batch int) []any {
-	return read_stream(stop, &atlas.done, batch, "esp1", atlas.opts.auth, atlas.titan.GetESP1Pharms)
+func (atlas *Atlas) getESP1(stop chan any) []any {
+	return read_stream(stop, &atlas.done, "esp1", atlas.opts.auth, atlas.titan.GetESP1Pharms)
 }
-func (atlas *Atlas) getEntities(stop chan any, batch int) []any {
-	return read_stream(stop, &atlas.done, batch, "entities", atlas.opts.auth, atlas.titan.GetEntities)
+func (atlas *Atlas) getEntities(stop chan any) []any {
+	return read_stream(stop, &atlas.done, "entities", atlas.opts.auth, atlas.titan.GetEntities)
 }
-func (atlas *Atlas) getLedger(stop chan any, batch int) []any {
-	return read_stream(stop, &atlas.done, batch, "ledger", atlas.opts.auth, atlas.titan.GetEligibilityLedger)
+func (atlas *Atlas) getLedger(stop chan any) []any {
+	return read_stream(stop, &atlas.done, "ledger", atlas.opts.auth, atlas.titan.GetEligibilityLedger)
 }
-func (atlas *Atlas) getNDCs(stop chan any, batch int) []any {
-	return read_stream(stop, &atlas.done, batch, "ndcs", atlas.opts.auth, atlas.titan.GetNDCs)
+func (atlas *Atlas) getNDCs(stop chan any) []any {
+	return read_stream(stop, &atlas.done, "ndcs", atlas.opts.auth, atlas.titan.GetNDCs)
 }
-func (atlas *Atlas) getPharms(stop chan any, batch int) []any {
-	return read_stream(stop, &atlas.done, batch, "pharms", atlas.opts.auth, atlas.titan.GetPharmacies)
+func (atlas *Atlas) getPharms(stop chan any) []any {
+	return read_stream(stop, &atlas.done, "pharms", atlas.opts.auth, atlas.titan.GetPharmacies)
 }
-func (atlas *Atlas) getSPIs(stop chan any, batch int) []any {
-	return read_stream(stop, &atlas.done, batch, "spis", atlas.opts.auth, atlas.titan.GetSPIs)
+func (atlas *Atlas) getSPIs(stop chan any) []any {
+	return read_stream(stop, &atlas.done, "spis", atlas.opts.auth, atlas.titan.GetSPIs)
 }
+
 type last_claim struct {
 	Doc int64
 }
 type seqs struct {
-	Scrubs int64
-	Rebates int64
-	ClaimUses int64
-	RebateMeta int64
+	Scrubs       int64
+	Rebates      int64
+	ClaimUses    int64
+	RebateMeta   int64
 	RebateClaims int64
 }
-func sync_to[T,R any](strm grpc.ClientStreamingClient[T,R], pool, tbln string, last int64) {
+
+func sync_to[T, R any](pool, tbln string, last int64, f func(context.Context, ...grpc.CallOption) (grpc.ClientStreamingClient[T, R], error)) {
 	strt := time.Now()
-	whr := fmt.Sprintf(" WHERE seq > %d ", last)
-	if cnt, err := db_strm_select_fm_client[T,R](strm, atlas.pools[pool], tbln, nil, whr); err == nil {
-		log("atlas", "sync", "%s upload completed (%d rows)", time.Since(strt), nil, tbln, cnt)
+	if strm, err := f(context.Background()); err == nil {
+		whr := fmt.Sprintf(" WHERE seq > %d ", last)
+		if cnt, err := db_select_strm_to_server[T, R](strm, atlas.pools[pool], tbln, nil, whr); err == nil {
+			log("atlas", "sync", "%s upload completed (%d rows)", time.Since(strt), nil, tbln, cnt)
+		} else {
+			log("atlas", "sync", "%s upload failed", time.Since(strt), err, tbln)
+		}
+		strm.CloseSend()
 	} else {
 		log("atlas", "sync", "%s upload failed", time.Since(strt), err, tbln)
 	}
-	strm.CloseSend()
 }
 func (atlas *Atlas) sync() {
 	strt := time.Now()
@@ -87,33 +93,17 @@ func (atlas *Atlas) sync() {
 		if obj == nil {
 			obj = &seqs{}
 		}
-		if strm, err := atlas.titan.Rebates(context.Background()); err == nil {
-			sync_to(strm, "atlas", "atlas.rebates", obj.Rebates)
-		} else {
-			log("atlas", "sync", "rebates upload failed", time.Since(strt), err)
-		}
-		if strm, err := atlas.titan.ClaimsUsed(context.Background()); err == nil {
-			sync_to(strm, "atlas", "atlas.claims_used", obj.ClaimUses)
-		} else {
-			log("atlas", "sync", "claims_used upload failed", time.Since(strt), err)
-		}
-		if strm, err := atlas.titan.RebateClaims(context.Background()); err == nil {
-			sync_to(strm, "atlas", "atlas.rebate_claims", obj.RebateClaims)
-		} else {
-			log("atlas", "sync", "rebate_claims upload failed", time.Since(strt), err)
-		}
-		if strm, err := atlas.titan.RebateMetas(context.Background()); err == nil {
-			sync_to(strm, "atlas", "atlas.rebate_meta", obj.RebateClaims)
-		} else {
-			log("atlas", "sync", "rebate_meta upload failed", time.Since(strt), err)
-		}
+		sync_to("atlas", "atlas.rebates",       obj.Rebates,      atlas.titan.Rebates)
+		sync_to("atlas", "atlas.claims_used",   obj.ClaimUses,    atlas.titan.ClaimsUsed)
+		sync_to("atlas", "atlas.rebate_claims", obj.RebateClaims, atlas.titan.RebateClaims)
+		sync_to("atlas", "atlas.rebate_meta",   obj.RebateMeta,   atlas.titan.RebateMetas)
 	} else {
 		log("atlas", "sync", "failed to read last seq values", time.Since(strt), err)
 		return
 	}
 }
 
-func read_stream[T any](stop chan any, done *bool, batch int, name, auth string, f func(context.Context, *Req, ...grpc.CallOption) (grpc.ServerStreamingClient[T], error)) []any {
+func read_stream[T any](stop chan any, done *bool, name, auth string, f func(context.Context, *Req, ...grpc.CallOption) (grpc.ServerStreamingClient[T], error)) []any {
 	if *done {
 		return nil
 	}
@@ -122,13 +112,12 @@ func read_stream[T any](stop chan any, done *bool, batch int, name, auth string,
 
 	// Stay in this outer loop until either we successfully read all rows from server, or we are stopped.
 	for {
-		outer:
+	outer:
 		list := make([]any, 0)
 		strt := time.Now()
 		c, fn := context.WithCancel(context.Background())
 
 		if strm, err := f(c, req); err == nil {
-			//log("atlas", title, "%s: created stream", time.Since(strt), nil, name)
 			// Stay in this inner loop to read the stream - each time through we'll watch to see if we're being stopped.
 			for {
 				select {
@@ -140,13 +129,7 @@ func read_stream[T any](stop chan any, done *bool, batch int, name, auth string,
 				default: // Not stopped yet. Read another row.
 					if obj, err := strm.Recv(); err == nil {
 						list = append(list, obj)
-						// if len(list)%batch == 0 {
-						// 	log("atlas", title, "%s: loaded %d rows", time.Since(strt), nil, name, len(list))
-						// }
 					} else if err == io.EOF {
-						// if len(list)%batch != 0 {
-						// 	log("atlas", title, "%s: loaded %d rows - done", time.Since(strt), nil, name, len(list))
-						// }
 						fn()
 						return list
 					} else {
@@ -162,7 +145,7 @@ func read_stream[T any](stop chan any, done *bool, batch int, name, auth string,
 				*done = true
 				fn()
 				return nil
-			case <-time.After(time.Duration(10)*time.Second):
+			case <-time.After(time.Duration(10) * time.Second):
 			}
 		}
 	}

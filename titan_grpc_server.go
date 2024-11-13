@@ -26,7 +26,7 @@ func (s *titanServer) GetSPIs(req *Req, strm grpc.ServerStreamingServer[SPI]) er
 		"chn": "COALESCE(chain_name, '')",
 	}
 	strt := time.Now()
-	cnt, err := db_strm_select_fm_server(strm, titan.pools["esp"], "ncpdp_providers", cols, "")
+	cnt, err := db_select_strm_to_client(strm, titan.pools["esp"], "ncpdp_providers", cols, "")
 	log("titan", "GetSPIs", "download to atlas (%s) (%d rows)", time.Since(strt), err, req.Manu, cnt)
 	return err
 }
@@ -37,7 +37,7 @@ func (s *titanServer) GetNDCs(req *Req, strm grpc.ServerStreamingServer[NDC]) er
 		"netw": "COALESCE(network, '')",
 	}
 	strt := time.Now()
-	cnt, err := db_strm_select_fm_server(strm, titan.pools["esp"], "ndcs", cols, fmt.Sprintf("manufacturer_name = '%s'", req.Manu))
+	cnt, err := db_select_strm_to_client(strm, titan.pools["esp"], "ndcs", cols, fmt.Sprintf("manufacturer_name = '%s'", req.Manu))
 	log("titan", "GetNDCs", "download to atlas (%s) (%d rows)", time.Since(strt), err, req.Manu, cnt)
 	return err
 }
@@ -49,7 +49,7 @@ func (s *titanServer) GetEntities(req *Req, strm grpc.ServerStreamingServer[Enti
 		"term":  "COALESCE(TRUNC(EXTRACT(EPOCH FROM term_date::timestamp)                *1000000, 0), 0)",
 	}
 	strt := time.Now()
-	cnt, err := db_strm_select_fm_server(strm, titan.pools["esp"], "covered_entities", cols, "")
+	cnt, err := db_select_strm_to_client(strm, titan.pools["esp"], "covered_entities", cols, "")
 	log("titan", "GetEntities", "download to atlas (%s) (%d rows)", time.Since(strt), err, req.Manu, cnt)
 	return err
 }
@@ -67,7 +67,7 @@ func (s *titanServer) GetPharmacies(req *Req, strm grpc.ServerStreamingServer[Ph
 		"state": "COALESCE(pharmacy_state, '')",
 	}
 	strt := time.Now()
-	cnt, err := db_strm_select_fm_server(strm, titan.pools["esp"], "contracted_pharmacies", cols, "")
+	cnt, err := db_select_strm_to_client(strm, titan.pools["esp"], "contracted_pharmacies", cols, "")
 	log("titan", "GetPharmacies", "download to atlas (%s) (%d rows)", time.Since(strt), err, req.Manu, cnt)
 	return err
 }
@@ -79,7 +79,7 @@ func (s *titanServer) GetESP1Pharms(req *Req, strm grpc.ServerStreamingServer[ES
 		"term": "COALESCE(TRUNC(EXTRACT(EPOCH FROM term::timestamp) *1000000, 0), 0)",
 	}
 	strt := time.Now()
-	cnt, err := db_strm_select_fm_server(strm, titan.pools["citus"], "esp1_providers", cols, fmt.Sprintf("manufacturer = '%s'", req.Manu))
+	cnt, err := db_select_strm_to_client(strm, titan.pools["citus"], "esp1_providers", cols, fmt.Sprintf("manufacturer = '%s'", req.Manu))
 	log("titan", "GetESP1Pharms", "download to atlas (%s) (%d rows)", time.Since(strt), err, req.Manu, cnt)
 	return err
 }
@@ -94,7 +94,7 @@ func (s *titanServer) GetEligibilityLedger(req *Req, strm grpc.ServerStreamingSe
 		"term": "COALESCE(TRUNC(EXTRACT(EPOCH FROM end_at)  *1000000, 0), 0)",
 	}
 	strt := time.Now()
-	cnt, err := db_strm_select_fm_server(strm, titan.pools["citus"], "eligibility_ledger", cols, fmt.Sprintf("manufacturer = '%s'", req.Manu))
+	cnt, err := db_select_strm_to_client(strm, titan.pools["citus"], "eligibility_ledger", cols, fmt.Sprintf("manufacturer = '%s'", req.Manu))
 	log("titan", "GetEligibilityLedger", "download to atlas (%s) (%d rows)", time.Since(strt), err, req.Manu, cnt)
 	return err
 }
@@ -187,7 +187,7 @@ func (s *titanServer) SyncClaims(req *SyncReq, strm grpc.ServerStreamingServer[C
 	whr := fmt.Sprintf("manufacturer = '%s' AND COALESCE(TRUNC(EXTRACT(EPOCH FROM created_at)*1000000, 0), 0) >= %d", req.Manu, req.Last)
 	strt := time.Now()
 	mdmanu := ""
-	cnt, err := db_strm_select_fm_server(strm, titan.pools["citus"], "submission_rows", cols, whr)
+	cnt, err := db_select_strm_to_client(strm, titan.pools["citus"], "submission_rows", cols, whr)
 	log("titan", "SyncClaims", "download to atlas (%s) (%d rows)", time.Since(strt), err, mdmanu, cnt)
 	return err
 }
