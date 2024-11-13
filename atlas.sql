@@ -113,5 +113,9 @@ CREATE TABLE atlas.claims (
     chnm text not null default '',
     elig bool not null default true,
     susp bool not null default false,
+    cnfm bool not null default true,
+    qty  numeric not null default 0,
+    manu text not null,
     ihph text array not null default '{}'
 );
+CREATE INDEX ON atlas.claims(doc);

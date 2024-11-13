@@ -30,11 +30,13 @@ func run_atlas(wg *sync.WaitGroup, opts *Opts, stop chan any) {
 
     atlas = &Atlas{atlas: &atlasServer{}, pools: map[string]*pgxpool.Pool{}, spis: newSPIs(), opts: opts}
 
+    manu = "teva"
+
     atlas.getEnv()
     atlas.connect()
     atlas.load(stop)
 
-    atlas.pools["binary"] = db_pool(atlas.db_host, atlas.db_port, atlas.db_name, atlas.db_user, atlas.db_pass, true)
+    atlas.pools["atlas"] = db_pool(atlas.db_host, atlas.db_port, atlas.db_name, atlas.db_user, atlas.db_pass, true)
 
     if atlas.done {
         return
@@ -44,16 +46,18 @@ func run_atlas(wg *sync.WaitGroup, opts *Opts, stop chan any) {
     go run_datab_ping(atlasWG, stop, 60, "atlas", nil)
     go run_titan_ping(atlasWG, stop, 60, atlas)
     go run_grpc_server(atlasWG, stop, "atlas", srvp, RegisterAtlasServer, atlas.atlas)
-    go run_atlas_sync(atlasWG, stop)
+    go run_atlas_sync(atlasWG, stop, 60, atlas)
     atlasWG.Wait()
 }
 
-func run_atlas_sync(wg *sync.WaitGroup, stop chan any) {
+func run_atlas_sync(wg *sync.WaitGroup, stop chan any, intv int, atlas *Atlas) {
     defer wg.Done()
     for {
         select {
-        case <-time.After(60*time.Second):
+        case <-time.After(time.Duration(intv)*time.Second):
+            atlas.sync()
         case <-stop:
+            log("atlas", "main", "titan sync returning", 0, nil)
             return
         }
     }
@@ -80,23 +84,23 @@ func run_titan_ping(wg *sync.WaitGroup, stop chan any, intv int, atlas *Atlas) {
     }
 }
 
-func (srv *Atlas) getEnv() {
-    setIf(&srv.db_host, "SRV_DB_HOST")
-    setIf(&srv.db_port, "SRV_DB_PORT")
-    setIf(&srv.db_name, "SRV_DB_NAME")
-    setIf(&srv.db_user, "SRV_DB_USER")
-    setIf(&srv.db_pass, "SRV_DB_PASS")
-    //setIf(&srv.environment, "BIN_ENVR")
+func (atlas *Atlas) getEnv() {
+    setIf(&atlas.db_host, "ATLAS_DB_HOST")
+    setIf(&atlas.db_port, "ATLAS_DB_PORT")
+    setIf(&atlas.db_name, "ATLAS_DB_NAME")
+    setIf(&atlas.db_user, "ATLAS_DB_USER")
+    setIf(&atlas.db_pass, "ATLAS_DB_PASS")
+    //setIf(&atlas.environment, "BIN_ENVR")
 }
 
-func (srv *Atlas) load(stop chan any) {
-    //srv.ca.clms = new_cache(srv.getClaims(stop, 100000))
-    srv.ca.esp1 = new_cache(srv.getESP1(    stop, 100000))
-    srv.ca.ents = new_cache(srv.getEntities(stop, 100000))
-    srv.ca.ledg = new_cache(srv.getLedger(  stop, 100000))
-    srv.ca.ndcs = new_cache(srv.getNDCs(    stop, 100000))
-    srv.ca.phms = new_cache(srv.getPharms(  stop, 100000))
-    srv.ca.spis = new_cache(srv.getSPIs(    stop, 100000))
-    srv.spis.load(srv.ca.spis)
-    srv.ca.done = true
+func (atlas *Atlas) load(stop chan any) {
+    //atlas.ca.clms = new_cache(atlas.getClaims(stop, 100000))
+    atlas.ca.esp1 = new_cache(atlas.getESP1(    stop, 100000))
+    atlas.ca.ents = new_cache(atlas.getEntities(stop, 100000))
+    atlas.ca.ledg = new_cache(atlas.getLedger(  stop, 100000))
+    atlas.ca.ndcs = new_cache(atlas.getNDCs(    stop, 100000))
+    atlas.ca.phms = new_cache(atlas.getPharms(  stop, 100000))
+    atlas.ca.spis = new_cache(atlas.getSPIs(    stop, 100000))
+    atlas.spis.load(atlas.ca.spis)
+    atlas.ca.done = true
 }

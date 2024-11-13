@@ -44,6 +44,29 @@ func (atlas *Atlas) getPharms(stop chan any, batch int) []any {
 func (atlas *Atlas) getSPIs(stop chan any, batch int) []any {
 	return read_stream(stop, &atlas.done, batch, "spis", atlas.opts.auth, atlas.titan.GetSPIs)
 }
+type last_claim struct {
+	Doc int64
+}
+func (atlas *Atlas) sync() {
+	strt := time.Now()
+	cols := map[string]string{
+		"doc": "COALESCE(MAX(doc), 0)",
+	}
+	if obj, err := db_select_one[last_claim](context.Background(), atlas.pools["atlas"], "atlas.claims", cols, ""); err == nil {
+		if strm, err := atlas.titan.SyncClaims(context.Background(), &SyncReq{Manu: manu, Last: obj.Doc}); err == nil {
+			if err := db_insert_strm_fm_server(strm, atlas.pools["atlas"], "atlas", "atlas.claims", nil, 5000); err == nil {
+				log("atlas", "sync", "claims completed", time.Since(strt), nil)
+			} else {
+				log("atlas", "sync", "claims failed", time.Since(strt), err)
+			}
+		} else {
+			log("atlas", "sync", "claims failed", time.Since(strt), err)
+		}
+	} else {
+		log("atlas", "sync", "failed to read last claim time", time.Since(strt), err)
+		return
+	}
+}
 
 func read_stream[T any](stop chan any, done *bool, batch int, name, auth string, f func(context.Context, *Req, ...grpc.CallOption) (grpc.ServerStreamingClient[T], error)) []any {
 	if *done {

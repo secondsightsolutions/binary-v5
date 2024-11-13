@@ -80,8 +80,9 @@ message Claim {
     bool   elig = 16;
     bool   susp = 17;
     bool   cnfm = 18;
-    string excl = 19;
-    repeated string ihph = 20;
+    string manu = 19;
+    float  qty  = 20;
+    repeated string ihph = 30;
 }
 
 message TitanRebate {

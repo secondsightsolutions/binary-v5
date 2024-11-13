@@ -28,7 +28,7 @@ func (s *titanServer) GetSPIs(req *Req, strm grpc.ServerStreamingServer[SPI]) er
 }
 func (s *titanServer) GetNDCs(req *Req, strm grpc.ServerStreamingServer[NDC]) error {
 	cols := map[string]string{
-		"ndc":  "COALESCE(item, '')",
+		"ndc":  "COALESCE(REPLACE(item, '-', ''), '')",
 		"name": "COALESCE(product_name, '')",
 		"netw": "COALESCE(network, '')",
 	}
@@ -83,42 +83,17 @@ func (s *titanServer) GetEligibilityLedger(req *Req, strm grpc.ServerStreamingSe
 // set locks
 
 func (s *titanServer) NewScrub(ctx context.Context, scr *Scrub) (*Res, error) {
-	cols := map[string]string{
-		"manu": "GetManu",
-		"scid": "GetScid",
-		"rbid": "GetRbid",
-		"stat": "GetStat",
-		"errc": "GetErrc",
-		"errm": "GetErrm",
-	}
-	_, err := db_insert(ctx, scr, titan.pools["titan"], "titan.scrubs", cols, "")
+	_, err := db_insert_one(ctx, titan.pools["titan"], "titan.scrubs", nil, scr, "")
 	return &Res{}, err
 }
 func (s *titanServer) Rebates(strm grpc.ClientStreamingServer[TitanRebate, Res]) error {
-	cols := map[string]string{
-		"manu": "GetManu",
-		"scid": "GetScid",
-		"rbid": "GetRbid",
-		"stat": "GetStat",
-		"fprt": "GetFprt",
-	}
-	return db_strm_insert(strm, titan.pools["titan"], "titan.rebates", cols, 10000)
+	return db_insert_strm_fm_client(strm, titan.pools["titan"], "titan.rebates", nil, 10000)
 }
 func (s *titanServer) ClaimsUsed(strm grpc.ClientStreamingServer[ClaimUse, Res]) error {
-	cols := map[string]string{
-		"scid": "GetScid",
-		"shrt": "GetShrt",
-		"excl": "GetExcl",
-	}
-	return db_strm_insert(strm, titan.pools["titan"], "titan.claim_uses", cols, 10000)
+	return db_insert_strm_fm_client(strm, titan.pools["titan"], "titan.claim_uses", nil, 10000)
 }
 func (s *titanServer) RebateClaims(strm grpc.ClientStreamingServer[RebateClaim, Res]) error {
-	cols := map[string]string{
-		"scid": "GetScid",
-		"rbid": "GetRbid",
-		"shrt": "GetShrt",
-	}
-	return db_strm_insert(strm, titan.pools["titan"], "titan.rebate_claims", cols, 10000)
+	return db_insert_strm_fm_client(strm, titan.pools["titan"], "titan.rebate_claims", nil, 10000)
 }
 func (s *titanServer) ScrubDone(ctx context.Context, m *Metrics) (*Res, error) {
 	cols := map[string]string{
@@ -152,7 +127,7 @@ func (s *titanServer) ScrubDone(ctx context.Context, m *Metrics) (*Res, error) {
 }
 func (s *titanServer) SyncClaims(req *SyncReq, strm grpc.ServerStreamingServer[Claim]) error {
 	cols := map[string]string{
-		"clid":  "COALESCE(id, '')",
+		// "clid":  "COALESCE(id, '')",
 		"chnm":  "COALESCE(chain_name, '')",
 		"cnfm":  "COALESCE(claim_conforms_flag, true)",
 		"doc":   "COALESCE(TRUNC(EXTRACT(EPOCH FROM created_at)   *1000000, 0), 0)",
@@ -162,23 +137,23 @@ func (s *titanServer) SyncClaims(req *SyncReq, strm grpc.ServerStreamingServer[C
 		"hdos":  "COALESCE(date_of_service, '')",
 		"hfrx":  "COALESCE(formatted_rx_number, '')",
 		"hrxn":  "COALESCE(rx_number, '')",
-		"i340":  "COALESCE(contracted_entity_id, '')",
-		"lauth": "COALESCE(rbt_hdos_auth, '')",
-		"lownr": "COALESCE(rbt_hdos_owner, '')",
-		"lscid": "COALESCE(rbt_rrid, -1)",
+		"i340":  "SPLIT_PART(COALESCE(id_340b, ''), '-', 1)",
+		// "lauth": "COALESCE(rbt_hdos_auth, '')",
+		// "lownr": "COALESCE(rbt_hdos_owner, '')",
+		// "lscid": "COALESCE(rbt_rrid, -1)",
 		"manu":  "COALESCE(manufacturer, '')",
-		"ndc":   "COALESCE(ndc, '')",
+		"ndc":   "REPLACE(COALESCE(ndc, ''), '-', '')",
 		"netw":  "COALESCE(network, '')",
 		"prnm":  "COALESCE(product_name, '')",
 		"qty":   "COALESCE(quantity, 0)",
-		"shid":  "COALESCE(short_id, '')",
+		"shrt":  "COALESCE(short_id, '')",
 		"spid":  "COALESCE(service_provider_id, '')",
 		"prid":  "COALESCE(prescriber_id, '')",
 		"elig":  "COALESCE(eligible_at_submission, true)",
 		"susp":  "COALESCE(suspended_submission, false)",
 		"ihph":  "COALESCE(in_house_pharmacy_ids, '{}')",
 	}
-	whr := fmt.Sprintf("manufacturer = '%s' AND COALESCE(TRUNC(EXTRACT(EPOCH FROM created_at)*1000000, 0), 0) < %d", req.Manu, req.Mill)
+	whr := fmt.Sprintf("manufacturer = '%s' AND COALESCE(TRUNC(EXTRACT(EPOCH FROM created_at)*1000000, 0), 0) >= %d", req.Manu, req.Last)
 	return db_strm_select(strm, titan.pools["citus"], "submission_rows", cols, whr)
 }
 

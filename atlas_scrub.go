@@ -9,8 +9,13 @@ import (
 	"sync"
 )
 
+type claim struct {
+	clm  *Claim
+	excl string
+}
 type scrub struct {
 	ca   CA
+	clms []*claim
 	scid int64
 	sr   *scrub_req
 	hdrs []string

@@ -187,6 +187,12 @@ envsubst < make/set.env > env.1p
 op inject -i env.1p -o env.txt > /dev/null
 cat env.txt >> run/${appl}
 echo "" >> run/${appl}
+echo "export ATLAS_DB_HOST='atlasdb-dev.postgres.database.azure.com'" >> run/${appl}
+echo "export ATLAS_DB_PORT=5432" >> run/${appl}
+echo "export ATLAS_DB_NAME=devel" >> run/${appl}
+echo "export ATLAS_DB_USER=atlas" >> run/${appl}
+echo "export ATLAS_DB_PASS=UMppT3_r" >> run/${appl}
+echo "" >> run/${appl}
 echo "./${prfx}_${MYARCH}_${MYOS} \$@" >> run/${appl}
 chmod ugo+x run/${appl}
 
