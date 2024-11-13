@@ -3,6 +3,7 @@ package main
 import (
 	context "context"
 	"fmt"
+	"time"
 
 	grpc "google.golang.org/grpc"
 )
@@ -24,7 +25,10 @@ func (s *titanServer) GetSPIs(req *Req, strm grpc.ServerStreamingServer[SPI]) er
 		"cde": "COALESCE(status_code_340b, '')",
 		"chn": "COALESCE(chain_name, '')",
 	}
-	return db_strm_select(strm, titan.pools["esp"], "ncpdp_providers", cols, "")
+	strt := time.Now()
+	cnt, err := db_strm_select_fm_server(strm, titan.pools["esp"], "ncpdp_providers", cols, "")
+	log("titan", "GetSPIs", "download to atlas (%s) (%d rows)", time.Since(strt), err, req.Manu, cnt)
+	return err
 }
 func (s *titanServer) GetNDCs(req *Req, strm grpc.ServerStreamingServer[NDC]) error {
 	cols := map[string]string{
@@ -32,7 +36,10 @@ func (s *titanServer) GetNDCs(req *Req, strm grpc.ServerStreamingServer[NDC]) er
 		"name": "COALESCE(product_name, '')",
 		"netw": "COALESCE(network, '')",
 	}
-	return db_strm_select(strm, titan.pools["esp"], "ndcs", cols, fmt.Sprintf("manufacturer_name = '%s'", req.Manu))
+	strt := time.Now()
+	cnt, err := db_strm_select_fm_server(strm, titan.pools["esp"], "ndcs", cols, fmt.Sprintf("manufacturer_name = '%s'", req.Manu))
+	log("titan", "GetNDCs", "download to atlas (%s) (%d rows)", time.Since(strt), err, req.Manu, cnt)
+	return err
 }
 func (s *titanServer) GetEntities(req *Req, strm grpc.ServerStreamingServer[Entity]) error {
 	cols := map[string]string{
@@ -41,7 +48,10 @@ func (s *titanServer) GetEntities(req *Req, strm grpc.ServerStreamingServer[Enti
 		"strt":  "COALESCE(TRUNC(EXTRACT(EPOCH FROM participating_start_date::timestamp) *1000000, 0), 0)",
 		"term":  "COALESCE(TRUNC(EXTRACT(EPOCH FROM term_date::timestamp)                *1000000, 0), 0)",
 	}
-	return db_strm_select(strm, titan.pools["esp"], "covered_entities", cols, "")
+	strt := time.Now()
+	cnt, err := db_strm_select_fm_server(strm, titan.pools["esp"], "covered_entities", cols, "")
+	log("titan", "GetEntities", "download to atlas (%s) (%d rows)", time.Since(strt), err, req.Manu, cnt)
+	return err
 }
 func (s *titanServer) GetPharmacies(req *Req, strm grpc.ServerStreamingServer[Pharmacy]) error {
 	cols := map[string]string{
@@ -56,7 +66,10 @@ func (s *titanServer) GetPharmacies(req *Req, strm grpc.ServerStreamingServer[Ph
 		"ncps":  "COALESCE(ncpdp, '{}')",
 		"state": "COALESCE(pharmacy_state, '')",
 	}
-	return db_strm_select(strm, titan.pools["esp"], "contracted_pharmacies", cols, "")
+	strt := time.Now()
+	cnt, err := db_strm_select_fm_server(strm, titan.pools["esp"], "contracted_pharmacies", cols, "")
+	log("titan", "GetPharmacies", "download to atlas (%s) (%d rows)", time.Since(strt), err, req.Manu, cnt)
+	return err
 }
 func (s *titanServer) GetESP1Pharms(req *Req, strm grpc.ServerStreamingServer[ESP1PharmNDC]) error {
 	cols := map[string]string{
@@ -65,7 +78,10 @@ func (s *titanServer) GetESP1Pharms(req *Req, strm grpc.ServerStreamingServer[ES
 		"strt": "COALESCE(TRUNC(EXTRACT(EPOCH FROM start::timestamp)*1000000, 0), 0)",
 		"term": "COALESCE(TRUNC(EXTRACT(EPOCH FROM term::timestamp) *1000000, 0), 0)",
 	}
-	return db_strm_select(strm, titan.pools["citus"], "esp1_providers", cols, fmt.Sprintf("manufacturer = '%s'", req.Manu))
+	strt := time.Now()
+	cnt, err := db_strm_select_fm_server(strm, titan.pools["citus"], "esp1_providers", cols, fmt.Sprintf("manufacturer = '%s'", req.Manu))
+	log("titan", "GetESP1Pharms", "download to atlas (%s) (%d rows)", time.Since(strt), err, req.Manu, cnt)
+	return err
 }
 func (s *titanServer) GetEligibilityLedger(req *Req, strm grpc.ServerStreamingServer[Eligibility]) error {
 	cols := map[string]string{
@@ -77,7 +93,10 @@ func (s *titanServer) GetEligibilityLedger(req *Req, strm grpc.ServerStreamingSe
 		"strt": "COALESCE(TRUNC(EXTRACT(EPOCH FROM start_at)*1000000, 0), 0)",
 		"term": "COALESCE(TRUNC(EXTRACT(EPOCH FROM end_at)  *1000000, 0), 0)",
 	}
-	return db_strm_select(strm, titan.pools["citus"], "eligibility_ledger", cols, fmt.Sprintf("manufacturer = '%s'", req.Manu))
+	strt := time.Now()
+	cnt, err := db_strm_select_fm_server(strm, titan.pools["citus"], "eligibility_ledger", cols, fmt.Sprintf("manufacturer = '%s'", req.Manu))
+	log("titan", "GetEligibilityLedger", "download to atlas (%s) (%d rows)", time.Since(strt), err, req.Manu, cnt)
+	return err
 }
 
 // set locks
@@ -87,36 +106,48 @@ func (s *titanServer) NewScrub(ctx context.Context, scr *Scrub) (*Res, error) {
 	return &Res{}, err
 }
 func (s *titanServer) Rebates(strm grpc.ClientStreamingServer[TitanRebate, Res]) error {
-	return db_insert_strm_fm_client(strm, titan.pools["titan"], "titan.rebates", nil, 10000)
+	strt := time.Now()
+	mdmanu := ""
+	cnt, err := db_insert_strm_fm_client(strm, titan.pools["titan"], "titan.rebates", nil, 10000)
+	log("titan", "Rebates", "upload from atlas (%s) (%d rows)", time.Since(strt), err, mdmanu, cnt)
+	return err
 }
 func (s *titanServer) ClaimsUsed(strm grpc.ClientStreamingServer[ClaimUse, Res]) error {
-	return db_insert_strm_fm_client(strm, titan.pools["titan"], "titan.claim_uses", nil, 10000)
+	strt := time.Now()
+	mdmanu := ""
+	cnt, err := db_insert_strm_fm_client(strm, titan.pools["titan"], "titan.claim_uses", nil, 10000)
+	log("titan", "ClaimsUsed", "upload from atlas (%s) (%d rows)", time.Since(strt), err, mdmanu, cnt)
+	return err
 }
 func (s *titanServer) RebateClaims(strm grpc.ClientStreamingServer[RebateClaim, Res]) error {
-	return db_insert_strm_fm_client(strm, titan.pools["titan"], "titan.rebate_claims", nil, 10000)
+	strt := time.Now()
+	mdmanu := ""
+	cnt, err := db_insert_strm_fm_client(strm, titan.pools["titan"], "titan.rebate_claims", nil, 10000)
+	log("titan", "RebateClaims", "upload from atlas (%s) (%d rows)", time.Since(strt), err, mdmanu, cnt)
+	return err
 }
 func (s *titanServer) ScrubDone(ctx context.Context, m *Metrics) (*Res, error) {
 	cols := map[string]string{
-		"rbt_total":	"GetRbtTotal",
-		"rbt_valid":  	"GetRbtValid",
-		"rbt_matched":	"GetRbtMatched",
-		"rbt_nomatch":	"GetRbtNomatch",
-		"rbt_passed":	"GetRbtPassed",
-		"rbt_failed":	"GetRbtFailed",
-		"clm_total":	"GetClmTotal",
-		"clm_valid":	"GetClmValid",
-		"clm_matched":	"GetClmMatched",
-		"clm_nomatch":	"GetClmNomatch",
-		"clm_invalid":	"GetClmInvalid",
-		"spi_exact":	"GetSpiExact",
-		"spi_cross":	"GetSpiCross",
-		"spi_stack":	"GetSpiStack",
-		"spi_chain":	"GetSpiChain",
-		"dos_equ_doc":	"GetDosEquDoc",
-		"dos_bef_doc":	"GetDosBefDoc",
-		"dos_equ_dof":	"GetDosEquDof",
-		"dos_bef_dof":	"GetDosBefDof",
-		"dos_aft_dof":	"GetDosAftDof",
+		"rbt_total":   "GetRbtTotal",
+		"rbt_valid":   "GetRbtValid",
+		"rbt_matched": "GetRbtMatched",
+		"rbt_nomatch": "GetRbtNomatch",
+		"rbt_passed":  "GetRbtPassed",
+		"rbt_failed":  "GetRbtFailed",
+		"clm_total":   "GetClmTotal",
+		"clm_valid":   "GetClmValid",
+		"clm_matched": "GetClmMatched",
+		"clm_nomatch": "GetClmNomatch",
+		"clm_invalid": "GetClmInvalid",
+		"spi_exact":   "GetSpiExact",
+		"spi_cross":   "GetSpiCross",
+		"spi_stack":   "GetSpiStack",
+		"spi_chain":   "GetSpiChain",
+		"dos_equ_doc": "GetDosEquDoc",
+		"dos_bef_doc": "GetDosBefDoc",
+		"dos_equ_dof": "GetDosEquDof",
+		"dos_bef_dof": "GetDosBefDof",
+		"dos_aft_dof": "GetDosAftDof",
 	}
 	_, _, _, manu, scid := getMetaGRPC(ctx)
 	whr := map[string]string{
@@ -128,33 +159,37 @@ func (s *titanServer) ScrubDone(ctx context.Context, m *Metrics) (*Res, error) {
 func (s *titanServer) SyncClaims(req *SyncReq, strm grpc.ServerStreamingServer[Claim]) error {
 	cols := map[string]string{
 		// "clid":  "COALESCE(id, '')",
-		"chnm":  "COALESCE(chain_name, '')",
-		"cnfm":  "COALESCE(claim_conforms_flag, true)",
-		"doc":   "COALESCE(TRUNC(EXTRACT(EPOCH FROM created_at)   *1000000, 0), 0)",
-		"dop":   "COALESCE(TRUNC(EXTRACT(EPOCH FROM formatted_dop)*1000000, 0), 0)",
-		"dos":   "COALESCE(TRUNC(EXTRACT(EPOCH FROM formatted_dos)*1000000, 0), 0)",
-		"hdop":  "COALESCE(date_prescribed, '')",
-		"hdos":  "COALESCE(date_of_service, '')",
-		"hfrx":  "COALESCE(formatted_rx_number, '')",
-		"hrxn":  "COALESCE(rx_number, '')",
-		"i340":  "SPLIT_PART(COALESCE(id_340b, ''), '-', 1)",
+		"chnm": "COALESCE(chain_name, '')",
+		"cnfm": "COALESCE(claim_conforms_flag, true)",
+		"doc":  "COALESCE(TRUNC(EXTRACT(EPOCH FROM created_at)   *1000000, 0), 0)",
+		"dop":  "COALESCE(TRUNC(EXTRACT(EPOCH FROM formatted_dop)*1000000, 0), 0)",
+		"dos":  "COALESCE(TRUNC(EXTRACT(EPOCH FROM formatted_dos)*1000000, 0), 0)",
+		"hdop": "COALESCE(date_prescribed, '')",
+		"hdos": "COALESCE(date_of_service, '')",
+		"hfrx": "COALESCE(formatted_rx_number, '')",
+		"hrxn": "COALESCE(rx_number, '')",
+		"i340": "SPLIT_PART(COALESCE(id_340b, ''), '-', 1)",
 		// "lauth": "COALESCE(rbt_hdos_auth, '')",
 		// "lownr": "COALESCE(rbt_hdos_owner, '')",
 		// "lscid": "COALESCE(rbt_rrid, -1)",
-		"manu":  "COALESCE(manufacturer, '')",
-		"ndc":   "REPLACE(COALESCE(ndc, ''), '-', '')",
-		"netw":  "COALESCE(network, '')",
-		"prnm":  "COALESCE(product_name, '')",
-		"qty":   "COALESCE(quantity, 0)",
-		"shrt":  "COALESCE(short_id, '')",
-		"spid":  "COALESCE(service_provider_id, '')",
-		"prid":  "COALESCE(prescriber_id, '')",
-		"elig":  "COALESCE(eligible_at_submission, true)",
-		"susp":  "COALESCE(suspended_submission, false)",
-		"ihph":  "COALESCE(in_house_pharmacy_ids, '{}')",
+		"manu": "COALESCE(manufacturer, '')",
+		"ndc":  "REPLACE(COALESCE(ndc, ''), '-', '')",
+		"netw": "COALESCE(network, '')",
+		"prnm": "COALESCE(product_name, '')",
+		"qty":  "COALESCE(quantity, 0)",
+		"shrt": "COALESCE(short_id, '')",
+		"spid": "COALESCE(service_provider_id, '')",
+		"prid": "COALESCE(prescriber_id, '')",
+		"elig": "COALESCE(eligible_at_submission, true)",
+		"susp": "COALESCE(suspended_submission, false)",
+		"ihph": "COALESCE(in_house_pharmacy_ids, '{}')",
 	}
 	whr := fmt.Sprintf("manufacturer = '%s' AND COALESCE(TRUNC(EXTRACT(EPOCH FROM created_at)*1000000, 0), 0) >= %d", req.Manu, req.Last)
-	return db_strm_select(strm, titan.pools["citus"], "submission_rows", cols, whr)
+	strt := time.Now()
+	mdmanu := ""
+	cnt, err := db_strm_select_fm_server(strm, titan.pools["citus"], "submission_rows", cols, whr)
+	log("titan", "SyncClaims", "download to atlas (%s) (%d rows)", time.Since(strt), err, mdmanu, cnt)
+	return err
 }
 
 func titanValidate(ctx context.Context) error {

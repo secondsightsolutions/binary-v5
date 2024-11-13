@@ -29,7 +29,7 @@ func db_pool(host, port, name, user, pass string, tls bool) *pgxpool.Pool {
 		cs = append(cs, fmt.Sprintf("%s=%s", "sslmode", "require"))
 	}
 	if pool, err := pgxpool.New(context.Background(), strings.Join(cs, " ")); err != nil {
-		log("titan", "db_pool", "cannot create connection pool - host=%s port=%s user=%s tls=%v", time.Since(strt), err, host, port, user, tls)
+		log(appl, "db_pool", "cannot create connection pool - host=%s port=%s user=%s tls=%v", time.Since(strt), err, host, port, user, tls)
 		return nil
 	} else {
 		return pool
@@ -38,19 +38,15 @@ func db_pool(host, port, name, user, pass string, tls bool) *pgxpool.Pool {
 
 func db_select_one[T any](ctx context.Context, pool *pgxpool.Pool, tbln string, cols map[string]string, where string) (*T, error) {
 	qry := dyn_select(tbln, cols, where)
-	now := time.Now()
-	// log("titan", "db_select_one", qry, 0, nil)
 	if tx, err := pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted}); err == nil {
 		if rows, err := tx.Query(ctx, qry); err == nil {
 			if rows.Next() {
 				pgx.RowToAddrOfStructByNameLax[T](rows)
 				if obj, err := pgx.RowToAddrOfStructByNameLax[T](rows); err == nil {
-					// log("titan", "db_select_one", "%s: read row", time.Since(now), nil, tbln)
 					tx.Commit(ctx)
 					return obj, err
 				} else {
 					tx.Rollback(context.Background())
-					log("titan", "db_select_one", "%s: cannot map returned data to object", time.Since(now), err, tbln)
 					return nil, err
 				}
 			} else {
@@ -60,11 +56,9 @@ func db_select_one[T any](ctx context.Context, pool *pgxpool.Pool, tbln string, 
 			}
 		} else {
 			tx.Rollback(context.Background())
-			log("titan", "db_select_one", "%s: error in query [%s]", time.Since(now), err, tbln, qry)
 			return nil, err
 		}
 	} else {
-		log("titan", "db_select_one", "%s: cannot create transaction", time.Since(now), err, tbln)
 		return nil, err
 	}
 }
@@ -74,155 +68,162 @@ func db_select_one[T any](ctx context.Context, pool *pgxpool.Pool, tbln string, 
 // 	now := time.Now()
 // 	lst := []*T{}
 // 	cnt := 0
-// 	log("titan", "db_select", qry, 0, nil)
+// 	log(appl, "db_select", qry, 0, nil)
 // 	if tx, err := pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted}); err == nil {
 // 		if rows, err := tx.Query(ctx, qry); err == nil {
 // 			for rows.Next() {
 // 				cnt++
 // 				// if cnt%100000 == 0 {
-// 				// 	log("titan", "db_select", "%s: read %d rows", time.Since(now), nil, tbln, cnt)
+// 				// 	log(appl, "db_select", "%s: read %d rows", time.Since(now), nil, tbln, cnt)
 // 				// }
 // 				pgx.RowToAddrOfStructByNameLax[T](rows)
 // 				if obj, err := pgx.RowToAddrOfStructByNameLax[T](rows); err == nil {
 // 					lst = append(lst, obj)
 // 				} else {
 // 					tx.Rollback(context.Background())
-// 					log("titan", "db_select", "%s: cannot map returned data to object", time.Since(now), err, tbln)
+// 					log(appl, "db_select", "%s: cannot map returned data to object", time.Since(now), err, tbln)
 // 					return nil, err
 // 				}
 // 			}
 // 			rows.Close()
 // 			tx.Commit(ctx)
-// 			log("titan", "db_select", "%s: read %d rows", time.Since(now), nil, tbln, cnt)
+// 			log(appl, "db_select", "%s: read %d rows", time.Since(now), nil, tbln, cnt)
 //     		return lst, nil
 // 		} else {
 // 			tx.Rollback(context.Background())
-// 			log("titan", "db_select", "%s: error in query [%s]", time.Since(now), err, tbln, qry)
+// 			log(appl, "db_select", "%s: error in query [%s]", time.Since(now), err, tbln, qry)
 // 			return nil, err
 // 		}
 // 	} else {
-// 		log("titan", "db_select", "%s: cannot create transaction", time.Since(now), err, tbln)
+// 		log(appl, "db_select", "%s: cannot create transaction", time.Since(now), err, tbln)
 // 		return nil, err
 // 	}
 // }
 
-func db_strm_select[T any](strm grpc.ServerStreamingServer[T], pool *pgxpool.Pool, tbln string, cols map[string]string, where string) error {
+func db_strm_select_fm_server[T any](strm grpc.ServerStreamingServer[T], pool *pgxpool.Pool, tbln string, cols map[string]string, where string) (int, error) {
 	ctx := strm.Context()
 	qry := dyn_select(tbln, cols, where)
-	now := time.Now()
 	cnt := 0
-	//log("titan", "db_strm_select", qry, 0, nil)
 	if tx, err := pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted}); err == nil {
 		if rows, err := tx.Query(ctx, qry); err == nil {
 			for rows.Next() {
 				cnt++
-				// if cnt%100000 == 0 {
-				// 	log("titan", "db_strm_select", "%s: read %d rows", time.Since(now), nil, tbln, cnt)
-				// }
 				pgx.RowToAddrOfStructByNameLax[T](rows)
 				if obj, err := pgx.RowToAddrOfStructByNameLax[T](rows); err == nil {
 					strm.SendMsg(obj)
 				} else {
 					tx.Rollback(context.Background())
-					log("titan", "db_strm_select", "%s: cannot map returned data to object", 0, err, tbln)
-					return err
+					return cnt, err
 				}
 			}
 			rows.Close()
 			tx.Commit(ctx)
 		} else {
 			tx.Rollback(context.Background())
-			log("titan", "db_strm_select", "%s: error in query [%s]", 0, err, tbln, qry)
-			return err
+			return cnt, err
 		}
 	} else {
-		log("titan", "db_strm_select", "%s: cannot create transaction", 0, err, tbln)
-		return err
+		return cnt, err
 	}
-	log("titan", "db_strm_select", "%s: read %d rows", time.Since(now), nil, tbln, cnt)
-    return nil
+	return cnt, nil
 }
 
-func db_insert_strm_fm_client[T,R any](strm grpc.ClientStreamingServer[T,R], pool *pgxpool.Pool, tbln string, colMap map[string]string, batch int) error {
+func db_strm_select_fm_client[T,R any](strm grpc.ClientStreamingClient[T,R], pool *pgxpool.Pool, tbln string, cols map[string]string, where string) (int, error) {
 	ctx := strm.Context()
-	list := []any{}
+	qry := dyn_select(tbln, cols, where)
+	cnt := 0
+	if tx, err := pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted}); err == nil {
+		if rows, err := tx.Query(ctx, qry); err == nil {
+			for rows.Next() {
+				cnt++
+				pgx.RowToAddrOfStructByNameLax[T](rows)
+				if obj, err := pgx.RowToAddrOfStructByNameLax[T](rows); err == nil {
+					strm.SendMsg(obj)
+				} else {
+					tx.Rollback(context.Background())
+					return cnt, err
+				}
+			}
+			rows.Close()
+			tx.Commit(ctx)
+		} else {
+			tx.Rollback(context.Background())
+			return cnt, err
+		}
+	} else {
+		return cnt, err
+	}
+	return cnt, nil
+}
+
+func db_insert_strm_fm_client[T, R any](strm grpc.ClientStreamingServer[T, R], pool *pgxpool.Pool, tbln string, colMap map[string]string, batch int) (int, error) {
+	ctx := strm.Context()
+	lst := []any{}
+	cnt := 0
 	if tx, err := pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted}); err == nil {
 		defer tx.Commit(context.Background())
 		for {
 			if obj, err := strm.Recv(); err == nil {
-				list = append(list, obj)
-				if len(list) == batch {
-					strt := time.Now()
-					if err := db_insert_batch(ctx, tx, pool, tbln, colMap, list, true); err != nil {
-						log(appl, "db_insert_strm_fm_client", "inserted batch of %d failed", time.Since(strt), err, len(list))
+				cnt++
+				lst = append(lst, obj)
+				if len(lst) == batch {
+					if err := db_insert_batch(ctx, tx, pool, tbln, colMap, lst, true); err != nil {
 						tx.Rollback(ctx)
-						return err
+						return cnt, err
 					}
-					log(appl, "db_insert_strm_fm_client", "inserted batch of %d", time.Since(strt), nil, len(list))
-					list = []any{}
+					lst = []any{}
 				}
 			} else if err == io.EOF {
-				if len(list) > 0 {
-					strt := time.Now()
-					if len(list) == batch {
-						if err := db_insert_batch(context.Background(), tx, pool, tbln, colMap, list, true); err != nil {
-							log(appl, "db_insert_strm_fm_client", "inserted batch of %d failed", time.Since(strt), err, len(list))
+				if len(lst) > 0 {
+					if len(lst) == batch {
+						if err := db_insert_batch(context.Background(), tx, pool, tbln, colMap, lst, true); err != nil {
 							tx.Rollback(context.Background())
-							return err
+							return cnt, err
 						}
 					}
-					log(appl, "db_insert_strm_fm_client", "inserted batch of %d", time.Since(strt), nil, len(list))
 				}
-				return nil
+				return cnt, nil
 			} else {
-				log(appl, "db_insert_strm_fm_client", "recv message failed", 0, err)
 				tx.Rollback(context.Background())
-				return err
+				return cnt, err
 			}
 		}
 	} else {
-		log(appl, "db_insert_strm_fm_client", "create transaction failed", 0, err)
-		return err
+		return cnt, err
 	}
 }
-func db_insert_strm_fm_server[T any](strm grpc.ServerStreamingClient[T], pool *pgxpool.Pool, appl, tbln string, colMap map[string]string, batch int) error {
+func db_insert_strm_fm_server[T any](strm grpc.ServerStreamingClient[T], pool *pgxpool.Pool, appl, tbln string, colMap map[string]string, batch int) (int, error) {
 	ctx := strm.Context()
-	list := []any{}
+	lst := []any{}
+	cnt := 0
 	if tx, err := pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted}); err == nil {
 		defer tx.Commit(context.Background())
 		for {
 			if obj, err := strm.Recv(); err == nil {
-				list = append(list, obj)
-				if len(list) == batch {
-					strt := time.Now()
-					if err := db_insert_batch(ctx, tx, pool, tbln, colMap, list, true); err != nil {
-						log(appl, "db_strm_fm_server", "inserted batch of %d failed", time.Since(strt), err, len(list))
+				cnt++
+				lst = append(lst, obj)
+				if len(lst) == batch {
+					if err := db_insert_batch(ctx, tx, pool, tbln, colMap, lst, true); err != nil {
 						tx.Rollback(context.Background())
-						return err
+						return cnt, err
 					}
-					log(appl, "db_strm_fm_server", "inserted batch of %d", time.Since(strt), nil, len(list))
-					list = []any{}
+					lst = []any{}
 				}
 			} else if err == io.EOF {
-				if len(list) > 0 {
-					strt := time.Now()
-					if err := db_insert_batch(context.Background(), tx, pool, tbln, colMap, list, true); err != nil {
-						log(appl, "db_strm_fm_server", "inserted batch of %d failed", time.Since(strt), err, len(list))
+				if len(lst) > 0 {
+					if err := db_insert_batch(context.Background(), tx, pool, tbln, colMap, lst, true); err != nil {
 						tx.Rollback(context.Background())
-						return err
+						return cnt, err
 					}
-					log(appl, "db_strm_fm_server", "inserted batch of %d", time.Since(strt), nil, len(list))
 				}
-				return nil
+				return cnt, nil
 			} else {
-				log(appl, "db_strm_fm_server", "recv message failed", 0, err)
 				tx.Rollback(context.Background())
-				return err
+				return cnt, err
 			}
 		}
 	} else {
-		log(appl, "db_strm_fm_server", "create transaction failed", 0, err)
-		return err
+		return cnt, err
 	}
 }
 
@@ -336,9 +337,10 @@ func db_update(ctx context.Context, obj any, pool *pgxpool.Pool, tbln string, co
 type dbFldMap struct {
 	flds []string
 	cols []string
-	f2cs map[string]string	// fields to columns
-	c2fs map[string]string	// columns to fields
+	f2cs map[string]string // fields to columns
+	c2fs map[string]string // columns to fields
 }
+
 func newDbFldMap(pool *pgxpool.Pool, tbln string, f2c map[string]string, obj any) *dbFldMap {
 	dfm := &dbFldMap{
 		flds: []string{},
@@ -347,7 +349,7 @@ func newDbFldMap(pool *pgxpool.Pool, tbln string, f2c map[string]string, obj any
 		c2fs: map[string]string{},
 	}
 	objV := reflect.ValueOf(obj)
-	if objV.Kind() == reflect.Pointer {					// Pointers to structs (ours are) must be dereferenced.
+	if objV.Kind() == reflect.Pointer { // Pointers to structs (ours are) must be dereferenced.
 		objV = objV.Elem()
 	}
 	for _, vf := range reflect.VisibleFields(objV.Type()) {
@@ -370,10 +372,10 @@ func newDbFldMap(pool *pgxpool.Pool, tbln string, f2c map[string]string, obj any
 	for _, fld := range dfm.flds {
 		// First look to see if this field has a custom mapping (must loop to allow for case)
 		cust := false
-		for cfld, ccol := range f2c {			// Look at each custom fld => col mapping (like rxn => rx_number)
-			if strings.EqualFold(cfld, fld) {	// We see that we have fld Rxn
-				dfm.c2fs[ccol] = fld			// rx_number => Rxn
-				dfm.f2cs[fld]  = ccol			// Rxn => rx_number (using fld, not cfld here. The caller may have messed up the case)
+		for cfld, ccol := range f2c { // Look at each custom fld => col mapping (like rxn => rx_number)
+			if strings.EqualFold(cfld, fld) { // We see that we have fld Rxn
+				dfm.c2fs[ccol] = fld // rx_number => Rxn
+				dfm.f2cs[fld] = ccol // Rxn => rx_number (using fld, not cfld here. The caller may have messed up the case)
 				cust = true
 				break
 			}
@@ -381,52 +383,53 @@ func newDbFldMap(pool *pgxpool.Pool, tbln string, f2c map[string]string, obj any
 		// Hopefully most/all are direct matches between fields and columns (case notwithstanding).
 		if !cust {
 			for _, col := range dfm.cols {
-				if strings.EqualFold(fld, col) {// The test is case-insensitive.
-					dfm.c2fs[col] = fld			// Save the true case.
-					dfm.f2cs[fld] = col			// Save the true case.
+				if strings.EqualFold(fld, col) { // The test is case-insensitive.
+					dfm.c2fs[col] = fld // Save the true case.
+					dfm.f2cs[fld] = col // Save the true case.
 				}
 			}
 		}
 	}
 	return dfm
 }
-// func (dfm *dbFldMap) print() {
-// 	fmt.Println()
-// 	fmt.Println("All flds")
-// 	for _, fld := range dfm.flds {
-// 		fmt.Println(fld)
-// 	}
-// 	fmt.Println()
-// 	fmt.Println("All cols")
-// 	for _, col := range dfm.cols {
-// 		fmt.Println(col)
-// 	}
-// 	fmt.Println()
-// 	fmt.Println("fld => col")
-// 	for fld, col := range dfm.f2cs {
-// 		fmt.Printf("%-10s => %-10s\n", fld, col)
-// 	}
-// 	fmt.Println()
-// 	fmt.Println("col => fld")
-// 	for col, fld := range dfm.c2fs {
-// 		fmt.Printf("%-10s => %-10s\n", col, fld)
-// 	}
-// 	fmt.Println()
-// 	fmt.Println("orphan flds")
-// 	for _, fld := range dfm.flds {
-// 		if col := dfm.f2cs[fld]; col == "" {
-// 			fmt.Println(fld)
-// 		}
-// 	}
-// 	fmt.Println()
-// 	fmt.Println("orphan cols")
-// 	for _, col := range dfm.cols {
-// 		if fld := dfm.c2fs[col]; fld == "" {
-// 			fmt.Println(col)
-// 		}
-// 	}
-// 	fmt.Println()
-// }
+
+//	func (dfm *dbFldMap) print() {
+//		fmt.Println()
+//		fmt.Println("All flds")
+//		for _, fld := range dfm.flds {
+//			fmt.Println(fld)
+//		}
+//		fmt.Println()
+//		fmt.Println("All cols")
+//		for _, col := range dfm.cols {
+//			fmt.Println(col)
+//		}
+//		fmt.Println()
+//		fmt.Println("fld => col")
+//		for fld, col := range dfm.f2cs {
+//			fmt.Printf("%-10s => %-10s\n", fld, col)
+//		}
+//		fmt.Println()
+//		fmt.Println("col => fld")
+//		for col, fld := range dfm.c2fs {
+//			fmt.Printf("%-10s => %-10s\n", col, fld)
+//		}
+//		fmt.Println()
+//		fmt.Println("orphan flds")
+//		for _, fld := range dfm.flds {
+//			if col := dfm.f2cs[fld]; col == "" {
+//				fmt.Println(fld)
+//			}
+//		}
+//		fmt.Println()
+//		fmt.Println("orphan cols")
+//		for _, col := range dfm.cols {
+//			if fld := dfm.c2fs[col]; fld == "" {
+//				fmt.Println(col)
+//			}
+//		}
+//		fmt.Println()
+//	}
 func (dfm *dbFldMap) reflect(obj any) *reflect.Value {
 	objV := reflect.ValueOf(obj)
 	if objV.Kind() == reflect.Pointer {
@@ -439,7 +442,7 @@ func (dfm *dbFldMap) getFieldValueByColumn(objV *reflect.Value, col string) stri
 }
 func (dfm *dbFldMap) getFieldValue(objV *reflect.Value, fldn string) string {
 	fld := objV.FieldByName(fldn)
-	fv  := "''"
+	fv := "''"
 	if fld.Kind() == reflect.String {
 		fv = fmt.Sprintf("'%s'", fld.String())
 	} else if fld.CanFloat() {
@@ -472,7 +475,7 @@ func (dfm *dbFldMap) getFieldValue(objV *reflect.Value, fldn string) string {
 			default:
 				sb.WriteString(" ")
 			}
-			
+
 		}
 		sb.WriteString("}'")
 		fv = sb.String()
@@ -483,7 +486,7 @@ func dyn_select(tbln string, cols map[string]string, where string) string {
 	var sb bytes.Buffer
 	sb.WriteString("SELECT ")
 	cnt := 0
-	for k,v := range cols {
+	for k, v := range cols {
 		sb.WriteString(v + " " + k)
 		if cnt < len(cols)-1 {
 			sb.WriteString(", ")

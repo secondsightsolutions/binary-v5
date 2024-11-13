@@ -47,6 +47,23 @@ func (atlas *Atlas) getSPIs(stop chan any, batch int) []any {
 type last_claim struct {
 	Doc int64
 }
+type seqs struct {
+	Scrubs int64
+	Rebates int64
+	ClaimUses int64
+	RebateMeta int64
+	RebateClaims int64
+}
+func sync_to[T,R any](strm grpc.ClientStreamingClient[T,R], pool, tbln string, last int64) {
+	strt := time.Now()
+	whr := fmt.Sprintf(" WHERE seq > %d ", last)
+	if cnt, err := db_strm_select_fm_client[T,R](strm, atlas.pools[pool], tbln, nil, whr); err == nil {
+		log("atlas", "sync", "%s upload completed (%d rows)", time.Since(strt), nil, tbln, cnt)
+	} else {
+		log("atlas", "sync", "%s upload failed", time.Since(strt), err, tbln)
+	}
+	strm.CloseSend()
+}
 func (atlas *Atlas) sync() {
 	strt := time.Now()
 	cols := map[string]string{
@@ -54,16 +71,44 @@ func (atlas *Atlas) sync() {
 	}
 	if obj, err := db_select_one[last_claim](context.Background(), atlas.pools["atlas"], "atlas.claims", cols, ""); err == nil {
 		if strm, err := atlas.titan.SyncClaims(context.Background(), &SyncReq{Manu: manu, Last: obj.Doc}); err == nil {
-			if err := db_insert_strm_fm_server(strm, atlas.pools["atlas"], "atlas", "atlas.claims", nil, 5000); err == nil {
-				log("atlas", "sync", "claims completed", time.Since(strt), nil)
+			if cnt, err := db_insert_strm_fm_server(strm, atlas.pools["atlas"], "atlas", "atlas.claims", nil, 5000); err == nil {
+				log("atlas", "sync", "claims download completed (%d rows)", time.Since(strt), nil, cnt)
 			} else {
-				log("atlas", "sync", "claims failed", time.Since(strt), err)
+				log("atlas", "sync", "claims download failed", time.Since(strt), err)
 			}
 		} else {
-			log("atlas", "sync", "claims failed", time.Since(strt), err)
+			log("atlas", "sync", "claims download failed", time.Since(strt), err)
 		}
 	} else {
 		log("atlas", "sync", "failed to read last claim time", time.Since(strt), err)
+		return
+	}
+	if obj, err := db_select_one[seqs](context.Background(), atlas.pools["atlas"], "atlas.sync", cols, ""); err == nil {
+		if obj == nil {
+			obj = &seqs{}
+		}
+		if strm, err := atlas.titan.Rebates(context.Background()); err == nil {
+			sync_to(strm, "atlas", "atlas.rebates", obj.Rebates)
+		} else {
+			log("atlas", "sync", "rebates upload failed", time.Since(strt), err)
+		}
+		if strm, err := atlas.titan.ClaimsUsed(context.Background()); err == nil {
+			sync_to(strm, "atlas", "atlas.claims_used", obj.ClaimUses)
+		} else {
+			log("atlas", "sync", "claims_used upload failed", time.Since(strt), err)
+		}
+		if strm, err := atlas.titan.RebateClaims(context.Background()); err == nil {
+			sync_to(strm, "atlas", "atlas.rebate_claims", obj.RebateClaims)
+		} else {
+			log("atlas", "sync", "rebate_claims upload failed", time.Since(strt), err)
+		}
+		if strm, err := atlas.titan.RebateMetas(context.Background()); err == nil {
+			sync_to(strm, "atlas", "atlas.rebate_meta", obj.RebateClaims)
+		} else {
+			log("atlas", "sync", "rebate_meta upload failed", time.Since(strt), err)
+		}
+	} else {
+		log("atlas", "sync", "failed to read last seq values", time.Since(strt), err)
 		return
 	}
 }
@@ -83,7 +128,7 @@ func read_stream[T any](stop chan any, done *bool, batch int, name, auth string,
 		c, fn := context.WithCancel(context.Background())
 
 		if strm, err := f(c, req); err == nil {
-			log("atlas", title, "%s: created stream", time.Since(strt), nil, name)
+			//log("atlas", title, "%s: created stream", time.Since(strt), nil, name)
 			// Stay in this inner loop to read the stream - each time through we'll watch to see if we're being stopped.
 			for {
 				select {
@@ -95,13 +140,13 @@ func read_stream[T any](stop chan any, done *bool, batch int, name, auth string,
 				default: // Not stopped yet. Read another row.
 					if obj, err := strm.Recv(); err == nil {
 						list = append(list, obj)
-						if len(list)%batch == 0 {
-							log("atlas", title, "%s: loaded %d rows", time.Since(strt), nil, name, len(list))
-						}
+						// if len(list)%batch == 0 {
+						// 	log("atlas", title, "%s: loaded %d rows", time.Since(strt), nil, name, len(list))
+						// }
 					} else if err == io.EOF {
-						if len(list)%batch != 0 {
-							log("atlas", title, "%s: loaded %d rows - done", time.Since(strt), nil, name, len(list))
-						}
+						// if len(list)%batch != 0 {
+						// 	log("atlas", title, "%s: loaded %d rows - done", time.Since(strt), nil, name, len(list))
+						// }
 						fn()
 						return list
 					} else {
