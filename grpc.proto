@@ -227,9 +227,6 @@ message Eligibility {
 }
 
 message Req {
-    string auth = 1;
-    string vers = 2;
-    string manu = 3;
 }
 message Res {
 }

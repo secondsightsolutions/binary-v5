@@ -11,6 +11,7 @@ import (
 var (
 	srvp int = 23460
 	svcp int = 23461
+	opts *Opts
 )
 
 func main() {
@@ -22,7 +23,7 @@ func main() {
 
 	getEnv()
 	CryptInit(cert, cacr, "", pkey, salt, phrs)
-	opts := options()
+	opts = options()
 
 	if opts.runPing {
 		ping()
@@ -71,7 +72,8 @@ func setIf(envVar *string, envName string) {
 
 func version() {
 	fmt.Printf("%s: %s\n", "appl", appl)
-	fmt.Printf("%s: %s\n", "name", X509ou())
+	fmt.Printf("%s: %s\n", "name", X509cname())
+	fmt.Printf("%s: %s\n", "full", X509ou())
 	fmt.Printf("%s: %s\n", "desc", desc)
 	fmt.Printf("%s: %s\n", "type", Type)
 	fmt.Printf("%s: %s\n", "envr", envr)

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"sync"
 	"time"
 
@@ -72,7 +71,7 @@ func run_titan_ping(readyWG, doneWG *sync.WaitGroup, stop chan any, intv int, at
     defer doneWG.Done()
     pingService := func() {
         started := time.Now()
-        if _, err := atlas.titan.Ping(context.Background(), &Req{Auth: atlas.opts.auth, Vers: vers}); err == nil {
+        if _, err := atlas.titan.Ping(metaGRPC(), &Req{}); err == nil {
             log("atlas", "main", "ping to titan service succeeded", time.Since(started), nil)
         } else {
             log("atlas", "main", "ping to titan service failed", time.Since(started), err)

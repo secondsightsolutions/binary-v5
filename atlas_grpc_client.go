@@ -27,22 +27,22 @@ func ping() {
 }
 
 func (atlas *Atlas) getESP1(stop chan any) []any {
-	return read_stream(stop, &atlas.done, "esp1", atlas.opts.auth, atlas.titan.GetESP1Pharms)
+	return read_stream(stop, &atlas.done, "esp1", atlas.titan.GetESP1Pharms)
 }
 func (atlas *Atlas) getEntities(stop chan any) []any {
-	return read_stream(stop, &atlas.done, "entities", atlas.opts.auth, atlas.titan.GetEntities)
+	return read_stream(stop, &atlas.done, "entities", atlas.titan.GetEntities)
 }
 func (atlas *Atlas) getLedger(stop chan any) []any {
-	return read_stream(stop, &atlas.done, "ledger", atlas.opts.auth, atlas.titan.GetEligibilityLedger)
+	return read_stream(stop, &atlas.done, "ledger", atlas.titan.GetEligibilityLedger)
 }
 func (atlas *Atlas) getNDCs(stop chan any) []any {
-	return read_stream(stop, &atlas.done, "ndcs", atlas.opts.auth, atlas.titan.GetNDCs)
+	return read_stream(stop, &atlas.done, "ndcs", atlas.titan.GetNDCs)
 }
 func (atlas *Atlas) getPharms(stop chan any) []any {
-	return read_stream(stop, &atlas.done, "pharms", atlas.opts.auth, atlas.titan.GetPharmacies)
+	return read_stream(stop, &atlas.done, "pharms", atlas.titan.GetPharmacies)
 }
 func (atlas *Atlas) getSPIs(stop chan any) []any {
-	return read_stream(stop, &atlas.done, "spis", atlas.opts.auth, atlas.titan.GetSPIs)
+	return read_stream(stop, &atlas.done, "spis", atlas.titan.GetSPIs)
 }
 
 type last_claim struct {
@@ -58,7 +58,7 @@ type seqs struct {
 
 func sync_to[T, R any](pool, tbln string, last int64, f func(context.Context, ...grpc.CallOption) (grpc.ClientStreamingClient[T, R], error)) {
 	strt := time.Now()
-	if strm, err := f(context.Background()); err == nil {
+	if strm, err := f(metaGRPC()); err == nil {
 		whr := fmt.Sprintf(" WHERE seq > %d ", last)
 		if cnt, err := db_select_strm_to_server[T, R](strm, atlas.pools[pool], tbln, nil, whr); err == nil {
 			log("atlas", "sync", "%s upload completed (%d rows)", time.Since(strt), nil, tbln, cnt)
@@ -76,7 +76,7 @@ func (atlas *Atlas) sync() {
 		"doc": "COALESCE(MAX(doc), 0)",
 	}
 	if obj, err := db_select_one[last_claim](context.Background(), atlas.pools["atlas"], "atlas.claims", cols, ""); err == nil {
-		if strm, err := atlas.titan.SyncClaims(context.Background(), &SyncReq{Manu: manu, Last: obj.Doc}); err == nil {
+		if strm, err := atlas.titan.SyncClaims(metaGRPC(), &SyncReq{Manu: manu, Last: obj.Doc}); err == nil {
 			if cnt, err := db_insert_strm_fm_server(strm, atlas.pools["atlas"], "atlas", "atlas.claims", nil, 5000); err == nil {
 				log("atlas", "sync", "claims download completed (%d rows)", time.Since(strt), nil, cnt)
 			} else {
@@ -103,19 +103,19 @@ func (atlas *Atlas) sync() {
 	}
 }
 
-func read_stream[T any](stop chan any, done *bool, name, auth string, f func(context.Context, *Req, ...grpc.CallOption) (grpc.ServerStreamingClient[T], error)) []any {
+func read_stream[T any](stop chan any, done *bool, name string, f func(context.Context, *Req, ...grpc.CallOption) (grpc.ServerStreamingClient[T], error)) []any {
 	if *done {
 		return nil
 	}
 	title := "read_stream"
-	req := &Req{Auth: auth, Vers: vers, Manu: manu}
+	req := &Req{}
 
 	// Stay in this outer loop until either we successfully read all rows from server, or we are stopped.
 	for {
 	outer:
 		list := make([]any, 0)
 		strt := time.Now()
-		c, fn := context.WithCancel(context.Background())
+		c, fn := context.WithCancel(metaGRPC())
 
 		if strm, err := f(c, req); err == nil {
 			// Stay in this inner loop to read the stream - each time through we'll watch to see if we're being stopped.
