@@ -4,14 +4,11 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io"
-	reflect "reflect"
 	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	grpc "google.golang.org/grpc"
 )
 
 func db_pool(host, port, name, user, pass string, tls bool) *pgxpool.Pool {
@@ -36,12 +33,50 @@ func db_pool(host, port, name, user, pass string, tls bool) *pgxpool.Pool {
 	}
 }
 
+func read_db[T any](pool *pgxpool.Pool, appl, tbln string, cols map[string]string,  where string, stop chan any) []*T {
+	strt := time.Now()
+	lst := make([]*T, 0)
+	if chn, err := db_select[T](pool, tbln, cols, where, stop); err == nil {
+		for obj := range chn {
+			lst = append(lst, obj)
+		}
+	} else {
+		log(appl, "read_db", "%s read db failed - failed to read rows from table", time.Since(strt), err, tbln)
+	}
+	return lst
+}
+
+func db_select_col(ctx context.Context, pool *pgxpool.Pool, qry string) (any, error) {
+	if tx, err := pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted}); err == nil {
+		defer tx.Commit(context.Background())
+		if rows, err := tx.Query(ctx, qry); err == nil {
+			defer rows.Close()
+			if rows.Next() {
+				if vals, err := rows.Values(); err == nil {
+					if len(vals) > 0 {
+						return vals[0], nil
+					} else {
+						return nil, fmt.Errorf("missing column")
+					}
+				} else {
+					return nil, err
+				}
+			} else {
+				return nil, nil
+			}
+		} else {
+			tx.Rollback(context.Background())
+			return nil, err
+		}
+	} else {
+		return nil, err
+	}
+}
 func db_select_one[T any](ctx context.Context, pool *pgxpool.Pool, tbln string, cols map[string]string, where string) (*T, error) {
 	qry := dyn_select(tbln, cols, where)
 	if tx, err := pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted}); err == nil {
 		if rows, err := tx.Query(ctx, qry); err == nil {
 			if rows.Next() {
-				pgx.RowToAddrOfStructByNameLax[T](rows)
 				if obj, err := pgx.RowToAddrOfStructByNameLax[T](rows); err == nil {
 					tx.Commit(ctx)
 					return obj, err
@@ -63,171 +98,94 @@ func db_select_one[T any](ctx context.Context, pool *pgxpool.Pool, tbln string, 
 	}
 }
 
-// func db_select[T any](ctx context.Context, pool *pgxpool.Pool, tbln string, cols map[string]string, where string) ([]*T, error) {
-// 	qry := dyn_select(tbln, cols, where)
-// 	now := time.Now()
-// 	lst := []*T{}
-// 	cnt := 0
-// 	log(appl, "db_select", qry, 0, nil)
-// 	if tx, err := pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted}); err == nil {
-// 		if rows, err := tx.Query(ctx, qry); err == nil {
-// 			for rows.Next() {
-// 				cnt++
-// 				// if cnt%100000 == 0 {
-// 				// 	log(appl, "db_select", "%s: read %d rows", time.Since(now), nil, tbln, cnt)
-// 				// }
-// 				pgx.RowToAddrOfStructByNameLax[T](rows)
-// 				if obj, err := pgx.RowToAddrOfStructByNameLax[T](rows); err == nil {
-// 					lst = append(lst, obj)
-// 				} else {
-// 					tx.Rollback(context.Background())
-// 					log(appl, "db_select", "%s: cannot map returned data to object", time.Since(now), err, tbln)
-// 					return nil, err
-// 				}
-// 			}
-// 			rows.Close()
-// 			tx.Commit(ctx)
-// 			log(appl, "db_select", "%s: read %d rows", time.Since(now), nil, tbln, cnt)
-//     		return lst, nil
-// 		} else {
-// 			tx.Rollback(context.Background())
-// 			log(appl, "db_select", "%s: error in query [%s]", time.Since(now), err, tbln, qry)
-// 			return nil, err
-// 		}
-// 	} else {
-// 		log(appl, "db_select", "%s: cannot create transaction", time.Since(now), err, tbln)
-// 		return nil, err
-// 	}
-// }
-
-func db_select_strm_to_client[T any](strm grpc.ServerStreamingServer[T], pool *pgxpool.Pool, tbln string, cols map[string]string, where string) (int, error) {
-	ctx := strm.Context()
+func db_select[T any](pool *pgxpool.Pool, tbln string, cols map[string]string, where string, stop chan any) (chan *T, error) {
+	chn := make(chan *T, 1000)
 	qry := dyn_select(tbln, cols, where)
 	cnt := 0
+	ctx := context.Background()
 	if tx, err := pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted}); err == nil {
 		if rows, err := tx.Query(ctx, qry); err == nil {
-			for rows.Next() {
-				cnt++
-				pgx.RowToAddrOfStructByNameLax[T](rows)
-				if obj, err := pgx.RowToAddrOfStructByNameLax[T](rows); err == nil {
-					strm.SendMsg(obj)
-				} else {
-					tx.Rollback(context.Background())
-					return cnt, err
-				}
-			}
-			rows.Close()
-			tx.Commit(ctx)
-		} else {
-			tx.Rollback(context.Background())
-			return cnt, err
-		}
-	} else {
-		return cnt, err
-	}
-	return cnt, nil
-}
-
-func db_select_strm_to_server[T, R any](strm grpc.ClientStreamingClient[T, R], pool *pgxpool.Pool, tbln string, cols map[string]string, where string) (int, error) {
-	ctx := strm.Context()
-	qry := dyn_select(tbln, cols, where)
-	cnt := 0
-	if tx, err := pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted}); err == nil {
-		if rows, err := tx.Query(ctx, qry); err == nil {
-			for rows.Next() {
-				cnt++
-				pgx.RowToAddrOfStructByNameLax[T](rows)
-				if obj, err := pgx.RowToAddrOfStructByNameLax[T](rows); err == nil {
-					strm.SendMsg(obj)
-				} else {
-					tx.Rollback(context.Background())
-					return cnt, err
-				}
-			}
-			rows.Close()
-			tx.Commit(ctx)
-		} else {
-			tx.Rollback(context.Background())
-			return cnt, err
-		}
-	} else {
-		return cnt, err
-	}
-	return cnt, nil
-}
-
-func db_insert_strm_fm_client[T, R any](strm grpc.ClientStreamingServer[T, R], pool *pgxpool.Pool, tbln string, colMap map[string]string, batch int) (int, error) {
-	ctx := strm.Context()
-	lst := []any{}
-	cnt := 0
-	if tx, err := pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted}); err == nil {
-		defer tx.Commit(context.Background())
-		for {
-			if obj, err := strm.Recv(); err == nil {
-				cnt++
-				lst = append(lst, obj)
-				if len(lst) == batch {
-					if err := db_insert_batch(ctx, tx, pool, tbln, colMap, lst, true); err != nil {
+			go func() {
+				defer tx.Commit(ctx)
+				defer rows.Close()
+				for {
+					select {
+					case <-stop:
 						tx.Rollback(ctx)
-						return cnt, err
-					}
-					lst = []any{}
-				}
-			} else if err == io.EOF {
-				if len(lst) > 0 {
-					if len(lst) == batch {
-						if err := db_insert_batch(context.Background(), tx, pool, tbln, colMap, lst, true); err != nil {
-							tx.Rollback(context.Background())
-							return cnt, err
+						close(chn)
+						return
+					default:
+						if rows.Next() {
+							cnt++
+							if obj, err := pgx.RowToAddrOfStructByNameLax[T](rows); err == nil {
+								chn <-obj
+							} else {
+								tx.Rollback(ctx)
+								close(chn)
+								return
+							}
+						} else {
+							close(chn)
+							return
 						}
 					}
 				}
-				return cnt, nil
-			} else {
-				tx.Rollback(context.Background())
-				return cnt, err
-			}
+			}()
+			return chn, nil
+		} else {
+			tx.Rollback(ctx)
+			return nil, err
 		}
 	} else {
-		return cnt, err
-	}
-}
-func db_insert_strm_fm_server[T any](strm grpc.ServerStreamingClient[T], pool *pgxpool.Pool, tbln string, colMap map[string]string, batch int) (int, error) {
-	ctx := strm.Context()
-	lst := []any{}
-	cnt := 0
-	if tx, err := pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted}); err == nil {
-		defer tx.Commit(context.Background())
-		for {
-			if obj, err := strm.Recv(); err == nil {
-				cnt++
-				lst = append(lst, obj)
-				if len(lst) == batch {
-					if err := db_insert_batch(ctx, tx, pool, tbln, colMap, lst, true); err != nil {
-						tx.Rollback(context.Background())
-						return cnt, err
-					}
-					lst = []any{}
-				}
-			} else if err == io.EOF {
-				if len(lst) > 0 {
-					if err := db_insert_batch(context.Background(), tx, pool, tbln, colMap, lst, true); err != nil {
-						tx.Rollback(context.Background())
-						return cnt, err
-					}
-				}
-				return cnt, nil
-			} else {
-				tx.Rollback(context.Background())
-				return cnt, err
-			}
-		}
-	} else {
-		return cnt, err
+		return nil, err
 	}
 }
 
-func db_insert_batch(ctx context.Context, tx pgx.Tx, pool *pgxpool.Pool, tbln string, colMap map[string]string, objs []any, ignoreConflicts bool) error {
+func db_insert[T any](pool *pgxpool.Pool, appl, tbln string, cols map[string]string, fm chan *T, batch int) (int64, int64, error) {
+	var dfm *dbFldMap
+	ctx := context.Background()
+	rfl := &rflt{}
+	lst := []any{}
+	cnt := int64(0)
+	seq := int64(0)	// update to max seq found in the batch, *after* the batch is successfully inserted.
+	if tx, err := pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted}); err == nil {
+		defer tx.Commit(context.Background())
+		for obj := range fm {
+			max := int64(0)
+			if dfm == nil {		// Assume the dfm can be the same across all objs in list (same object type).
+				dfm = newDbFldMap(pool, tbln, cols, obj)
+				if len(dfm.unqC) > 0 || len(dfm.unqF) > 0 {
+					log(appl, "db_insert", "tbln=%s uniq-cols:%s uniq-flds: %s", 0, nil, tbln, strings.Join(dfm.unqC, ","), strings.Join(dfm.unqF, ","))
+				}
+			}
+			cnt++
+			seqn := rfl.getFieldValueAsInt64(obj, "Seq")
+			if seqn > max {
+				max = seqn
+			}
+			lst = append(lst, obj)
+			if len(lst) == batch {
+				if err := db_insert_batch(ctx, tx, pool, tbln, dfm, lst, true); err != nil {
+					tx.Rollback(ctx)
+					return cnt, seq, err
+				}
+				seq = max
+				lst = []any{}
+			}
+		}
+		if len(lst) > 0 {
+			if err := db_insert_batch(context.Background(), tx, pool, tbln, dfm, lst, true); err != nil {
+				tx.Rollback(context.Background())
+				return cnt, seq, err
+			}
+		}
+	} else {
+		return cnt, seq, err
+	}
+	return cnt, seq, nil
+}
+
+func db_insert_batch(ctx context.Context, tx pgx.Tx, pool *pgxpool.Pool, tbln string, dfm *dbFldMap, objs []any, ignoreConflicts bool) error {
 	if tx == nil {
 		var err error
 		if tx, err = pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted}); err != nil {
@@ -235,17 +193,17 @@ func db_insert_batch(ctx context.Context, tx pgx.Tx, pool *pgxpool.Pool, tbln st
 		}
 		defer tx.Commit(ctx)
 	}
-	qry := dyn_insert(pool, tbln, colMap, objs, ignoreConflicts)
+	qry := dyn_insert(pool, tbln, dfm, objs, ignoreConflicts)
 	_, err := tx.Exec(ctx, qry)
 	if err != nil {
 		tx.Rollback(ctx)
 	}
 	return err
 }
-func db_insert_one(ctx context.Context, pool *pgxpool.Pool, tbln string, colMap map[string]string, obj any, rtrn string) (int64, error) {
+func db_insert_one(ctx context.Context, pool *pgxpool.Pool, tbln string, dfm *dbFldMap, obj any, rtrn string) (int64, error) {
 	if tx, err := pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted}); err == nil {
 		defer tx.Commit(ctx)
-		qry := dyn_insert(pool, tbln, colMap, []any{obj}, false)
+		qry := dyn_insert(pool, tbln, dfm, []any{obj}, false)
 		if rtrn != "" {
 			qry += " RETURNING " + rtrn
 			if row := tx.QueryRow(ctx, qry); row != nil {
@@ -279,23 +237,11 @@ func db_update(ctx context.Context, obj any, pool *pgxpool.Pool, tbln string, co
 			cols = append(cols, col)
 		}
 		var sb bytes.Buffer
+		rfl := &rflt{}
 		sb.WriteString(fmt.Sprintf("UPDATE %s SET ", tbln))
 		for i, col := range cols {
 			fn := colMap[col]
-			vs := reflect.ValueOf(&obj).MethodByName(fn).Call([]reflect.Value{})
-			v0 := vs[0]
-			sv := "''"
-			if v0.Kind() == reflect.String {
-				sv = fmt.Sprintf("'%s'", v0.String())
-			} else if v0.CanFloat() {
-				sv = fmt.Sprintf("%f", v0.Float())
-			} else if v0.CanInt() {
-				sv = fmt.Sprintf("%d", v0.Int())
-			} else if v0.CanUint() {
-				sv = fmt.Sprintf("%d", v0.Uint())
-			} else if v0.Kind() == reflect.Bool {
-				sv = fmt.Sprintf("'%v'", v0.Bool())
-			}
+			sv := fmt.Sprintf("'%s'", rfl.getString(obj, fn))
 			sb.WriteString(col + " = " + sv)
 			if i < len(cols)-1 {
 				sb.WriteString(", ")
@@ -339,8 +285,22 @@ func db_exec(ctx context.Context, pool *pgxpool.Pool, qry string) (int64, error)
 	return tag.RowsAffected(), err
 }
 
-func db_max_seq(ctx context.Context, pool *pgxpool.Pool, tbln, coln string) (int64, error) {
-	if rows, err := pool.Query(ctx, fmt.Sprintf("SELECT COALESCE(MAX(%s), 0) seq FROM %s", coln, tbln)); err == nil {
+func db_last_seq(ctx context.Context, pool *pgxpool.Pool, tbln, coln string) (int64, error) {
+	if rows, err := pool.Query(ctx, fmt.Sprintf("SELECT COALESCE(%s, 0) seq FROM %s", coln, tbln)); err == nil {
+		defer rows.Close()
+		var seq int64
+		if rows.Next() {
+			err := rows.Scan(&seq)
+			return seq, err
+		} else {
+			return 0, nil
+		}
+	} else {
+		return 0, err
+	}
+}
+func db_max_seq(pool *pgxpool.Pool, tbln, coln string) (int64, error) {
+	if rows, err := pool.Query(context.Background(), fmt.Sprintf("SELECT COALESCE(MAX(%s), 0) seq FROM %s", coln, tbln)); err == nil {
 		defer rows.Close()
 		var seq int64
 		if rows.Next() {
@@ -373,6 +333,8 @@ type dbFldMap struct {
 	cols []string
 	f2cs map[string]string // fields to columns
 	c2fs map[string]string // columns to fields
+	unqF []string
+	unqC []string
 }
 
 func newDbFldMap(pool *pgxpool.Pool, tbln string, f2c map[string]string, obj any) *dbFldMap {
@@ -381,22 +343,26 @@ func newDbFldMap(pool *pgxpool.Pool, tbln string, f2c map[string]string, obj any
 		cols: []string{},
 		f2cs: map[string]string{},
 		c2fs: map[string]string{},
+		unqF: []string{},
+		unqC: []string{},
 	}
-	objV := reflect.ValueOf(obj)
-	if objV.Kind() == reflect.Pointer { // Pointers to structs (ours are) must be dereferenced.
-		objV = objV.Elem()
-	}
-	for _, vf := range reflect.VisibleFields(objV.Type()) {
-		if vf.IsExported() {
-			dfm.flds = append(dfm.flds, vf.Name)
-		}
-	}
+	rfl := &rflt{}
+	dfm.flds = rfl.fields(obj)
+
 	// What are the actual column names on this table?
-	qry := fmt.Sprintf("SELECT * FROM %s LIMIT 1", tbln)
+	schm := ""
+	_tbl := tbln
+	toks := strings.Split(tbln, ".")
+	if len(toks) > 1 {
+		schm = toks[0]
+		_tbl = toks[1]
+	}
+	qry := fmt.Sprintf("select column_name, data_type from information_schema.columns where table_schema = '%s' and table_name = '%s';", schm, _tbl)
 	if rows, err := pool.Query(context.Background(), qry); err == nil {
-		colDes := rows.FieldDescriptions()
-		for _, desc := range colDes {
-			dfm.cols = append(dfm.cols, desc.Name)
+		for rows.Next() {
+			var coln, colt string
+			rows.Scan(&coln, &colt)
+			dfm.cols = append(dfm.cols, coln)
 		}
 		rows.Close()
 	}
@@ -404,13 +370,15 @@ func newDbFldMap(pool *pgxpool.Pool, tbln string, f2c map[string]string, obj any
 	// This first pass of associations is really only to deal with case differences.
 	// Unless there are custom mappings - this is where we use them as overriding mappings.
 	for _, fld := range dfm.flds {
+		found := false
 		// First look to see if this field has a custom mapping (must loop to allow for case)
 		cust := false
 		for cfld, ccol := range f2c { // Look at each custom fld => col mapping (like rxn => rx_number)
 			if strings.EqualFold(cfld, fld) { // We see that we have fld Rxn
 				dfm.c2fs[ccol] = fld // rx_number => Rxn
 				dfm.f2cs[fld] = ccol // Rxn => rx_number (using fld, not cfld here. The caller may have messed up the case)
-				cust = true
+				cust  = true
+				found = true
 				break
 			}
 		}
@@ -420,112 +388,37 @@ func newDbFldMap(pool *pgxpool.Pool, tbln string, f2c map[string]string, obj any
 				if strings.EqualFold(fld, col) { // The test is case-insensitive.
 					dfm.c2fs[col] = fld // Save the true case.
 					dfm.f2cs[fld] = col // Save the true case.
+					found = true
+					break
 				}
 			}
+		}
+		if !found && !strings.EqualFold(fld, "Seq") {	// Special column, ignore if only on one side.
+			dfm.unqF = append(dfm.unqF, fld)
+		}
+	}
+	for _, col := range dfm.cols {
+		if _,ok := dfm.c2fs[col];!ok {
+			dfm.unqC = append(dfm.unqC, col)
 		}
 	}
 	return dfm
 }
 
-//	func (dfm *dbFldMap) print() {
-//		fmt.Println()
-//		fmt.Println("All flds")
-//		for _, fld := range dfm.flds {
-//			fmt.Println(fld)
-//		}
-//		fmt.Println()
-//		fmt.Println("All cols")
-//		for _, col := range dfm.cols {
-//			fmt.Println(col)
-//		}
-//		fmt.Println()
-//		fmt.Println("fld => col")
-//		for fld, col := range dfm.f2cs {
-//			fmt.Printf("%-10s => %-10s\n", fld, col)
-//		}
-//		fmt.Println()
-//		fmt.Println("col => fld")
-//		for col, fld := range dfm.c2fs {
-//			fmt.Printf("%-10s => %-10s\n", col, fld)
-//		}
-//		fmt.Println()
-//		fmt.Println("orphan flds")
-//		for _, fld := range dfm.flds {
-//			if col := dfm.f2cs[fld]; col == "" {
-//				fmt.Println(fld)
-//			}
-//		}
-//		fmt.Println()
-//		fmt.Println("orphan cols")
-//		for _, col := range dfm.cols {
-//			if fld := dfm.c2fs[col]; fld == "" {
-//				fmt.Println(col)
-//			}
-//		}
-//		fmt.Println()
-//	}
-func (dfm *dbFldMap) reflect(obj any) *reflect.Value {
-	objV := reflect.ValueOf(obj)
-	if objV.Kind() == reflect.Pointer {
-		objV = objV.Elem()
-	}
-	return &objV
-}
-func (dfm *dbFldMap) getFieldValueByColumn(objV *reflect.Value, col string) string {
-	return dfm.getFieldValue(objV, dfm.c2fs[col])
-}
-func (dfm *dbFldMap) getFieldValue(objV *reflect.Value, fldn string) string {
-	fld := objV.FieldByName(fldn)
-	fv := "''"
-	if fld.Kind() == reflect.String {
-		fv = fmt.Sprintf("'%s'", fld.String())
-	} else if fld.CanFloat() {
-		fv = fmt.Sprintf("%f", fld.Float())
-	} else if fld.CanInt() {
-		fv = fmt.Sprintf("%d", fld.Int())
-	} else if fld.CanUint() {
-		fv = fmt.Sprintf("%d", fld.Uint())
-	} else if fld.Kind() == reflect.Bool {
-		fv = fmt.Sprintf("'%v'", fld.Bool())
-	} else if fld.Kind() == reflect.Slice {
-		var sb bytes.Buffer
-		sb.WriteString("'{")
-		for a := 0; a < fld.Len(); a++ {
-			if sb.Len() > 2 {
-				sb.WriteString(",")
-			}
-			e := fld.Index(a).Interface()
-			switch val := e.(type) {
-			case string:
-				sb.WriteString(val)
-			case int:
-				sb.WriteString(fmt.Sprintf("%d", val))
-			case int32:
-				sb.WriteString(fmt.Sprintf("%d", val))
-			case int64:
-				sb.WriteString(fmt.Sprintf("%d", val))
-			case bool:
-				sb.WriteString(fmt.Sprintf("%v", val))
-			default:
-				sb.WriteString(" ")
-			}
-
-		}
-		sb.WriteString("}'")
-		fv = sb.String()
-	}
-	return fv
-}
 func dyn_select(tbln string, cols map[string]string, where string) string {
 	var sb bytes.Buffer
 	sb.WriteString("SELECT ")
-	cnt := 0
-	for k, v := range cols {
-		sb.WriteString(v + " " + k)
-		if cnt < len(cols)-1 {
-			sb.WriteString(", ")
+	if len(cols) > 0 {
+		cnt := 0
+		for k, v := range cols {
+			sb.WriteString(v + " " + k)
+			if cnt < len(cols)-1 {
+				sb.WriteString(", ")
+			}
+			cnt++
 		}
-		cnt++
+	} else {
+		sb.WriteString(" * ")
 	}
 	sb.WriteString(" FROM " + tbln)
 	if where != "" {
@@ -533,8 +426,8 @@ func dyn_select(tbln string, cols map[string]string, where string) string {
 	}
 	return sb.String()
 }
-func dyn_insert(pool *pgxpool.Pool, tbln string, colMap map[string]string, objs []any, ignoreConflicts bool) string {
-	dfm := newDbFldMap(pool, tbln, colMap, objs[0])
+func dyn_insert(pool *pgxpool.Pool, tbln string, dfm *dbFldMap, objs []any, ignoreConflicts bool) string {
+	//dfm := newDbFldMap(pool, tbln, colMap, objs[0])
 
 	// Start building the insert query.
 	var sb bytes.Buffer
@@ -542,12 +435,14 @@ func dyn_insert(pool *pgxpool.Pool, tbln string, colMap map[string]string, objs 
 	sb.WriteString(fmt.Sprintf("( %s )", strings.Join(dfm.cols, ", ")))
 	sb.WriteString(" VALUES ")
 
+	rfl := &rflt{}	// Empty type that has the reflection convenience functions.
 	for i, obj := range objs {
 		sb.WriteString(" ( ")
-		objV := dfm.reflect(obj)
 		for j, colN := range dfm.cols {
-			fv := dfm.getFieldValueByColumn(objV, colN)
+			fv := rfl.getFieldValueAsString(obj, dfm.c2fs[colN])
+			sb.WriteString("'")
 			sb.WriteString(fv)
+			sb.WriteString("'")
 			if j < len(dfm.cols)-1 {
 				sb.WriteString(", ")
 			}

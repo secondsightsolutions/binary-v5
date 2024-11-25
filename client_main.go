@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	_ "embed"
 	"fmt"
 	"os"
@@ -10,10 +12,12 @@ import (
 )
 
 type Shell struct {
-	opts  *Opts
-	file  *rebate_file
-	scid  int64 // scrub id
-	atlas AtlasClient
+	opts     *Opts
+	file     *rebate_file
+	scid     int64 // scrub id
+	atlas    AtlasClient
+	TLSCert  *tls.Certificate
+    X509cert *x509.Certificate
 }
 
 var shell *Shell
@@ -23,7 +27,12 @@ func run_shell(wg *sync.WaitGroup, opts *Opts, stop chan any) {
 
 	//memoryWatch(stop)
 
+	var err error
 	shell = &Shell{opts: opts}
+	if shell.TLSCert, shell.X509cert, err = CryptInit(shell_cert, cacr, "", shell_pkey, salt, phrs); err != nil {
+		log("shell", "run_shell", "cannot initialize crypto", 0, err)
+		exit(nil, 1, fmt.Sprintf("shell cannot initialize crypto: %s", err.Error()))
+	}
 	shell.connect()
 	
 	for {

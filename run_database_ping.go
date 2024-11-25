@@ -11,17 +11,20 @@ func run_datab_ping(readyWG, doneWG *sync.WaitGroup, stop chan any, intv int, ap
 	defer doneWG.Done()
 	pingDBs := func(pools map[string]*pgxpool.Pool) {
 		for name, pool := range pools {
-			pingDB(appl, name, pool)
+			go pingDB(appl, name, pool)
 		}
 	}
-	pingDBs(pools)
-	readyWG.Done()
-	durn := time.Duration(intv) * time.Second
+	durn := time.Duration(0) * time.Second
 	for {
 		select {
 		case <-time.After(durn):
 			pingDBs(pools)
+			if durn == 0 {
+				readyWG.Done()
+			}
+			durn = time.Duration(intv) * time.Second
 		case <-stop:
+			log(appl, "run_datab_ping", "received stop signal, returning", 0, nil)
 			return
 		}
 	}

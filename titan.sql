@@ -47,28 +47,75 @@ CREATE INDEX ON titan.rebates(manu);
 CREATE INDEX ON titan.rebates(manu, scid);
 
 CREATE TABLE titan.claim_uses (
+    manu  text not null,
     scid  bigint not null,
     shrt  text not null,
     excl  text not null default '',
-    CONSTRAINT PRIMARY KEY (scid, shrt)
+    CONSTRAINT claim_uses_pk PRIMARY KEY (manu, scid, shrt)
 );
-CREATE INDEX ON titan.claim_uses(seq);
 CREATE INDEX ON titan.claim_uses(scid);
 CREATE INDEX ON titan.claim_uses(shrt);
 CREATE INDEX ON titan.claim_uses(scid, shrt);
 
 CREATE TABLE titan.rebate_meta (
-    scid  bigint not null primary key,
+    manu  text not null,
+    scid  bigint not null,
     col1  text not null default '',
     col2  text not null default '',
-    col50 text not null default ''
+    col50 text not null default '',
+    CONSTRAINT rebate_meta_pk PRIMARY KEY (manu, scid)
 );
-CREATE INDEX ON titan.rebate_meta(seq);
 CREATE INDEX ON titan.rebate_meta(scid);
 
 CREATE TABLE titan.rebate_claims (
+    manu text not null,
     scid bigint not null,
     rbid bigint not null,
     shrt text not null,
-    CONSTRAINT PRIMARY KEY (manu, scid, rbid, shrt)
+    CONSTRAINT rebate_claims_pk PRIMARY KEY (manu, scid, rbid, shrt)
 );
+
+-- PROVISIONING
+
+CREATE TABLE titan.auth (
+	auth text NOT NULL,
+	enb  bool NOT NULL DEFAULT true,
+	kind text NOT NULL DEFAULT 'pharmacy',
+	CONSTRAINT auth_pkey PRIMARY KEY (auth)
+);
+GRANT ALL ON TABLE titan.auth TO titan;
+
+CREATE TABLE titan.manu (
+	manu text NOT NULL,
+	enb  bool NOT NULL DEFAULT true,
+	CONSTRAINT manu_pkey PRIMARY KEY (manu)
+);
+GRANT ALL ON TABLE titan.manu TO titan;
+
+CREATE TABLE titan.manu_auth (
+	manu text NOT NULL,
+	auth text NOT NULL,
+	enb  bool NOT NULL DEFAULT true,
+	CONSTRAINT manu_auth_pkey PRIMARY KEY (manu, auth)
+);
+GRANT ALL ON TABLE titan.manu_auth TO titan;
+ALTER TABLE titan.manu_auth ADD CONSTRAINT fk_manu_auth_auth FOREIGN KEY (auth) REFERENCES titan.auth(auth);
+ALTER TABLE titan.manu_auth ADD CONSTRAINT fk_manu_auth_manu FOREIGN KEY (manu) REFERENCES titan.manu(manu);
+
+CREATE TABLE titan.proc (
+	proc text NOT NULL,
+	enb  bool NOT NULL DEFAULT true,
+	ver  int8 NOT NULL DEFAULT 0,
+	CONSTRAINT proc_pkey PRIMARY KEY (prid)
+);
+GRANT ALL ON TABLE titan.proc TO titan;
+
+CREATE TABLE titan.proc_auth (
+	proc text NOT NULL,
+	auth text NOT NULL,
+	CONSTRAINT proc_auth_auth_key UNIQUE (auth),
+	CONSTRAINT proc_auth_pkey PRIMARY KEY (proc, auth)
+);
+GRANT ALL ON TABLE titan.proc_auth TO titan;
+ALTER TABLE titan.proc_auth ADD CONSTRAINT fk_proc_auth_auth FOREIGN KEY (auth) REFERENCES titan.auth(auth);
+ALTER TABLE titan.proc_auth ADD CONSTRAINT fk_proc_auth_proc FOREIGN KEY (proc) REFERENCES titan.proc(proc);

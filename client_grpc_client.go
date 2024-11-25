@@ -13,9 +13,9 @@ import (
 )
 
 func (clt *Shell) connect() {
-	tgt := fmt.Sprintf("%s:%d", srvh, srvp)
+	tgt := fmt.Sprintf("%s:%d", atlas_grpc, atlas_grpc_port)
 	cfg := &tls.Config{
-		Certificates: []tls.Certificate{TLSCert},
+		Certificates: []tls.Certificate{*clt.TLSCert},
 		RootCAs:      X509pool,
 	}
 	crd := credentials.NewTLS(cfg)
@@ -37,7 +37,7 @@ func (clt *Shell) newScrub() error {
 		Vers: vers,
 		Desc: desc,
 		Hash: hash,
-		Host: srvh,
+		Host: "",
 		Appl: appl,
 		Hdrs: "", // TODO: send these in the update
 		Cmdl: strings.Join(os.Args, " "),

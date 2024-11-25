@@ -213,7 +213,7 @@ var ScreenLevel = struct {
 
 func screen(start time.Time, bar *int, cur, max int, mfr, prc int, nl bool, text string, args ...any) {
 	// Rows that are "hidden" actually just have the N of M hidden. Still display the row, along with the continually updating times (all platforms) and memory usages (on linux).
-	_brg := strings.EqualFold("brg", X509cname())
+	_brg := strings.EqualFold("brg", name)
 	_mnu := strings.EqualFold(Type, "manu")
 	_lvl := 0
 	bars := 20
@@ -375,7 +375,7 @@ func log(app, title, msg string, dur time.Duration, err error, args ...any) {
 }
 
 func metaGRPC() context.Context {
-	md  := metadata.Pairs("name", X509cname(), "auth", opts.auth, "vers", vers, "manu", manu)
+	md  := metadata.Pairs("name", name, "auth", opts.auth, "vers", vers, "manu", manu)
 	ctx := metadata.NewOutgoingContext(context.Background(), md)
 	return ctx
 }
@@ -411,4 +411,9 @@ func getCreds(tlsInfo credentials.TLSInfo) (cn, ou string) {
 		}
 	}
 	return
+}
+
+func metaManu(ctx context.Context) string {
+	_,_,_,manu,_ := getMetaGRPC(ctx)
+	return manu
 }

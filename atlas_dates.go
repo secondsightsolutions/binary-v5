@@ -12,7 +12,7 @@ type Dates struct {
 var dates *Dates
 
 func init() {
-    CryptInit(cert, cacr, "", pkey, salt, phrs)
+    CryptInit(atlas_cert, cacr, "", atlas_pkey, salt, phrs)
     dates = NewDates(10)
 }
 

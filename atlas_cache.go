@@ -56,7 +56,8 @@ type sort_elem struct {
     row     *row
 }
 
-func new_cache(list []any) *cache {
+func new_cache[T any](name string, list []*T) *cache {
+    strt := time.Now()
     ca := &cache{
     	views: map[string]*view{},
     	rows:  []*row{},
@@ -65,6 +66,7 @@ func new_cache(list []any) *cache {
         ca.Add(obj)
     }
     // At this point the main list is naturally sorted by the index.
+    log("atlas", "new_cache", "%s loaded with %d rows", time.Since(strt), nil, name, len(ca.rows))
     return ca
 }
 
