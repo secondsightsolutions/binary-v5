@@ -54,7 +54,6 @@ func (atlas *Atlas) getESP1(stop chan any) []*ESP1PharmNDC {
 	return recv_fm(atlas.pools["atlas"], "atlas", "esp1", atlas.titan.GetESP1Pharms, stop)
 }
 func (atlas *Atlas) getEntities(stop chan any) []*Entity {
-	log("atlas", "getEntities", "Trying to read entities", 0, nil)
 	return recv_fm(atlas.pools["atlas"], "atlas", "ents", atlas.titan.GetEntities, stop)
 }
 func (atlas *Atlas) getLedger(stop chan any) []*Eligibility {

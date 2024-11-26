@@ -56,7 +56,7 @@ func sync_to_server[T, R any](pool *pgxpool.Pool, appl, tbln, coln string, f fun
 	strt := time.Now()
 	if seqn, err := db_sync_get(pool, appl, coln); err == nil {
 		whr := fmt.Sprintf("seq > %d ", seqn)
-		if chn, err := db_select[T](pool, tbln, nil, whr, stop); err == nil {
+		if chn, err := db_select[T](pool, tbln, nil, whr, "", stop); err == nil {
 			if cnt, seq, err := strm_send_srvr(appl, tbln, f, chn, stop); err == nil {
 				if cnt > 0 {
 					if err := db_sync_set(pool, appl, coln, seq); err != nil {
@@ -87,7 +87,7 @@ func sync_fm_client[T,R any](pool *pgxpool.Pool, appl, manu, tbln string, strm g
 func sync_to_client[T any](pool *pgxpool.Pool, appl, manu, tbln, whr string, colmap map[string]string, strm grpc.ServerStreamingServer[T]) {
 	strt := time.Now()
 	stop := make(chan any, 1)
-	if chn, err := db_select[T](pool, tbln, colmap, whr, stop); err == nil {
+	if chn, err := db_select[T](pool, tbln, colmap, whr, "", stop); err == nil {
 		if cnt, seq, err := strm_send_clnt(appl, tbln, strm, chn, stop); err == nil {
 			log_sync(appl, "sync_to_client", tbln, manu, "", cnt, seq, err, time.Since(strt))
 		} else {

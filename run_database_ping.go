@@ -11,7 +11,7 @@ func run_datab_ping(readyWG, doneWG *sync.WaitGroup, stop chan any, intv int, ap
 	defer doneWG.Done()
 	pingDBs := func(pools map[string]*pgxpool.Pool) {
 		for name, pool := range pools {
-			go pingDB(appl, name, pool)
+			go ping_db(appl, name, pool)
 		}
 	}
 	durn := time.Duration(0) * time.Second

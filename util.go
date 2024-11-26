@@ -353,14 +353,14 @@ func renderCols(hdrs []string, row map[string]string) string {
 	return sb.String()
 }
 
-func log(app, title, msg string, dur time.Duration, err error, args ...any) {
+func log(app, fcn, msg string, dur time.Duration, err error, args ...any) {
 	mesg := fmt.Sprintf(msg, args...)
 	mil  := dur.Milliseconds() % 1000
 	sec  := dur.Milliseconds() / 1000 % 60
 	min  := dur.Milliseconds() / 1000 / 60
 	curT := time.Now().Format("2006-01-02 15:04:05")
 	durn := fmt.Sprintf("(%02dm.%02ds.%03dms)", min, sec, mil)
-	str  := fmt.Sprintf("%s [%-5s] %-24s: %s %s", curT, app, title, durn, mesg)
+	str  := fmt.Sprintf("%s [%-5s] %-24s: %s %s", curT, app, fcn, durn, mesg)
 	if err != nil {
 		errS := err.Error()
 		if strings.Contains(errS, "rpc error") {

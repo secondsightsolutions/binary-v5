@@ -36,7 +36,7 @@ func db_pool(host, port, name, user, pass string, tls bool) *pgxpool.Pool {
 func read_db[T any](pool *pgxpool.Pool, appl, tbln string, cols map[string]string,  where string, stop chan any) []*T {
 	strt := time.Now()
 	lst := make([]*T, 0)
-	if chn, err := db_select[T](pool, tbln, cols, where, stop); err == nil {
+	if chn, err := db_select[T](pool, tbln, cols, where, "", stop); err == nil {
 		for obj := range chn {
 			lst = append(lst, obj)
 		}
@@ -72,8 +72,8 @@ func db_select_col(ctx context.Context, pool *pgxpool.Pool, qry string) (any, er
 		return nil, err
 	}
 }
-func db_select_one[T any](ctx context.Context, pool *pgxpool.Pool, tbln string, cols map[string]string, where string) (*T, error) {
-	qry := dyn_select(tbln, cols, where)
+func db_select_one[T any](ctx context.Context, pool *pgxpool.Pool, tbln string, cols map[string]string, where, sort string) (*T, error) {
+	qry := dyn_select(tbln, cols, where, sort)
 	if tx, err := pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted}); err == nil {
 		if rows, err := tx.Query(ctx, qry); err == nil {
 			if rows.Next() {
@@ -98,9 +98,9 @@ func db_select_one[T any](ctx context.Context, pool *pgxpool.Pool, tbln string, 
 	}
 }
 
-func db_select[T any](pool *pgxpool.Pool, tbln string, cols map[string]string, where string, stop chan any) (chan *T, error) {
+func db_select[T any](pool *pgxpool.Pool, tbln string, cols map[string]string, where, sort string, stop chan any) (chan *T, error) {
 	chn := make(chan *T, 1000)
-	qry := dyn_select(tbln, cols, where)
+	qry := dyn_select(tbln, cols, where, sort)
 	cnt := 0
 	ctx := context.Background()
 	if tx, err := pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted}); err == nil {
@@ -147,11 +147,11 @@ func db_insert[T any](pool *pgxpool.Pool, appl, tbln string, cols map[string]str
 	rfl := &rflt{}
 	lst := []any{}
 	cnt := int64(0)
-	seq := int64(0)	// update to max seq found in the batch, *after* the batch is successfully inserted.
+	cur := int64(0)	// current max within the batch (once we write the batch to disk, it's our new max).
+	max := int64(0)	// update to max seq found in the batch, *after* the batch is successfully inserted.
 	if tx, err := pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted}); err == nil {
 		defer tx.Commit(context.Background())
 		for obj := range fm {
-			max := int64(0)
 			if dfm == nil {		// Assume the dfm can be the same across all objs in list (same object type).
 				dfm = newDbFldMap(pool, tbln, cols, obj)
 				if len(dfm.unqC) > 0 || len(dfm.unqF) > 0 {
@@ -160,29 +160,34 @@ func db_insert[T any](pool *pgxpool.Pool, appl, tbln string, cols map[string]str
 			}
 			cnt++
 			seqn := rfl.getFieldValueAsInt64(obj, "Seq")
-			if seqn > max {
-				max = seqn
+			if seqn > cur {
+				cur = seqn	// current max within the batch
 			}
 			lst = append(lst, obj)
 			if len(lst) == batch {
 				if err := db_insert_batch(ctx, tx, pool, tbln, dfm, lst, true); err != nil {
 					tx.Rollback(ctx)
-					return cnt, seq, err
+					return cnt, max, err
 				}
-				seq = max
+				if cur > max {	// If the max in this batch exceeds the max so far (it should), then use it (cuz we hopefully sort by Seq on input).
+					max = cur
+				}
 				lst = []any{}
 			}
 		}
 		if len(lst) > 0 {
 			if err := db_insert_batch(context.Background(), tx, pool, tbln, dfm, lst, true); err != nil {
 				tx.Rollback(context.Background())
-				return cnt, seq, err
+				return cnt, max, err
+			}
+			if cur > max {	// If the max in this batch exceeds the max so far (it should), then use it (cuz we hopefully sort by Seq on input).
+				max = cur
 			}
 		}
 	} else {
-		return cnt, seq, err
+		return cnt, max, err
 	}
-	return cnt, seq, nil
+	return cnt, max, nil
 }
 
 func db_insert_batch(ctx context.Context, tx pgx.Tx, pool *pgxpool.Pool, tbln string, dfm *dbFldMap, objs []any, ignoreConflicts bool) error {
@@ -405,9 +410,10 @@ func newDbFldMap(pool *pgxpool.Pool, tbln string, f2c map[string]string, obj any
 	return dfm
 }
 
-func dyn_select(tbln string, cols map[string]string, where string) string {
+func dyn_select(tbln string, cols map[string]string, where, sort string) string {
 	var sb bytes.Buffer
 	sb.WriteString("SELECT ")
+	seq := false
 	if len(cols) > 0 {
 		cnt := 0
 		for k, v := range cols {
@@ -416,6 +422,9 @@ func dyn_select(tbln string, cols map[string]string, where string) string {
 				sb.WriteString(", ")
 			}
 			cnt++
+			if strings.EqualFold(k, "seq") {
+				seq = true
+			}
 		}
 	} else {
 		sb.WriteString(" * ")
@@ -423,6 +432,16 @@ func dyn_select(tbln string, cols map[string]string, where string) string {
 	sb.WriteString(" FROM " + tbln)
 	if where != "" {
 		sb.WriteString(" WHERE " + where)
+	}
+	if seq {
+		sb.WriteString(" ORDER BY seq")
+		if sort != "" {
+			sb.WriteString(", " + sort)
+		}
+	} else {
+		if sort != "" {
+			sb.WriteString(" ORDER BY " + sort)
+		}
 	}
 	return sb.String()
 }
@@ -458,15 +477,15 @@ func dyn_insert(pool *pgxpool.Pool, tbln string, dfm *dbFldMap, objs []any, igno
 	return sb.String()
 }
 
-func pingDB(app, name string, pool *pgxpool.Pool) {
+func ping_db(app, name string, pool *pgxpool.Pool) {
 	strt := time.Now()
 	if pool == nil {
-		log(app, "pingDB", "DB pool %s not initialized yet", time.Since(strt), nil, name)
+		log(app, "ping_db", "%-21s / %s", time.Since(strt), nil, "pool not defined", name)
 		return
 	}
 	if err := pool.Ping(context.Background()); err == nil {
-		log(app, "pingDB", "DB pool %s connected to database server", time.Since(strt), nil, name)
+		log(app, "ping_db", "%-21s / %s", time.Since(strt), nil, "pool connected", name)
 	} else {
-		log(app, "pingDB", "DB pool %s cannot ping database server", time.Since(strt), err, name)
+		log(app, "ping_db", "%-21s / %s", time.Since(strt), err, "pool not connected", name)
 	}
 }
