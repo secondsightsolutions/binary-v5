@@ -120,6 +120,7 @@ func db_select[T any](pool *pgxpool.Pool, tbln string, cols map[string]string, w
 							if obj, err := pgx.RowToAddrOfStructByNameLax[T](rows); err == nil {
 								chn <-obj
 							} else {
+								fmt.Printf("db_select/func: err=%s\n", err.Error())
 								tx.Rollback(ctx)
 								close(chn)
 								return
@@ -141,7 +142,7 @@ func db_select[T any](pool *pgxpool.Pool, tbln string, cols map[string]string, w
 	}
 }
 
-func db_insert[T any](pool *pgxpool.Pool, appl, tbln string, cols map[string]string, fm chan *T, batch int) (int64, int64, error) {
+func db_insert[T any](pool *pgxpool.Pool, appl, tbln string, cols map[string]string, fm chan *T, batch int, replace bool) (int64, int64, error) {
 	var dfm *dbFldMap
 	ctx := context.Background()
 	rfl := &rflt{}
@@ -151,6 +152,15 @@ func db_insert[T any](pool *pgxpool.Pool, appl, tbln string, cols map[string]str
 	max := int64(0)	// update to max seq found in the batch, *after* the batch is successfully inserted.
 	if tx, err := pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted}); err == nil {
 		defer tx.Commit(context.Background())
+		if replace {
+			// If we're replacing, then first delete all. Very important that all is done in same transaction!
+			strt := time.Now()
+			if cnt, err := db_exec(ctx, pool, fmt.Sprintf("DELETE FROM %s", tbln)); err == nil {
+				log(appl, "db_insert", "%-21s / %-20s / rows=%d", time.Since(strt), err, "delete rows succeeded", tbln, cnt)
+			} else {
+				log(appl, "db_insert", "%-21s / %-20s / rows=%d", time.Since(strt), err, "delete rows failed", tbln, cnt)
+			}
+		}
 		for obj := range fm {
 			if dfm == nil {		// Assume the dfm can be the same across all objs in list (same object type).
 				dfm = newDbFldMap(pool, tbln, cols, obj)

@@ -31,9 +31,9 @@ func run_grpc_server[T any](wg *sync.WaitGroup, stop chan any, name string, port
                 go func() {
                     if lis, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", port)); err == nil {
                         regis(gsr, srv)
-                        log(name, "grpc", "server starting", 0, nil)
+                        log(name, "run_grpc_server", "server starting", 0, nil)
                         if err := gsr.Serve(lis); err != nil {
-                            log(name, "grpc", "server cannot Serve()", 0, err)
+                            log(name, "run_grpc_server", "server cannot Serve()", 0, err)
                             gsr = nil
                         }
                     } else {
@@ -43,11 +43,11 @@ func run_grpc_server[T any](wg *sync.WaitGroup, stop chan any, name string, port
             }
         case <-stop:
             if gsr != nil {
-                log(name, "grpc", "server stopping", 0, nil)
+                log(name, "run_grpc_server", "received stop signal, stopping", 0, nil)
                 gsr.GracefulStop()
-                log(name, "grpc", "server stopped", 0, nil)
+                log(name, "run_grpc_server", "server stopped", 0, nil)
             }
-            log(name, "grpc", "server returning", 0, nil)
+            log(name, "run_grpc_server", "server returning", 0, nil)
             return
         }
     }

@@ -69,11 +69,13 @@ func (atlas *Atlas) getSPIs(stop chan any) []*SPI {
 	return recv_fm(atlas.pools["atlas"], "atlas", "spis", atlas.titan.GetSPIs, stop)
 }
 
-
 func (atlas *Atlas) sync(stop chan any) {
 	pool := atlas.pools["atlas"]
 
 	sync_fm_server(pool, "atlas", "atlas.claims",        "claims",          atlas.titan.GetClaims,    stop)
+	sync_fm_server(pool, "atlas", "atlas.proc",          "",            	atlas.titan.GetProcs,     stop)
+	sync_fm_server(pool, "atlas", "atlas.auth",          "",            	atlas.titan.GetAuths,     stop)
+	sync_fm_server(pool, "atlas", "atlas.proc_auth",     "",            	atlas.titan.GetProcAuths, stop)
 	sync_to_server(pool, "atlas", "atlas.scrubs",        "scrubs",			atlas.titan.Scrubs,       stop)
 	sync_to_server(pool, "atlas", "atlas.rebates",       "rebates",		    atlas.titan.Rebates,      stop)
 	sync_to_server(pool, "atlas", "atlas.claims_used",   "claim_uses",		atlas.titan.ClaimsUsed,   stop)

@@ -202,3 +202,27 @@ CREATE TABLE atlas.claims (
     ihph text array not null default '{}'
 );
 CREATE INDEX ON atlas.claims(doc);
+
+CREATE TABLE atlas.proc (
+	proc text not null,
+	enb  bool not null default true,
+	ver  int8 not null default 0,
+	CONSTRAINT proc_pkey PRIMARY KEY (proc)
+);
+
+CREATE TABLE atlas.auth (
+	auth text not null,
+	enb  bool not null default true,
+	kind text not null default 'pharmacy',
+	CONSTRAINT auth_pkey PRIMARY KEY (auth)
+);
+
+CREATE TABLE atlas.proc_auth (
+	proc text not null,
+	auth text not null,
+	CONSTRAINT proc_auth_auth_key UNIQUE (auth),
+	CONSTRAINT proc_auth_pkey     PRIMARY KEY (proc, auth)
+);
+
+ALTER TABLE atlas.proc_auth ADD CONSTRAINT fk_proc_auth_auth FOREIGN KEY (auth) REFERENCES atlas.auth(auth);
+ALTER TABLE atlas.proc_auth ADD CONSTRAINT fk_proc_auth_proc FOREIGN KEY (proc) REFERENCES atlas.proc(proc);

@@ -274,6 +274,20 @@ message Eligibility {
     int64  strt   = 6;   // start_at
     int64  term   = 7;   // end_at
 }
+message Proc {
+    string proc = 1;
+    bool   enb  = 2;
+    int64  vers = 3;
+}
+message Auth {
+    string auth = 1;
+    bool   enb  = 2;
+    string kind = 3;
+}
+message ProcAuth {
+    string proc = 1;
+    string auth = 2;
+}
 
 message Req {
 }
@@ -325,6 +339,9 @@ service Titan {
     rpc GetPharmacies(SyncReq)              returns (stream Pharmacy) {}
     rpc GetESP1Pharms(SyncReq)              returns (stream ESP1PharmNDC) {}
     rpc GetEligibilityLedger(SyncReq)       returns (stream Eligibility) {}
+    rpc GetProcs(SyncReq)                   returns (stream Proc) {}
+    rpc GetAuths(SyncReq)                   returns (stream Auth) {}
+    rpc GetProcAuths(SyncReq)               returns (stream ProcAuth) {}
 
     rpc Scrubs(stream Scrub)                returns (Res) {}
     rpc Rebates(stream TitanRebate)         returns (Res) {}

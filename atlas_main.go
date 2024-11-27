@@ -31,7 +31,7 @@ func run_atlas(wg *sync.WaitGroup, opts *Opts, stop chan any) {
 
     atlas.pools["atlas"] = db_pool(atlas_host, atlas_port, atlas_name, atlas_user, atlas_pass, true)
 
-    manu = "teva"
+    manu = "amgen"
 
     var err error
     if atlas.TLSCert, atlas.X509cert, err = CryptInit(atlas_cert, cacr, "", atlas_pkey, salt, phrs); err != nil {
@@ -67,7 +67,7 @@ func run_atlas_sync(readyWG, doneWG *sync.WaitGroup, stop chan any, intv int, at
         case <-time.After(time.Duration(intv)*time.Second):
             atlas.sync(stop)
         case <-stop:
-            log("atlas", "main", "titan sync returning", 0, nil)
+            log("atlas", "run_atlas_sync", "received stop signal, returning", 0, nil)
             return
         }
     }
@@ -75,11 +75,11 @@ func run_atlas_sync(readyWG, doneWG *sync.WaitGroup, stop chan any, intv int, at
 func run_titan_ping(readyWG, doneWG *sync.WaitGroup, stop chan any, intv int, atlas *Atlas) {
     defer doneWG.Done()
     pingService := func() {
-        started := time.Now()
+        strt := time.Now()
         if _, err := atlas.titan.Ping(metaGRPC(), &Req{}); err == nil {
-            log("atlas", "main", "ping to titan service succeeded", time.Since(started), nil)
+            log("atlas", "run_titan_ping", "%-21s", time.Since(strt), err, "ping succeeded")
         } else {
-            log("atlas", "main", "ping to titan service failed", time.Since(started), err)
+            log("atlas", "run_titan_ping", "%-21s", time.Since(strt), err, "ping failed")
         }
     }
     pingService()
@@ -90,6 +90,7 @@ func run_titan_ping(readyWG, doneWG *sync.WaitGroup, stop chan any, intv int, at
         case <-time.After(durn):
             pingService()
         case <-stop:
+            log("atlas", "run_titan_ping", "received stop signal, returning", 0, nil)
             return
         }
     }
