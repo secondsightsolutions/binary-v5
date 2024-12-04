@@ -11,11 +11,17 @@ type titanServer struct {
 	UnimplementedTitanServer
 }
 
-func (s *titanServer) Ping(context.Context, *Req) (*Res, error) {
+func (s *titanServer) Ping(ctx context.Context, req *Req) (*Res, error) {
+	if err := validate_client(ctx, titan.pools["titan"], "titan"); err != nil {
+		return &Res{}, err
+	}
 	return &Res{}, nil
 }
 
 func (s *titanServer) GetClaims(req *SyncReq, strm grpc.ServerStreamingServer[Claim]) error {
+	if err := validate_client(strm.Context(), titan.pools["titan"], "titan"); err != nil {
+		return err
+	}
 	cols := map[string]string{
 		// "clid":  "COALESCE(id, '')",
 		"chnm": "COALESCE(chain_name, '')",
@@ -50,6 +56,9 @@ func (s *titanServer) GetClaims(req *SyncReq, strm grpc.ServerStreamingServer[Cl
 	return nil
 }
 func (s *titanServer) GetSPIs(req *SyncReq, strm grpc.ServerStreamingServer[SPI]) error {
+	if err := validate_client(strm.Context(), titan.pools["titan"], "titan"); err != nil {
+		return err
+	}
 	cols := map[string]string{
 		"ncp": "COALESCE(ncpdp_provider_id, '')",
 		"npi": "COALESCE(national_provider_id, '')",
@@ -64,6 +73,9 @@ func (s *titanServer) GetSPIs(req *SyncReq, strm grpc.ServerStreamingServer[SPI]
 	return nil
 }
 func (s *titanServer) GetNDCs(req *SyncReq, strm grpc.ServerStreamingServer[NDC]) error {
+	if err := validate_client(strm.Context(), titan.pools["titan"], "titan"); err != nil {
+		return err
+	}
 	cols := map[string]string{
 		"ndc":  "COALESCE(REPLACE(item, '-', ''), '')",
 		"name": "COALESCE(product_name, '')",
@@ -75,6 +87,9 @@ func (s *titanServer) GetNDCs(req *SyncReq, strm grpc.ServerStreamingServer[NDC]
 	return nil
 }
 func (s *titanServer) GetEntities(req *SyncReq, strm grpc.ServerStreamingServer[Entity]) error {
+	if err := validate_client(strm.Context(), titan.pools["titan"], "titan"); err != nil {
+		return err
+	}
 	cols := map[string]string{
 		"i340":  "COALESCE(id_340b, '')",
 		"state": "COALESCE(state, '')",
@@ -86,6 +101,9 @@ func (s *titanServer) GetEntities(req *SyncReq, strm grpc.ServerStreamingServer[
 	return nil
 }
 func (s *titanServer) GetPharmacies(req *SyncReq, strm grpc.ServerStreamingServer[Pharmacy]) error {
+	if err := validate_client(strm.Context(), titan.pools["titan"], "titan"); err != nil {
+		return err
+	}
 	cols := map[string]string{
 		"chnm":  "COALESCE(chain_name, '')",
 		"i340":  "COALESCE(id_340b, '')",
@@ -103,6 +121,9 @@ func (s *titanServer) GetPharmacies(req *SyncReq, strm grpc.ServerStreamingServe
 	return nil
 }
 func (s *titanServer) GetESP1Pharms(req *SyncReq, strm grpc.ServerStreamingServer[ESP1PharmNDC]) error {
+	if err := validate_client(strm.Context(), titan.pools["titan"], "titan"); err != nil {
+		return err
+	}
 	cols := map[string]string{
 		"spid": "service_provider_id",
 		"ndc":  "ndc",
@@ -115,6 +136,9 @@ func (s *titanServer) GetESP1Pharms(req *SyncReq, strm grpc.ServerStreamingServe
 	return nil
 }
 func (s *titanServer) GetEligibilityLedger(req *SyncReq, strm grpc.ServerStreamingServer[Eligibility]) error {
+	if err := validate_client(strm.Context(), titan.pools["titan"], "titan"); err != nil {
+		return err
+	}
 	cols := map[string]string{
 		"id":   "id",
 		"i340": "id_340b",
@@ -129,14 +153,29 @@ func (s *titanServer) GetEligibilityLedger(req *SyncReq, strm grpc.ServerStreami
 	sync_to_client(titan.pools["citus"], "titan", manu, "eligibility_ledger", whr, cols, strm)
 	return nil
 }
+func (s *titanServer) GetAuths(req *SyncReq, strm grpc.ServerStreamingServer[Auth]) error {
+	if err := validate_client(strm.Context(), titan.pools["titan"], "titan"); err != nil {
+		return err
+	}
+	manu := metaManu(strm.Context())
+	whr := fmt.Sprintf("manu = '%s'", manu)
+	sync_to_client(titan.pools["titan"], "titan", manu, "titan.auths", whr, nil, strm)
+	return nil
+}
 
 // set locks
 
 func (s *titanServer) NewScrub(ctx context.Context, scr *Scrub) (*Res, error) {
+	if err := validate_client(ctx, titan.pools["titan"], "titan"); err != nil {
+		return &Res{}, err
+	}
 	_, err := db_insert_one(ctx, titan.pools["titan"], "titan.scrubs", nil, scr, "")
 	return &Res{}, err
 }
 func (s *titanServer) ScrubDone(ctx context.Context, m *Metrics) (*Res, error) {
+	if err := validate_client(ctx, titan.pools["titan"], "titan"); err != nil {
+		return &Res{}, err
+	}
 	cols := map[string]string{
 		"rbt_total":   "GetRbtTotal",
 		"rbt_valid":   "GetRbtValid",
@@ -159,27 +198,33 @@ func (s *titanServer) ScrubDone(ctx context.Context, m *Metrics) (*Res, error) {
 		"dos_bef_dof": "GetDosBefDof",
 		"dos_aft_dof": "GetDosAftDof",
 	}
-	_, _, _, manu, scid := getMetaGRPC(ctx)
+	_, _, _, manu, _, scid := getMetaGRPC(ctx)
 	whr := map[string]string{
 		"manu": manu,
 		"scid": scid,
 	}
-	return &Res{}, db_update(ctx, m, titan.pools["titan"], "titan.scrubs", cols, whr)
+	return &Res{}, db_update(ctx, m, nil, titan.pools["titan"], "titan.scrubs", cols, whr)
 }
 
 func (s *titanServer) Rebates(strm grpc.ClientStreamingServer[TitanRebate, Res]) error {
+	if err := validate_client(strm.Context(), titan.pools["titan"], "titan"); err != nil {
+		return err
+	}
 	sync_fm_client(titan.pools["titan"], "titan", manu, "titan.rebates", strm)
 	return nil
 }
 func (s *titanServer) ClaimsUsed(strm grpc.ClientStreamingServer[ClaimUse, Res]) error {
+	if err := validate_client(strm.Context(), titan.pools["titan"], "titan"); err != nil {
+		return err
+	}
 	sync_fm_client(titan.pools["titan"], "titan", manu, "titan.claim_uses", strm)
 	return nil
 }
 func (s *titanServer) RebateClaims(strm grpc.ClientStreamingServer[RebateClaim, Res]) error {
+	if err := validate_client(strm.Context(), titan.pools["titan"], "titan"); err != nil {
+		return err
+	}
 	sync_fm_client(titan.pools["titan"], "titan", manu, "titan.rebate_claims", strm)
 	return nil
 }
 
-func titanValidate(ctx context.Context) error {
-	return nil
-}

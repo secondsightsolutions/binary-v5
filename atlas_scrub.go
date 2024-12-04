@@ -2,11 +2,14 @@ package main
 
 import (
 	"bufio"
+	"context"
+	"fmt"
 	"os"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/jackc/pgx/v5"
 )
 
 type claim struct {
@@ -14,10 +17,14 @@ type claim struct {
 	excl string
 }
 type scrub struct {
-	ca   CA
+	sr   *Scrub
+	ca   *cache_set
+	spis *SPIs
 	clms []*claim
 	scid int64
-	sr   *scrub_req
+	slot string
+	outf string
+	// sr   *scrub_req
 	hdrs []string
 	rbtC chan *Rebate
 	plcy *Policy
@@ -26,70 +33,92 @@ type scrub struct {
 	lckM sync.Mutex
 }
 
-type scrub_req struct {
-	auth  string
-	manu  string
-	sort  string                 // The sort order for rebates (defaults to "indx", the generated ordinal position in the rebate file).
-	slot  string                 // How we divide across rebate procs. All rebates with same value for "slot" must go to same rebate proc.
-	outf  string                 // The output file.
-	files map[string]*scrub_file // The set of input files (rebates, claims, LU tables).
-}
-
-type scrub_file struct {
-	name  string // The name to use for the cache, like "rebates", "claims", "ndcs", etc.
-	path  string // Disk file path. Either test dir or temp dir created by http upload.
-	args  string
-	csep  string            // If set, the hdr/col separator in the input (defaults to ",")
-	hdrs  []string          // Original values for CSV headers or table column names.
-	keys  []sort_key        // keyn;length;order,keyn,keyn;length (in policy definition).
-	hdrm  map[string]string // Maps custom input name to proper short name (in policy definition for defining input).
-	hdri  map[int]string    // CSV column index => proper_hdr
-	shrt  map[string]string // Maps short name back to original name (CSV header or table column) (dynamic based on input found).
-	full  map[string]string // Maps original name (CSV or table column) to short name (dynamic based on input found).
-	lines int
-	rderr error
-}
-
-type rbt_sort struct {
-	num int
-	rbt *Rebate
-}
-
-// func new_scrub(scid int64, manu string) *Scrub {
-// 	sc := &Scrub{
-// 		scid: scid,
-// 		sr:   &scrub_req{manu: manu, files: map[string]*scrub_file{}},
-// 		atts: NewAttempts(),
-// 		metr: &Metrics{},
-// 		plcy: GetPolicy(manu),
-// 	}
-	// sc.sr.files["rebates"]  = &scrub_file{name: "rebates", csep: ",", hdrm: "rxnum=rxn;hrxnum=hrxn"}
-	// sc.sr.files["claims"]   = &scrub_file{name: "claims",   pool: "citus",  tbln: "submission_rows"}
-	// sc.sr.files["ndcs"]     = &scrub_file{name: "ndcs",     pool: "esp",    tbln: "ndcs"}
-	// sc.sr.files["spis"]     = &scrub_file{name: "spis",     pool: "esp",    tbln: "ncpdp_providers"}
-	// sc.sr.files["pharms"]   = &scrub_file{name: "pharms",   pool: "esp",    tbln: "contracted_pharmacies"}
-	// sc.sr.files["ents"]     = &scrub_file{name: "ents",     pool: "esp",    tbln: "covered_entities"}
-	// sc.sr.files["elig"]     = &scrub_file{name: "elig",     pool: "esp",    tbln: "eligibility_ledger"}
-	// sc.sr.files["esp1"]     = &scrub_file{name: "esp1",     pool: "esp",    tbln: "esp1_providers"}
-// 	return sc
+// type scrub_req struct {
+// 	auth  string
+// 	manu  string
+// 	sort  string                 // The sort order for rebates (defaults to "indx", the generated ordinal position in the rebate file).
+// 	slot  string                 // How we divide across rebate procs. All rebates with same value for "slot" must go to same rebate proc.
+// 	outf  string                 // The output file.
+// 	files map[string]*scrub_file // The set of input files (rebates, claims, LU tables).
 // }
+
+// type scrub_file struct {
+// 	name  string // The name to use for the cache, like "rebates", "claims", "ndcs", etc.
+// 	path  string // Disk file path. Either test dir or temp dir created by http upload.
+// 	args  string
+// 	csep  string            // If set, the hdr/col separator in the input (defaults to ",")
+// 	hdrs  []string          // Original values for CSV headers or table column names.
+// 	keys  []sort_key        // keyn;length;order,keyn,keyn;length (in policy definition).
+// 	hdrm  map[string]string // Maps custom input name to proper short name (in policy definition for defining input).
+// 	hdri  map[int]string    // CSV column index => proper_hdr
+// 	shrt  map[string]string // Maps short name back to original name (CSV header or table column) (dynamic based on input found).
+// 	full  map[string]string // Maps original name (CSV or table column) to short name (dynamic based on input found).
+// 	lines int
+// 	rderr error
+// }
+
+func new_scrub(s *Scrub) *scrub {
+	return &scrub{
+		ca:   nil,
+		clms: []*claim{},
+		spis: atlas.spis,
+		scid: s.Scid,
+		sr:   s,
+		hdrs: []string{},
+		rbtC: make(chan *Rebate),
+		plcy: nil,
+		atts: &Attempts{list: []*attempt{}},
+		metr: &Metrics{},
+		lckM: sync.Mutex{},
+	}
+}
 
 func (sc *scrub) run() {
 	wgrp := sync.WaitGroup{}
-	wgrp.Add(4)
-	chn1 := make(chan *Rebate, 100000) // Connects rebate reader/workers to the rebate re-sorter.
-	chn2 := make(chan *Rebate, 100000) // Connects rebate re-sorter to the rebate sender.
-	chn3 := make(chan *Rebate, 100000) // Connects rebate sender to the result writer.
-
-	go sc.read_rebates(&wgrp, chn1)       // Reads rebates from input source.
-	go sc.sort_rebates(&wgrp, chn1, chn2) // Re-sorts the completed rebates coming from multiple workers.
-	go sc.send_rebates(&wgrp, chn2, chn3) // Sends rebates up to server.
-	go sc.save_rebates(&wgrp, chn3)       // Writes rebates to output file.
-
+	wgrp.Add(2)
+	go sc.prep_claims(&wgrp)  // Filters/prepares claims based on policy.
+	go sc.recv_rebates(&wgrp) // Get rebates from input source and write into rebates table.
 	wgrp.Wait()
+
+	chn1 := make(chan *Rebate, 100000) // Connects rebate database reader to the workers.
+	chn2 := make(chan *Rebate, 100000) // Connects rebate workers to the rebate (db) saver.
+	out1, in1 := (chan<- *Rebate)(chn1), (<-chan *Rebate)(chn1)
+	out2, in2 := (chan<- *Rebate)(chn2), (<-chan *Rebate)(chn2)
+	wgrp.Add(3)
+	go sc.pull_rebates(&wgrp, out1) // Pull rebates from table in order specified by policy, and feed to rebate workers.
+	go sc.work_rebates(&wgrp, in1, out2, 64, 20)
+	go sc.save_rebates(&wgrp, in2, 5, 100) // Reads finished rebates from workers and updates the rebates table.
+	wgrp.Wait()
+
+	sc.file_rebates() // Reads the rebates table and generates the result file.
+
 }
 
-func (sc *scrub) read_rebates(wgrp *sync.WaitGroup, out chan *Rebate) {
+func (sc *scrub) prep_claims(wgrp *sync.WaitGroup) {
+	defer wgrp.Done()
+	sc.clms = make([]*claim, 0, len(sc.ca.clms.rows))
+	for _, row := range sc.ca.clms.rows {
+		Clm := row.elem.(*Claim)
+		sc.clms = append(sc.clms, &claim{clm: Clm})
+	}
+	sc.plcy.prepClaims(sc)
+}
+func (sc *scrub) recv_rebates(wgrp *sync.WaitGroup) {
+	defer wgrp.Done()
+	db_insert(atlas.pools["atlas"], "atlas", "atlas.rebates", nil, sc.rbtC, 5000, false)
+}
+func (sc *scrub) pull_rebates(wgrp *sync.WaitGroup, out chan<- *Rebate) {
+	defer wgrp.Done()
+	defer close(out)
+	whr := fmt.Sprintf("scid = %d", sc.scid)
+	sort := sc.plcy.rebateOrder
+	if chn, err := db_select[Rebate](atlas.pools["atlas"], "atlas.rebates", nil, whr, sort, nil); err == nil {
+		for rbt := range chn {
+			out <- rbt
+		}
+	}
+}
+func (sc *scrub) work_rebates(wgrp *sync.WaitGroup, in1 <-chan *Rebate, out2 chan<- *Rebate, wrks, size int) {
 	hashIndex := func(indx int64, modulo int) int {
 		return int(indx % int64(modulo))
 	}
@@ -107,23 +136,36 @@ func (sc *scrub) read_rebates(wgrp *sync.WaitGroup, out chan *Rebate) {
 			return 0
 		}
 	}
+	worker := func(cgrp *sync.WaitGroup, in <-chan *Rebate, out chan<- *Rebate) {
+		for rbt := range in {
+			sc.plcy.scrubRebate(sc, rbt)
+			sc.update_rbt(rbt)
+			out <- rbt
+		}
+		cgrp.Done()
+	}
+	defer wgrp.Done()
+	defer close(out2)
 	cgrp := &sync.WaitGroup{}
-	thrs := 1
-	chns := make([]chan *Rebate, thrs)
+	chns := make([]chan *Rebate, wrks)
 	// Create the rebate workers.
 	for a := 0; a < len(chns); a++ {
 		cgrp.Add(1)
-		chns[a] = make(chan *Rebate, 20)
-		go sc.read_rebates_worker(cgrp, chns[a], out)
+		chns[a] = make(chan *Rebate, size)
+		go worker(cgrp, chns[a], out2)
 	}
 	// Now that all rebate worker threads are started, feed them rebates.
+	rflt := &rflt{}
 	indx := int64(0)
-	sc.sr.slot = strings.ToLower(sc.sr.slot)
-	for rbt := range sc.rbtC {
+	sc.slot = strings.ToLower(sc.slot)
+	for rbt := range in1 {
 		rbt.Indx = indx
-		slot := hashIndex(indx, thrs)
-		if sc.sr.slot != "" {
-			slot = hashString(rbt.GetRxn(), thrs)	// TODO: fix this! Field should be dynamic!
+		slot := 0
+		if sc.slot != "" { // Rebate field that we use to find the correct worker (eg., all with same rx go to same worker).
+			val := rflt.getFieldValueAsString(rbt, sc.slot)
+			slot = hashString(val, wrks)
+		} else {
+			slot = hashIndex(indx, wrks)
 		}
 		chns[slot] <- rbt
 	}
@@ -132,96 +174,57 @@ func (sc *scrub) read_rebates(wgrp *sync.WaitGroup, out chan *Rebate) {
 		close(chn)
 	}
 	cgrp.Wait()
-	close(out) // Tell the next step in the pipe (the sort thread) that no more data coming.
-	wgrp.Done()
 }
-func (sc *scrub) read_rebates_worker(wgrp *sync.WaitGroup, in, out chan *Rebate) {
-	for rbt := range in {
-		sc.plcy.scrubRebate(sc, rbt)
-		sc.update_rbt(rbt)
-		out <- rbt
-	}
-	wgrp.Done()
-}
-func (sc *scrub) sort_rebates(wgrp *sync.WaitGroup, in, out chan *Rebate) {
-	// The sort thread. Reads the common scrub output channel written by input workers.
-	// Re-sort the rebates and write to the result writer input channel.
-	sortQ := []*rbt_sort{}
-	last := -1
-	for rbt := range in {
-		i64 := rbt.Indx
-		num := int(i64)
-		rsort := &rbt_sort{num: num, rbt: rbt}
-		sortQ = append(sortQ, rsort)                  // Just put it onto our outbound queue.
-		sort.SliceStable(sortQ, func(i, j int) bool { // Sort them to make sure they're still in order.
-			return sortQ[i].num < sortQ[j].num
-		})
-
-		// The next one to go needs to be the next rnum in sequence. Otherwise can't send.
-		for (len(sortQ) > 0 && sortQ[0].num == last+1) || len(sortQ) > 1000000 {
-			rbt := sortQ[0].rbt
-			sortQ = sortQ[1:] // Trims first entry off.
-			out <- rbt
-			last++
-		}
-		// We've sent out what we can. Go back to top and get another completed rebate/claim.
-	}
-	// No more writers. Take whatever we have buffered and send them.
-	for _, rbtS := range sortQ {
-		out <- rbtS.rbt
-	}
-	close(out) // Tell the next step in the pipe (the result writer thread) no more data coming.
-	wgrp.Done()
-}
-func (sc *scrub) send_rebates(wgrp *sync.WaitGroup, in, out chan *Rebate) {
-	// pool  := sc.sr.files["rebates"].pool
-	// tbln  := sc.sr.files["rebates"].tbln
-	// do,di := putData(pool, tbln, "insert")  // do - data out (send to grpc), di - data in (back from grpc)
-	// for {
-	//     select {
-	//     case rbt := <-in:       // Get rebate from previous stage.
-	//         if rbt != nil {     // Not nil, means channel still open. Previous stage still active and sending.
-	//             do <-rbt        // Send to grpc.
-	//         } else {
-	//             close(do)       // Close this side - tells grpc nothing more is coming.
-	//         }
-
-	//     case rbt := <-di:       // Get rebate back from grpc (was sent up to server, so now we can print it).
-	//         if rbt != nil {     // Not nil, means channel still open.
-	//             out <-rbt
-	//         } else {
-	//             close(out)      // Tell next stage that we're done - nothing more coming.
-	//             goto done       // Is nil, means grpc has no work left to do, and closed the channel.
-	//         }
-	//     }
-	// }
-	for {
-		select {
-		case rbt := <-in: // Get rebate from previous stage.
-			if rbt != nil { // Not nil, means channel still open. Previous stage still active and sending.
-				out <- rbt // Send to grpc.
-			} else {
-				close(out) // Tell next stage that we're done - nothing more coming.
-				goto done
+func (sc *scrub) save_rebates(wgrp *sync.WaitGroup, in2 <-chan *Rebate, wrks, size int) {
+	defer wgrp.Done()
+	cgrp := &sync.WaitGroup{}
+	pool := atlas.pools["atlas"]
+	opts := pgx.TxOptions{IsoLevel: pgx.ReadCommitted}
+	whr := map[string]string{"scid": fmt.Sprintf("%d", sc.scid)}
+	for a := 0; a < wrks; a++ { // Create the workers
+		cgrp.Add(1)
+		go func() { // Each worker runs separately
+			defer cgrp.Done()
+			cnt := 0
+			tx, _ := pool.BeginTx(context.Background(), opts) // Create the first transaction for the batch of updates.
+			for rbt := range in2 {                            // Keep reading rebates from the common input queue.
+				if rbt != nil { // When we get nil, the sending side is closed - we're done (almost).
+					cnt++
+					db_update(context.Background(), rbt, tx, nil, "atlas.rebates", nil, whr)
+					if cnt%size == 0 { // If we reached our size number of updates, commit the transaction and create another.
+						tx.Commit(context.Background())
+						tx, _ = pool.BeginTx(context.Background(), opts)
+					}
+				} else { // No more rebates. But very likely we have uncommitted updates.
+					break
+				}
 			}
-		}
+			if cnt%size != 0 {
+				tx.Commit(context.Background())
+			} else {
+				tx.Rollback(context.Background())
+			}
+		}()
 	}
-done:
-	wgrp.Done()
+	cgrp.Wait()
 }
-func (sc *scrub) save_rebates(wgrp *sync.WaitGroup, in chan *Rebate) {
-	if fd, err := os.Create(sc.sr.outf); err == nil {
+func (sc *scrub) file_rebates() {
+	if fd, err := os.Create(sc.outf); err == nil {
 		w := bufio.NewWriter(fd)
 		hdrs := strings.Join(sc.hdrs, ",")
 		w.Write([]byte("stat," + hdrs + "\n"))
-		for rbt := range in {
-			str := sc.plcy.result(sc, rbt)
-			w.Write([]byte(str + "\n"))
+
+		whr := fmt.Sprintf("scid = %d", sc.scid)
+		sort := "indx"
+		if chn, err := db_select[Rebate](atlas.pools["atlas"], "atlas.rebates", nil, whr, sort, nil); err == nil {
+			for rbt := range chn {
+				str := sc.plcy.result(sc, rbt)
+				w.Write([]byte(str + "\n"))
+			}
 		}
 		w.Flush()
 		fd.Close()
 	} else {
-		exit(sc, 1, "cannot create output file (%s): %s", sc.sr.outf, err.Error())
+		log("atlas", "file_rebates", "output file", 0, err)
 	}
-	wgrp.Done()
 }

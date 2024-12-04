@@ -15,6 +15,9 @@ var (
 	//go:embed embed/type.txt
 	Type string
 
+	//go:embed embed/kind.txt
+	kind string
+
 	//go:embed embed/manu.txt
 	manu string
 

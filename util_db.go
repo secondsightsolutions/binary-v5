@@ -72,31 +72,6 @@ func db_select_col(ctx context.Context, pool *pgxpool.Pool, qry string) (any, er
 		return nil, err
 	}
 }
-func db_select_one[T any](ctx context.Context, pool *pgxpool.Pool, tbln string, cols map[string]string, where, sort string) (*T, error) {
-	qry := dyn_select(tbln, cols, where, sort)
-	if tx, err := pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted}); err == nil {
-		if rows, err := tx.Query(ctx, qry); err == nil {
-			if rows.Next() {
-				if obj, err := pgx.RowToAddrOfStructByNameLax[T](rows); err == nil {
-					tx.Commit(ctx)
-					return obj, err
-				} else {
-					tx.Rollback(context.Background())
-					return nil, err
-				}
-			} else {
-				rows.Close()
-				tx.Commit(ctx)
-				return nil, nil
-			}
-		} else {
-			tx.Rollback(context.Background())
-			return nil, err
-		}
-	} else {
-		return nil, err
-	}
-}
 
 func db_select[T any](pool *pgxpool.Pool, tbln string, cols map[string]string, where, sort string, stop chan any) (chan *T, error) {
 	chn := make(chan *T, 1000)
@@ -208,7 +183,7 @@ func db_insert_batch(ctx context.Context, tx pgx.Tx, pool *pgxpool.Pool, tbln st
 		}
 		defer tx.Commit(ctx)
 	}
-	qry := dyn_insert(pool, tbln, dfm, objs, ignoreConflicts)
+	qry := dyn_insert(tbln, dfm, objs, ignoreConflicts)
 	_, err := tx.Exec(ctx, qry)
 	if err != nil {
 		tx.Rollback(ctx)
@@ -218,7 +193,7 @@ func db_insert_batch(ctx context.Context, tx pgx.Tx, pool *pgxpool.Pool, tbln st
 func db_insert_one(ctx context.Context, pool *pgxpool.Pool, tbln string, dfm *dbFldMap, obj any, rtrn string) (int64, error) {
 	if tx, err := pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted}); err == nil {
 		defer tx.Commit(ctx)
-		qry := dyn_insert(pool, tbln, dfm, []any{obj}, false)
+		qry := dyn_insert(tbln, dfm, []any{obj}, false)
 		if rtrn != "" {
 			qry += " RETURNING " + rtrn
 			if row := tx.QueryRow(ctx, qry); row != nil {
@@ -245,7 +220,7 @@ func db_insert_one(ctx context.Context, pool *pgxpool.Pool, tbln string, dfm *db
 	}
 }
 
-func db_update(ctx context.Context, obj any, pool *pgxpool.Pool, tbln string, colMap map[string]string, where map[string]string) error {
+func db_update(ctx context.Context, obj any, tx pgx.Tx, pool *pgxpool.Pool, tbln string, colMap map[string]string, where map[string]string) error {
 	mk := func(obj any) string {
 		cols := make([]string, 0, len(colMap))
 		for col := range colMap {
@@ -276,20 +251,22 @@ func db_update(ctx context.Context, obj any, pool *pgxpool.Pool, tbln string, co
 	if len(where) == 0 {
 		return fmt.Errorf("missing WHERE")
 	}
-	if tx, err := pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted}); err == nil {
+	if tx == nil {
+		var err error
+		if tx, err = pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted}); err != nil {
+			return err
+		}
 		defer tx.Commit(ctx)
-		upd := mk(obj)
-		if tag, err := tx.Exec(ctx, upd); err == nil {
-			// Only allow one row to be updated!
-			if tag.RowsAffected() > 1 {
-				tx.Rollback(ctx)
-				return err
-			}
-		} else {
+	}
+	upd := mk(obj)
+	if tag, err := tx.Exec(ctx, upd); err == nil {
+		// Only allow one row to be updated!
+		if tag.RowsAffected() > 1 {
 			tx.Rollback(ctx)
 			return err
 		}
 	} else {
+		tx.Rollback(ctx)
 		return err
 	}
 	return nil
@@ -300,34 +277,6 @@ func db_exec(ctx context.Context, pool *pgxpool.Pool, qry string) (int64, error)
 	return tag.RowsAffected(), err
 }
 
-func db_last_seq(ctx context.Context, pool *pgxpool.Pool, tbln, coln string) (int64, error) {
-	if rows, err := pool.Query(ctx, fmt.Sprintf("SELECT COALESCE(%s, 0) seq FROM %s", coln, tbln)); err == nil {
-		defer rows.Close()
-		var seq int64
-		if rows.Next() {
-			err := rows.Scan(&seq)
-			return seq, err
-		} else {
-			return 0, nil
-		}
-	} else {
-		return 0, err
-	}
-}
-func db_max_seq(pool *pgxpool.Pool, tbln, coln string) (int64, error) {
-	if rows, err := pool.Query(context.Background(), fmt.Sprintf("SELECT COALESCE(MAX(%s), 0) seq FROM %s", coln, tbln)); err == nil {
-		defer rows.Close()
-		var seq int64
-		if rows.Next() {
-			err := rows.Scan(&seq)
-			return seq, err
-		} else {
-			return 0, nil
-		}
-	} else {
-		return 0, err
-	}
-}
 func db_count(ctx context.Context, pool *pgxpool.Pool, frmWhr string) (int64, error) {
 	if rows, err := pool.Query(ctx, fmt.Sprintf("SELECT COUNT(*) count %s ", frmWhr)); err == nil {
 		defer rows.Close()
@@ -455,9 +404,7 @@ func dyn_select(tbln string, cols map[string]string, where, sort string) string 
 	}
 	return sb.String()
 }
-func dyn_insert(pool *pgxpool.Pool, tbln string, dfm *dbFldMap, objs []any, ignoreConflicts bool) string {
-	//dfm := newDbFldMap(pool, tbln, colMap, objs[0])
-
+func dyn_insert(tbln string, dfm *dbFldMap, objs []any, ignoreConflicts bool) string {
 	// Start building the insert query.
 	var sb bytes.Buffer
 	sb.WriteString(fmt.Sprintf("INSERT INTO %s ", tbln))
@@ -499,3 +446,57 @@ func ping_db(app, name string, pool *pgxpool.Pool) {
 		log(app, "ping_db", "%-21s / %s", time.Since(strt), err, "pool not connected", name)
 	}
 }
+
+// func db_select_one[T any](ctx context.Context, pool *pgxpool.Pool, tbln string, cols map[string]string, where, sort string) (*T, error) {
+// 	qry := dyn_select(tbln, cols, where, sort)
+// 	if tx, err := pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted}); err == nil {
+// 		if rows, err := tx.Query(ctx, qry); err == nil {
+// 			if rows.Next() {
+// 				if obj, err := pgx.RowToAddrOfStructByNameLax[T](rows); err == nil {
+// 					tx.Commit(ctx)
+// 					return obj, err
+// 				} else {
+// 					tx.Rollback(context.Background())
+// 					return nil, err
+// 				}
+// 			} else {
+// 				rows.Close()
+// 				tx.Commit(ctx)
+// 				return nil, nil
+// 			}
+// 		} else {
+// 			tx.Rollback(context.Background())
+// 			return nil, err
+// 		}
+// 	} else {
+// 		return nil, err
+// 	}
+// }
+// func db_last_seq(ctx context.Context, pool *pgxpool.Pool, tbln, coln string) (int64, error) {
+// 	if rows, err := pool.Query(ctx, fmt.Sprintf("SELECT COALESCE(%s, 0) seq FROM %s", coln, tbln)); err == nil {
+// 		defer rows.Close()
+// 		var seq int64
+// 		if rows.Next() {
+// 			err := rows.Scan(&seq)
+// 			return seq, err
+// 		} else {
+// 			return 0, nil
+// 		}
+// 	} else {
+// 		return 0, err
+// 	}
+// }
+// func db_max_seq(pool *pgxpool.Pool, tbln, coln string) (int64, error) {
+// 	if rows, err := pool.Query(context.Background(), fmt.Sprintf("SELECT COALESCE(MAX(%s), 0) seq FROM %s", coln, tbln)); err == nil {
+// 		defer rows.Close()
+// 		var seq int64
+// 		if rows.Next() {
+// 			err := rows.Scan(&seq)
+// 			return seq, err
+// 		} else {
+// 			return 0, nil
+// 		}
+// 	} else {
+// 		return 0, err
+// 	}
+// }

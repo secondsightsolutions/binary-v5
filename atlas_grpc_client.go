@@ -51,31 +51,29 @@ func (atlas *Atlas) getClaims(stop chan any) []*Claim {
 	return read_db[Claim](atlas.pools["atlas"], "atlas", "atlas.claims", cols, whr, stop)
 }
 func (atlas *Atlas) getESP1(stop chan any) []*ESP1PharmNDC {
-	return recv_fm(atlas.pools["atlas"], "atlas", "esp1", atlas.titan.GetESP1Pharms, stop)
+	return recv_fm("atlas", "esp1", atlas.titan.GetESP1Pharms, stop)
 }
 func (atlas *Atlas) getEntities(stop chan any) []*Entity {
-	return recv_fm(atlas.pools["atlas"], "atlas", "ents", atlas.titan.GetEntities, stop)
+	return recv_fm("atlas", "ents", atlas.titan.GetEntities, stop)
 }
 func (atlas *Atlas) getLedger(stop chan any) []*Eligibility {
-	return recv_fm(atlas.pools["atlas"], "atlas", "elig", atlas.titan.GetEligibilityLedger, stop)
+	return recv_fm("atlas", "elig", atlas.titan.GetEligibilityLedger, stop)
 }
 func (atlas *Atlas) getNDCs(stop chan any) []*NDC {
-	return recv_fm(atlas.pools["atlas"], "atlas", "ndcs", atlas.titan.GetNDCs, stop)
+	return recv_fm("atlas", "ndcs", atlas.titan.GetNDCs, stop)
 }
 func (atlas *Atlas) getPharms(stop chan any) []*Pharmacy {
-	return recv_fm(atlas.pools["atlas"], "atlas", "phms", atlas.titan.GetPharmacies, stop)
+	return recv_fm("atlas", "phms", atlas.titan.GetPharmacies, stop)
 }
 func (atlas *Atlas) getSPIs(stop chan any) []*SPI {
-	return recv_fm(atlas.pools["atlas"], "atlas", "spis", atlas.titan.GetSPIs, stop)
+	return recv_fm("atlas", "spis", atlas.titan.GetSPIs, stop)
 }
 
 func (atlas *Atlas) sync(stop chan any) {
 	pool := atlas.pools["atlas"]
 
 	sync_fm_server(pool, "atlas", "atlas.claims",        "claims",          atlas.titan.GetClaims,    stop)
-	sync_fm_server(pool, "atlas", "atlas.proc",          "",            	atlas.titan.GetProcs,     stop)
-	sync_fm_server(pool, "atlas", "atlas.auth",          "",            	atlas.titan.GetAuths,     stop)
-	sync_fm_server(pool, "atlas", "atlas.proc_auth",     "",            	atlas.titan.GetProcAuths, stop)
+	sync_fm_server(pool, "atlas", "atlas.auth",          "auth",            atlas.titan.GetAuths,     stop)
 	sync_to_server(pool, "atlas", "atlas.scrubs",        "scrubs",			atlas.titan.Scrubs,       stop)
 	sync_to_server(pool, "atlas", "atlas.rebates",       "rebates",		    atlas.titan.Rebates,      stop)
 	sync_to_server(pool, "atlas", "atlas.claims_used",   "claim_uses",		atlas.titan.ClaimsUsed,   stop)

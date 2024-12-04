@@ -20,7 +20,8 @@ var MemUse = struct {
     ready bool
 }{sync.Mutex{}, 0, 0, 0, false, false}
 
-func memoryWatch(done chan interface{}) {
+func run_memr_watch(readyWG, doneWG *sync.WaitGroup, stop chan interface{}) {
+    defer readyWG.Done()
     rgxMem  := regexp.MustCompile(`(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+).*`)
     durSec  := 0
     started := make(chan any)
@@ -87,10 +88,9 @@ func memoryWatch(done chan interface{}) {
         var osv func()(int,int, bool)     // OS version
         for {
             select {
-            case _,ok := <-done:
-                if !ok {
-                    return
-                }
+            case <-stop:
+                doneWG.Done()
+                return
     
             case <-time.After(time.Duration(durSec)*time.Second):
                 durSec = 2

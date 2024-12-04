@@ -6,11 +6,10 @@ import (
 	"io"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	grpc "google.golang.org/grpc"
 )
 
-func recv_fm[T any](pool *pgxpool.Pool, appl, name string, f func(context.Context, *SyncReq, ...grpc.CallOption) (grpc.ServerStreamingClient[T], error), stop chan any) []*T {
+func recv_fm[T any](appl, name string, f func(context.Context, *SyncReq, ...grpc.CallOption) (grpc.ServerStreamingClient[T], error), stop chan any) []*T {
 	chn := strm_recv_srvr(appl, name, 0, f, stop);
 	lst := make([]*T, 0)
 	for obj := range chn {
@@ -98,6 +97,7 @@ func strm_send_srvr[T,R any](appl, name string, f func(context.Context, ...grpc.
 	var max int64
 	for {
 		outer:
+		strt := time.Now()
 		c, fn := context.WithCancel(metaGRPC())
 		if strm, err := f(c); err == nil {
 			// Stay in this loop until either we successfully pushed all rows to server, or we are stopped.
@@ -138,6 +138,12 @@ func strm_send_srvr[T,R any](appl, name string, f func(context.Context, ...grpc.
 					}
 				}
 			}
+		} else {
+			log(appl, "strm_send_srvr", "%s: got an error trying to connect, will retry", time.Since(strt), err, name)
+			if !sleep() {
+				fn()
+				return 0, max, err
+			}
 		}
 	}
 }
@@ -161,6 +167,7 @@ func strm_recv_srvr[T any](appl, name string, seq int64, f func(context.Context,
 	go func() {
 		for {
 			outer:
+			strt := time.Now()
 			c, fn := context.WithCancel(metaGRPC())
 			if strm, err := f(c, req); err == nil {
 				// Stay in this loop until either we successfully pushed all rows to server, or we are stopped.
@@ -190,6 +197,12 @@ func strm_recv_srvr[T any](appl, name string, seq int64, f func(context.Context,
 							goto outer
 						}
 					}
+				}
+			} else {
+				log(appl, "strm_recv_srvr", "%s: got an error trying to connect, will retry", time.Since(strt), err, name)
+				if !sleep() {
+					fn()
+					return
 				}
 			}
 		}

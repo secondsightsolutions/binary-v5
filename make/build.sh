@@ -1,14 +1,14 @@
 #!/bin/bash
 
-#make.sh {build} {shell|atlas|titan} {staging|prod} {descr} {name} {manu}"
-#make.sh build  appl   envr    desc   name    manu"
-#        1      2      3       4      5       6
-#make.sh build  shell staging 'desc' teva    teva"
-#make.sh build  shell prod    'desc' teva    teva"   # is a manu
-#make.sh build  shell prod    'desc' modeln  bayer"  # is a proc
-#make.sh build  shell staging 'desc' amgen   amgen"
-#make.sh build  atlas staging 'cntr' brg     bayer"  # is a proc (but brg can access all)
-#make.sh build  atlas staging 'cntr' brg     brg"    # is a manu (but brg can access all)
+#make.sh {build} {shell|atlas|titan} {staging|prod} {descr} {name} {manu}
+#make.sh build  appl   envr    desc   name    manu   kind
+#        1      2      3       4      5       6      7
+#make.sh build  shell staging 'desc' teva    teva
+#make.sh build  shell prod    'desc' teva    teva    # is a manu
+#make.sh build  shell prod    'desc' modeln  bayer   # is a proc
+#make.sh build  shell staging 'desc' amgen   amgen 
+#make.sh build  atlas staging 'cntr' brg     bayer   pharmacy # is a proc (but brg can access all)
+#make.sh build  atlas staging 'cntr' brg     brg     medical  # is a manu (but brg can access all)
 
 #make.sh {deploy} {shell|atlas|service} {staging|prod} {descr} {name} {readme}"
 #make.sh deploy appl   envr    desc      name    readme"
@@ -36,6 +36,7 @@ envr="$3"   # Dev, devint, staging, prod, etc.
 desc="$4"   # Description - embedded in all apps, and in shell/deploy (binary) (for servers it's the container id/version/name)
 name="$5"   # Identity, like brg or amgen
 manu="$6"   # Manufacturer. If the same as name/$5, then the type is manu, else type is proc.
+kind="$7"   # Kind. Defaults to pharmacy. Could be whatever.
 
 if [ "$appl" == "shell" ]; then
   if [ "$manu" == "$name" ]; then
@@ -50,10 +51,14 @@ elif [ "$appl" == "titan" ]; then
   name="brg"
   cntr=$desc
 fi
+if [ "$kind" == "" ]; then
+  kind="pharmacy"
+fi
 
 make_cert() {
 local appl=$1
 local addr=$2
+echo "Building cert/pkey for ${appl}"
 export X509_O=${name}.secondsightsolutions.com  # brg.secondsightsolutions.com
 export X509_OU=${appl}.${envr}.${prdt}          # atlas.staging.binary-v5
 export X509_CN=${name}                          # brg
@@ -129,6 +134,7 @@ echo -n $name          > embed/name.txt
 echo -n $appl          > embed/appl.txt
 echo -n $type          > embed/type.txt
 echo -n $manu          > embed/manu.txt
+echo -n $kind          > embed/kind.txt
 echo -n $V5_APPL_ENVR  > embed/envr.txt
 echo -n $V5_APPL_CACR  > embed/cacr.txt
 echo -n $V5_APPL_SALT  > embed/salt.txt
@@ -138,6 +144,7 @@ echo -n $V5_APPL_HASH  > embed/hash.txt
 echo -n $V5_APPL_DESC  > embed/desc.txt
 
 if [ "$name" == "brg" ] || [ "$appl" == "atlas" ];then
+echo "Embedding atlas data"
 echo -n $V5_ATLAS_CERT > embed/atlas_cert.txt
 echo -n $V5_ATLAS_PKEY > embed/atlas_pkey.txt
 echo -n $V5_ATLAS_OGKY > embed/atlas_ogky.txt
@@ -152,6 +159,7 @@ echo -n $V5_ATLAS_PASS > embed/atlas_pass.txt
 fi
 
 if [ "$name" == "brg" ] || [ "$appl" == "titan" ];then
+echo "Embedding titan data"
 echo -n $V5_TITAN_CERT > embed/titan_cert.txt
 echo -n $V5_TITAN_PKEY > embed/titan_pkey.txt
 echo -n $V5_TITAN_OGKY > embed/titan_ogky.txt
@@ -175,6 +183,7 @@ echo -n $V5_TITAN_PASS > embed/titan_pass.txt
 fi
 
 if [ "$name" == "brg" ] || [ "$appl" == "shell" ];then
+echo "Embedding shell data"
 echo -n $V5_SHELL_CERT > embed/shell_cert.txt
 echo -n $V5_SHELL_PKEY > embed/shell_pkey.txt
 echo -n $V5_ATLAS_GRPC > embed/atlas_grpc.txt
@@ -197,6 +206,7 @@ echo -n "" > embed/type.txt
 echo -n "" > embed/vers.txt
 echo -n "" > embed/hash.txt
 echo -n "" > embed/manu.txt
+echo -n "" > embed/kind.txt
 echo -n "" > embed/desc.txt
 
 echo -n "" > embed/shell_cert.txt

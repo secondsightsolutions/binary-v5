@@ -1,16 +1,13 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"io"
 	"strconv"
 	"strings"
 	"time"
 
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/metadata"
 )
 
 var prefDateFmts = map[string]any{}
@@ -211,6 +208,7 @@ var ScreenLevel = struct {
 	All  int
 }{ 0, 1, 2, 3}
 
+/*
 func screen(start time.Time, bar *int, cur, max int, mfr, prc int, nl bool, text string, args ...any) {
 	// Rows that are "hidden" actually just have the N of M hidden. Still display the row, along with the continually updating times (all platforms) and memory usages (on linux).
 	_brg := strings.EqualFold("brg", name)
@@ -317,7 +315,8 @@ func screen(start time.Time, bar *int, cur, max int, mfr, prc int, nl bool, text
 		fmt.Println()
 	}
 }
-
+*/
+/*
 func lineCounter(r io.Reader) (int, error) {
 	buf := make([]byte, 32*1024)
 	count := 0
@@ -352,7 +351,7 @@ func renderCols(hdrs []string, row map[string]string) string {
 	}
 	return sb.String()
 }
-
+*/
 func log(app, fcn, msg string, dur time.Duration, err error, args ...any) {
 	mesg := fmt.Sprintf(msg, args...)
 	mil  := dur.Milliseconds() % 1000
@@ -362,40 +361,9 @@ func log(app, fcn, msg string, dur time.Duration, err error, args ...any) {
 	durn := fmt.Sprintf("(%02dm.%02ds.%03dms)", min, sec, mil)
 	str  := fmt.Sprintf("%s [%-5s] %-24s: %s %s", curT, app, fcn, durn, mesg)
 	if err != nil {
-		errS := err.Error()
-		if strings.Contains(errS, "rpc error") {
-			toks := strings.Split(errS, ":")
-			if len(toks) > 0 {
-				errS = toks[len(toks)-1]
-			}
-		}
-		str = fmt.Sprintf("%s - %s", str, errS)
+		str = fmt.Sprintf("%s - %s", str, err.Error())
 	}
 	fmt.Println(str)
-}
-
-func metaGRPC() context.Context {
-	md  := metadata.Pairs("name", name, "auth", opts.auth, "vers", vers, "manu", manu)
-	ctx := metadata.NewOutgoingContext(context.Background(), md)
-	return ctx
-}
-func getMetaGRPC(ctx context.Context) (name, auth, vers, manu, scid string) {
-	val := func(md metadata.MD, name string) string {
-		if vals, ok := md[name]; ok {
-			if len(vals) > 0 {
-				return vals[0]
-			}
-		}
-		return ""
-	}
-	if md, ok := metadata.FromIncomingContext(ctx); ok {
-		name = val(md, "name")
-		auth = val(md, "auth")
-		vers = val(md, "vers")
-		manu = val(md, "manu")
-		scid = val(md, "scid")
-	}
-	return
 }
 
 func getCreds(tlsInfo credentials.TLSInfo) (cn, ou string) {
@@ -414,6 +382,6 @@ func getCreds(tlsInfo credentials.TLSInfo) (cn, ou string) {
 }
 
 func metaManu(ctx context.Context) string {
-	_,_,_,manu,_ := getMetaGRPC(ctx)
+	_,_,_,manu,_,_ := getMetaGRPC(ctx)
 	return manu
 }

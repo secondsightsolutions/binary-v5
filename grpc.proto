@@ -71,6 +71,7 @@ message Scrub {
     string col48= 68;
     string col49= 69;
     string col50= 70;
+    map<string,string> data = 71;
 }
 message Rebate {
     int64  seq  = 1;    // sync sequence number
@@ -274,19 +275,14 @@ message Eligibility {
     int64  strt   = 6;   // start_at
     int64  term   = 7;   // end_at
 }
-message Proc {
-    string proc = 1;
-    bool   enb  = 2;
-    int64  vers = 3;
-}
+
 message Auth {
-    string auth = 1;
-    bool   enb  = 2;
-    string kind = 3;
-}
-message ProcAuth {
-    string proc = 1;
-    string auth = 2;
+    string manu = 1;
+    string proc = 2;
+    string auth = 3;
+    string kind = 4;
+    int64  vers = 5;
+    bool   enb  = 6;
 }
 
 message Req {
@@ -339,9 +335,7 @@ service Titan {
     rpc GetPharmacies(SyncReq)              returns (stream Pharmacy) {}
     rpc GetESP1Pharms(SyncReq)              returns (stream ESP1PharmNDC) {}
     rpc GetEligibilityLedger(SyncReq)       returns (stream Eligibility) {}
-    rpc GetProcs(SyncReq)                   returns (stream Proc) {}
     rpc GetAuths(SyncReq)                   returns (stream Auth) {}
-    rpc GetProcAuths(SyncReq)               returns (stream ProcAuth) {}
 
     rpc Scrubs(stream Scrub)                returns (Res) {}
     rpc Rebates(stream TitanRebate)         returns (Res) {}

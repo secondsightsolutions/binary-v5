@@ -77,6 +77,3 @@ func (clt *Shell) rebates(stop chan any, rbts chan *Rebate) error {
 	return nil
 }
 
-func (clt *Shell) done() {
-
-}

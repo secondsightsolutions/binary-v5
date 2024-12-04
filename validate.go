@@ -9,11 +9,11 @@ import (
 
 var rgxNdc542 *regexp.Regexp
 var rgxNdc11  *regexp.Regexp
-var rgxNdc541 *regexp.Regexp
-var rgxNdc532 *regexp.Regexp
-var rgxNdc442 *regexp.Regexp
-var rgxNdc641 *regexp.Regexp
-var rgxNdc632 *regexp.Regexp
+// var rgxNdc541 *regexp.Regexp
+// var rgxNdc532 *regexp.Regexp
+// var rgxNdc442 *regexp.Regexp
+// var rgxNdc641 *regexp.Regexp
+// var rgxNdc632 *regexp.Regexp
 
 var rgxDigits *regexp.Regexp
 var rgxWhlInv *regexp.Regexp
@@ -30,11 +30,11 @@ var rgxPOS    *regexp.Regexp
 func init() {
 	rgxNdc542 = regexp.MustCompile(`^\d{5}-\d{4}-\d{2}$`)
 	rgxNdc11  = regexp.MustCompile(`^\d{11}$`)
-	rgxNdc541 = regexp.MustCompile(`^\d{5}-\d{4}-\d{1}$`)
-	rgxNdc532 = regexp.MustCompile(`^\d{5}-\d{3}-\d{2}$`)
-	rgxNdc442 = regexp.MustCompile(`^\d{4}-\d{4}-\d{2}$`)
-	rgxNdc632 = regexp.MustCompile(`^\d{6}-\d{3}-\d{2}$`)
-	rgxNdc641 = regexp.MustCompile(`^\d{6}-\d{4}-\d{1}$`)
+	// rgxNdc541 = regexp.MustCompile(`^\d{5}-\d{4}-\d{1}$`)
+	// rgxNdc532 = regexp.MustCompile(`^\d{5}-\d{3}-\d{2}$`)
+	// rgxNdc442 = regexp.MustCompile(`^\d{4}-\d{4}-\d{2}$`)
+	// rgxNdc632 = regexp.MustCompile(`^\d{6}-\d{3}-\d{2}$`)
+	// rgxNdc641 = regexp.MustCompile(`^\d{6}-\d{4}-\d{1}$`)
 	rgxDigits = regexp.MustCompile(`^\d+$`)
 	rgxWhlInv = regexp.MustCompile(`^[0-9-,.#]+$`)
 	rgxPresQ  = regexp.MustCompile(`^(01|1|12)$`)

@@ -1,6 +1,7 @@
 package main
 
 type Policy struct {
+	rebateOrder string
 	prepRebates func(*scrub)
 	prepClaims  func(*scrub)
 	scrubRebate func(*scrub, *Rebate)

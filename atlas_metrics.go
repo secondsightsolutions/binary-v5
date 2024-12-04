@@ -24,11 +24,11 @@ func (s *scrub) update_rbt(rbt *Rebate) {
 }
 
 func (s *scrub) update_rbt_clm(rbt *Rebate, clm *Claim) {
-    doc := clm.Doc
-    dof := clm.Hdos
     s.lckM.Lock()
     defer s.lckM.Unlock()
     if clm != nil {
+        doc := clm.Doc
+        dof := clm.Hdos
         if diff, err := dates.Compare(rbt.Dos, doc); err == nil {
             if diff == 0 {
                 s.metr.DosEquDoc++
