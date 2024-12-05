@@ -35,8 +35,7 @@ func validate_client(ctx context.Context, pool *pgxpool.Pool, schm string) error
 				return fmt.Errorf("missing manu from metadata")
 			}
 			if kind == "" {
-				panic("missing kind from metadata")
-				//return fmt.Errorf("missing kind from metadata")
+				return fmt.Errorf("missing kind from metadata")
 			}
 			if cn != name {
 				return fmt.Errorf("name on cert doesnt match name in metadata")

@@ -33,32 +33,55 @@ func run_shell(wg *sync.WaitGroup, opts *Opts, stop chan any) {
 		log("shell", "run_shell", "cannot initialize crypto", 0, err)
 		exit(nil, 1, fmt.Sprintf("shell cannot initialize crypto: %s", err.Error()))
 	}
-	shell.connect()
-	
+	intv := time.Duration(0)
 	for {
-		if err := shell.newScrub(); err != nil {
-			log("shell", "run_shell", "cannot create scrub", 0, err)
-			time.Sleep(time.Duration(10)*time.Second)
+		select {
+		case <-time.After(time.Duration(intv)*time.Second):
+			intv = time.Duration(10)
 			shell.connect()
-		} else {
-			break
+			if err := shell.newScrub(); err != nil {
+				if strings.Contains(err.Error(), "Unavailable") {
+					log("shell", "run_shell", "cannot create scrub (network error, retrying)", 0, err)
+				} else {
+					log("shell", "run_shell", "cannot create scrub (giving up)", 0, err)
+					return
+				}
+			} else {
+				goto scrub_created
+			}
+		case <-stop:
+			log("shell", "run_shell", "stopping", 0, err)
+			return
 		}
 	}
+	scrub_created:
 	shell.file = new_rebate_file(opts)
-	
-	for {
-		if rbtc, err := shell.file.read(); err != nil {
-			log("shell", "run_shell", "cannot read file %s", 0, err, shell.file.path)
-			break
-		} else {
-			if err := shell.rebates(stop, rbtc); err != nil {
-				time.Sleep(time.Duration(10)*time.Second)
+	if rbtc, err := shell.file.read(); err != nil {
+		log("shell", "run_shell", "cannot read file %s", 0, err, shell.file.path)
+	} else {
+		intv = 0
+		for {
+			select {
+			case <-time.After(intv):
+				intv = time.Duration(10)
 				shell.connect()
-			} else {
-				break
+				if err := shell.rebates(stop, rbtc); err != nil {
+					if strings.Contains(err.Error(), "Unavailable") {
+						log("shell", "run_shell", "error sending rebates (network error, retrying)", 0, err)
+					} else {
+						log("shell", "run_shell", "error sending rebates (giving up)", 0, err)
+						return
+					}
+				} else {
+					goto rebates_sent
+				}
+			case <-stop:
+				log("shell", "run_shell", "stopping", 0, err)
+				return
 			}
 		}
 	}
+	rebates_sent:
 }
 
 func exit(sc *scrub, code int, msg string, args ...any) {
