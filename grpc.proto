@@ -20,7 +20,9 @@ message Scrub {
     string appl = 10;
     string hdrs = 11;
     string cmdl = 12;
-    int64  scid = 13;
+    string kind = 13;
+    string test = 14;
+    int64  scid = 15;
     string col1 = 21;
     string col2 = 22;
     string col3 = 23;
@@ -292,9 +294,7 @@ message Res {
 message SyncReq {
     int64  last = 1;
 }
-message ScrubRes {
-    int64   scid = 1;
-}
+
 message Metrics {
     int32   rbt_total     = 1;
     int32   rbt_valid     = 2;
@@ -322,8 +322,7 @@ message Metrics {
 
 service Atlas {
     rpc Ping(Req)                           returns (Res) {}
-    rpc NewScrub(Scrub)                     returns (ScrubRes) {}
-    rpc Rebates(stream Rebate)              returns (Res) {}
+    rpc Rebates(stream Rebate)              returns (stream Rebate) {}
 }
 
 service Titan {
@@ -342,5 +341,4 @@ service Titan {
     rpc ClaimsUsed(stream ClaimUse)         returns (Res) {}
     rpc RebateClaims(stream RebateClaim)    returns (Res) {}
     rpc RebateMetas(stream RebateMeta)      returns (Res) {}
-    rpc ScrubDone(Metrics)                  returns (Res) {}
 }

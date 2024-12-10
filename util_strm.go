@@ -209,3 +209,55 @@ func strm_recv_srvr[T any](appl, name string, seq int64, f func(context.Context,
 	}()
 	return chn
 }
+
+// -----------------
+
+// Server side - server functions that have stream data pushed up.
+func strm_fmto_clnt[T,R any](appl, name string, strm grpc.BidiStreamingServer[T, R], stop chan any) (<-chan *T, chan<- *R) {
+	chnT := make(chan *T, 1000)
+	chnR := make(chan *R, 1000)
+	// Read from the client.
+	go func() {
+		// Stay in this loop until either we successfully read all rows from client, or we are stopped.
+		strt := time.Now()
+		cnt  := 0
+		for {
+			select {
+			case <-stop: 	// We've been shut down from above! Must return.
+				close(chnT)
+				return
+
+			default: 		// Not stopped yet. Read another row.
+				if obj, err := strm.Recv(); err == nil {
+					chnT <-obj
+					cnt++
+				} else if err == io.EOF {
+					close(chnT)
+					return
+				} else {
+					log(appl, "strm_fmto_clnt", "%s: got an error after reading %d rows", time.Since(strt), err, name, cnt)
+					close(chnT)
+					return
+				}
+			}
+		}
+	}()
+	// Send down to the client.
+	go func() {
+		for {
+			select {
+			case <-stop:	// We've been shut down from above! Must return.
+				return
+
+			case obj, ok := <-chnR:
+				if !ok {
+					return
+				}
+				if err := strm.Send(obj); err != nil {
+					return
+				}
+			}
+		}
+	}()
+	return chnT, chnR
+}

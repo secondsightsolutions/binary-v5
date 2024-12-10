@@ -180,22 +180,24 @@ func (sc *scrub) save_rebates(wgrp *sync.WaitGroup, in2 <-chan *Rebate, wrks, si
 	cgrp := &sync.WaitGroup{}
 	pool := atlas.pools["atlas"]
 	opts := pgx.TxOptions{IsoLevel: pgx.ReadCommitted}
-	whr := map[string]string{"scid": fmt.Sprintf("%d", sc.scid)}
+	whr  := map[string]string{"scid": fmt.Sprintf("%d", sc.scid)}
+	dfm  := newDbFldMap(pool, "atlas.rebates", nil, &Rebate{})
 	for a := 0; a < wrks; a++ { // Create the workers
 		cgrp.Add(1)
-		go func() { // Each worker runs separately
+		go func() { 			// Each worker runs separately
 			defer cgrp.Done()
 			cnt := 0
 			tx, _ := pool.BeginTx(context.Background(), opts) // Create the first transaction for the batch of updates.
 			for rbt := range in2 {                            // Keep reading rebates from the common input queue.
-				if rbt != nil { // When we get nil, the sending side is closed - we're done (almost).
+				if rbt != nil { 							  // When we get nil, the sending side is closed - we're done (almost).
 					cnt++
-					db_update(context.Background(), rbt, tx, nil, "atlas.rebates", nil, whr)
-					if cnt%size == 0 { // If we reached our size number of updates, commit the transaction and create another.
+					whr["rbid"] = fmt.Sprintf("%d", rbt.Rbid)
+					db_update(context.Background(), rbt, tx, nil, "atlas.rebates", dfm, whr)
+					if cnt%size == 0 { 						  // If we reached our size number of updates, commit the transaction and create another.
 						tx.Commit(context.Background())
 						tx, _ = pool.BeginTx(context.Background(), opts)
 					}
-				} else { // No more rebates. But very likely we have uncommitted updates.
+				} else {	// No more rebates. But very likely we have uncommitted updates.
 					break
 				}
 			}

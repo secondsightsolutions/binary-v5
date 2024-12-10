@@ -100,6 +100,7 @@ func setIf(envVar *string, envName string) {
 
 func version() {
 	fmt.Printf("%s: %s\n", "appl", appl)
+	fmt.Printf("%s: %s\n", "kind", kind)
 	fmt.Printf("%s: %s\n", "name", name)
 	fmt.Printf("%s: %s\n", "desc", desc)
 	fmt.Printf("%s: %s\n", "type", Type)

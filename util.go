@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/metadata"
 )
 
 var prefDateFmts = map[string]any{}
@@ -352,6 +353,9 @@ func renderCols(hdrs []string, row map[string]string) string {
 	return sb.String()
 }
 */
+// rpc error: code = Unknown desc = ERROR: null value in column "plcy" of relation "scrubs" violates not-null constraint (SQLSTATE 23502)
+// rpc error: code = Unknown desc = ERROR: 
+// rpc error: code = Unavailable desc = connection error: desc = "transport: Error while dialing: dial tcp 127.0.0.1:23460: connect: connection refused
 func log(app, fcn, msg string, dur time.Duration, err error, args ...any) {
 	mesg := fmt.Sprintf(msg, args...)
 	mil  := dur.Milliseconds() % 1000
@@ -381,7 +385,28 @@ func getCreds(tlsInfo credentials.TLSInfo) (cn, ou string) {
 	return
 }
 
+func metaGet(ctx context.Context, key string) string {
+	vals := metadata.ValueFromIncomingContext(ctx, key)
+	if len(vals) > 0 {
+		return vals[0]
+	}
+	return ""
+}
 func metaManu(ctx context.Context) string {
 	_,_,_,manu,_,_ := getMetaGRPC(ctx)
 	return manu
+}
+func metaValue(md metadata.MD, key string) string {
+	if vals := md.Get(key); len(vals) > 0 {
+		return vals[0]
+	}
+	return ""
+}
+func metaValueInt64(md metadata.MD, key string) int64 {
+	if val := metaValue(md, key); val != "" {
+		if iVal, err := strconv.ParseInt(val, 10, 64); err == nil {
+			return iVal
+		}
+	}
+	return 0
 }

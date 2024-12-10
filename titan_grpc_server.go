@@ -163,49 +163,6 @@ func (s *titanServer) GetAuths(req *SyncReq, strm grpc.ServerStreamingServer[Aut
 	return nil
 }
 
-// set locks
-
-func (s *titanServer) NewScrub(ctx context.Context, scr *Scrub) (*Res, error) {
-	if err := validate_client(ctx, titan.pools["titan"], "titan"); err != nil {
-		return &Res{}, err
-	}
-	_, err := db_insert_one(ctx, titan.pools["titan"], "titan.scrubs", nil, scr, "")
-	return &Res{}, err
-}
-func (s *titanServer) ScrubDone(ctx context.Context, m *Metrics) (*Res, error) {
-	if err := validate_client(ctx, titan.pools["titan"], "titan"); err != nil {
-		return &Res{}, err
-	}
-	cols := map[string]string{
-		"rbt_total":   "GetRbtTotal",
-		"rbt_valid":   "GetRbtValid",
-		"rbt_matched": "GetRbtMatched",
-		"rbt_nomatch": "GetRbtNomatch",
-		"rbt_passed":  "GetRbtPassed",
-		"rbt_failed":  "GetRbtFailed",
-		"clm_total":   "GetClmTotal",
-		"clm_valid":   "GetClmValid",
-		"clm_matched": "GetClmMatched",
-		"clm_nomatch": "GetClmNomatch",
-		"clm_invalid": "GetClmInvalid",
-		"spi_exact":   "GetSpiExact",
-		"spi_cross":   "GetSpiCross",
-		"spi_stack":   "GetSpiStack",
-		"spi_chain":   "GetSpiChain",
-		"dos_equ_doc": "GetDosEquDoc",
-		"dos_bef_doc": "GetDosBefDoc",
-		"dos_equ_dof": "GetDosEquDof",
-		"dos_bef_dof": "GetDosBefDof",
-		"dos_aft_dof": "GetDosAftDof",
-	}
-	_, _, _, manu, _, scid := getMetaGRPC(ctx)
-	whr := map[string]string{
-		"manu": manu,
-		"scid": scid,
-	}
-	return &Res{}, db_update(ctx, m, nil, titan.pools["titan"], "titan.scrubs", cols, whr)
-}
-
 func (s *titanServer) Rebates(strm grpc.ClientStreamingServer[TitanRebate, Res]) error {
 	if err := validate_client(strm.Context(), titan.pools["titan"], "titan"); err != nil {
 		return err

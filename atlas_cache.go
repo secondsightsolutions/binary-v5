@@ -56,7 +56,7 @@ type sort_elem struct {
 	row     *row
 }
 
-func (cs *cache_set) clone(data map[string]string) *cache_set {
+func (cs *cache_set) clone() *cache_set {
     ncs := &cache_set{
     	clms: cs.clms,
     	esp1: cs.esp1,
@@ -67,34 +67,34 @@ func (cs *cache_set) clone(data map[string]string) *cache_set {
     	spis: cs.spis,
     	done: cs.done,
     }
-    if buf := data["claims"]; buf != "" {
-        clms := import_data[Claim](buf, ",", nil)
-        cs.clms = new_cache("clms", clms)
-    }
-    if buf := data["esp1"]; buf != "" {
-        esp1 := import_data[ESP1PharmNDC](buf, ",", nil)
-        cs.esp1 = new_cache("esp1", esp1)
-    }
-    if buf := data["entities"]; buf != "" {
-        ents := import_data[Entity](buf, ",", nil)
-        cs.ents = new_cache("ents", ents)
-    }
-    if buf := data["elig"]; buf != "" {
-        elig := import_data[Eligibility](buf, ",", nil)
-        cs.ledg = new_cache("elig", elig)
-    }
-    if buf := data["ndcs"]; buf != "" {
-        ndcs := import_data[NDC](buf, ",", nil)
-        cs.ndcs = new_cache("ndcs", ndcs)
-    }
-    if buf := data["phms"]; buf != "" {
-        phms := import_data[Pharmacy](buf, ",", nil)
-        cs.phms = new_cache("phms", phms)
-    }
-    if buf := data["spis"]; buf != "" {
-        spis := import_data[SPI](buf, ",", nil)
-        cs.spis = new_cache("spis", spis)
-    }
+    // if buf := data["claims"]; buf != "" {
+    //     clms := import_data[Claim](buf, ",", nil)
+    //     cs.clms = new_cache("clms", clms)
+    // }
+    // if buf := data["esp1"]; buf != "" {
+    //     esp1 := import_data[ESP1PharmNDC](buf, ",", nil)
+    //     cs.esp1 = new_cache("esp1", esp1)
+    // }
+    // if buf := data["entities"]; buf != "" {
+    //     ents := import_data[Entity](buf, ",", nil)
+    //     cs.ents = new_cache("ents", ents)
+    // }
+    // if buf := data["elig"]; buf != "" {
+    //     elig := import_data[Eligibility](buf, ",", nil)
+    //     cs.ledg = new_cache("elig", elig)
+    // }
+    // if buf := data["ndcs"]; buf != "" {
+    //     ndcs := import_data[NDC](buf, ",", nil)
+    //     cs.ndcs = new_cache("ndcs", ndcs)
+    // }
+    // if buf := data["phms"]; buf != "" {
+    //     phms := import_data[Pharmacy](buf, ",", nil)
+    //     cs.phms = new_cache("phms", phms)
+    // }
+    // if buf := data["spis"]; buf != "" {
+    //     spis := import_data[SPI](buf, ",", nil)
+    //     cs.spis = new_cache("spis", spis)
+    // }
     return ncs
 }
 func new_cache[T any](name string, list []*T) *cache {

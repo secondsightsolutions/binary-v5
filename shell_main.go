@@ -34,27 +34,7 @@ func run_shell(wg *sync.WaitGroup, opts *Opts, stop chan any) {
 		exit(nil, 1, fmt.Sprintf("shell cannot initialize crypto: %s", err.Error()))
 	}
 	intv := time.Duration(0)
-	for {
-		select {
-		case <-time.After(time.Duration(intv)*time.Second):
-			intv = time.Duration(10)
-			shell.connect()
-			if err := shell.newScrub(); err != nil {
-				if strings.Contains(err.Error(), "Unavailable") {
-					log("shell", "run_shell", "cannot create scrub (network error, retrying)", 0, err)
-				} else {
-					log("shell", "run_shell", "cannot create scrub (giving up)", 0, err)
-					return
-				}
-			} else {
-				goto scrub_created
-			}
-		case <-stop:
-			log("shell", "run_shell", "stopping", 0, err)
-			return
-		}
-	}
-	scrub_created:
+	
 	shell.file = new_rebate_file(opts)
 	if rbtc, err := shell.file.read(); err != nil {
 		log("shell", "run_shell", "cannot read file %s", 0, err, shell.file.path)

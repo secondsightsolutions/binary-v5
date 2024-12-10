@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -26,36 +27,29 @@ func (clt *Shell) connect() {
 	}
 }
 
-func (clt *Shell) newScrub() error {
-	md := metadata.New(map[string]string{"auth": clt.opts.auth, "vers": vers, "manu": manu})
-	ctx := metadata.NewOutgoingContext(context.Background(), md)
-	req := &Scrub{
-		Auth: clt.opts.auth,
-		Manu: manu,
-		Plcy: clt.opts.policy,
-		Name: clt.opts.name,
-		Vers: vers,
-		Desc: desc,
-		Hash: hash,
-		Host: "",
-		Appl: appl,
-		Hdrs: "", // TODO: send these in the update
-		Cmdl: strings.Join(os.Args, " "),
-	}
-	if res, err := clt.atlas.NewScrub(ctx, req); err == nil {
-		clt.scid = res.Scid
-		return nil
-	} else {
-		return err
-	}
-}
-
 func (clt *Shell) rebates(stop chan any, rbts chan *Rebate) error {
-	md  := metadata.New(map[string]string{"auth": clt.opts.auth, "vers": vers, "manu": manu, "scid": fmt.Sprintf("%d", clt.scid)})
+	md  := metadata.New(map[string]string{
+		"auth": clt.opts.auth, 
+		"manu": manu,
+		"plcy": clt.opts.policy,
+		"kind": kind, 
+		"name": name,
+		"vers": vers,
+		"desc": desc,
+		"hash": hash,
+		"host": "",
+		"appl": appl,
+		"hdrs": "",
+		"cmdl": strings.Join(os.Args, " "),
+		"test": "",
+	})
 	ctx := metadata.NewOutgoingContext(context.Background(), md)
 	c,f := context.WithCancel(ctx)
 	
 	if strm, err := clt.atlas.Rebates(c); err == nil {
+		if hdrs, err := strm.Header();err == nil {
+			clt.scid = metaValueInt64(hdrs, "scid")
+		}
 		for rbt := range rbts {
 			select {
 			case <-stop:
@@ -69,6 +63,15 @@ func (clt *Shell) rebates(stop chan any, rbts chan *Rebate) error {
 			}
 		}
 		strm.CloseSend()
+		for {
+			if res, err := strm.Recv(); err == nil {
+				fmt.Printf("res: %v\n", res)
+			} else if err == io.EOF {
+				break
+			} else {
+				fmt.Printf("error: %s\n", err.Error())
+			}
+		}
 		f()
 	} else {
 		f()

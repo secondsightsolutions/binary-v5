@@ -43,24 +43,6 @@ func (rfl *rflt) fields(obj any) []string {
 	return flds
 }
 
-func (rfl *rflt) getString(obj any, fcn string) string {
-	vs := reflect.ValueOf(&obj).MethodByName(fcn).Call([]reflect.Value{})
-	v0 := vs[0]
-	sv := ""
-	if v0.Kind() == reflect.String {
-		sv = v0.String()
-	} else if v0.CanFloat() {
-		sv = fmt.Sprintf("%f", v0.Float())
-	} else if v0.CanInt() {
-		sv = fmt.Sprintf("%d", v0.Int())
-	} else if v0.CanUint() {
-		sv = fmt.Sprintf("%d", v0.Uint())
-	} else if v0.Kind() == reflect.Bool {
-		sv = fmt.Sprintf("%v", v0.Bool())
-	}
-	return sv
-}
-
 func (rfl *rflt) getFieldValueAsString(obj any, name string) string {
 	objV := rfl.objValue(obj)
 	fld  := objV.FieldByName(name)
@@ -77,7 +59,6 @@ func (rfl *rflt) getFieldValueAsString(obj any, name string) string {
 		fv = fmt.Sprintf("%v", fld.Bool())
 	} else if fld.Kind() == reflect.Slice {
 		var sb bytes.Buffer
-		sb.WriteString("{")
 		for a := 0; a < fld.Len(); a++ {
 			if sb.Len() > 1 {
 				sb.WriteString(",")
@@ -98,7 +79,6 @@ func (rfl *rflt) getFieldValueAsString(obj any, name string) string {
 				sb.WriteString(" ")
 			}
 		}
-		sb.WriteString("}")
 		fv = sb.String()
 	}
 	return fv
@@ -124,6 +104,25 @@ func (rfl *rflt) getFieldValueAsInt64(obj any, name string) int64 {
 		fv = int64(0)
 	}
 	return fv
+}
+
+func (rfl *rflt) getFieldValue(obj any, name string) any {
+	objV := rfl.objValue(obj)
+	fld  := objV.FieldByName(name)
+	if fld.Kind() == reflect.String {
+		return fld.String()
+	} else if fld.CanFloat() {
+		return fld.Float()
+	} else if fld.CanInt() {
+		return fld.Int()
+	} else if fld.CanUint() {
+		return fld.Uint()
+	} else if fld.Kind() == reflect.Bool {
+		return fld.Bool()
+	} else if fld.Kind() == reflect.Slice {
+		return fld.Interface()
+	}
+	return nil
 }
 
 func (rfl *rflt) setFieldValue(obj any, fld string, val any) {

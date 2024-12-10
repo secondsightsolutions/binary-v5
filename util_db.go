@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"fmt"
 	"strings"
 	"time"
@@ -117,7 +118,7 @@ func db_select[T any](pool *pgxpool.Pool, tbln string, cols map[string]string, w
 	}
 }
 
-func db_insert[T any](pool *pgxpool.Pool, appl, tbln string, cols map[string]string, fm chan *T, batch int, replace bool) (int64, int64, error) {
+func db_insert[T any](pool *pgxpool.Pool, appl, tbln string, cols map[string]string, fm <-chan *T, batch int, replace bool) (int64, int64, error) {
 	var dfm *dbFldMap
 	ctx := context.Background()
 	rfl := &rflt{}
@@ -190,57 +191,55 @@ func db_insert_batch(ctx context.Context, tx pgx.Tx, pool *pgxpool.Pool, tbln st
 	}
 	return err
 }
-func db_insert_one(ctx context.Context, pool *pgxpool.Pool, tbln string, dfm *dbFldMap, obj any, rtrn string) (int64, error) {
+func db_insert_one(ctx context.Context, pool *pgxpool.Pool, tbln string, obj any, rtrn string) (int64, error) {
+	dfm := newDbFldMap(pool, tbln, nil, obj)
+	fmt.Printf("dfm=%v\n", dfm)
 	if tx, err := pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted}); err == nil {
-		defer tx.Commit(ctx)
 		qry := dyn_insert(tbln, dfm, []any{obj}, false)
+		var err error
+		fmt.Printf("db_insert_one(): %s\n", qry)
 		if rtrn != "" {
 			qry += " RETURNING " + rtrn
 			if row := tx.QueryRow(ctx, qry); row != nil {
 				var id int64
-				if err := row.Scan(&id); err != nil {
-					tx.Rollback(ctx)
-					return 0, err
-				} else {
-					return id, nil
+				if err = row.Scan(&id); err == nil {
+					if err = tx.Commit(ctx); err == nil {
+						return id, nil
+					}
 				}
-			} else {
-				return 0, err
 			}
 		} else {
-			if _, err := tx.Exec(ctx, qry); err != nil {
-				tx.Rollback(ctx)
-				return 0, err
-			} else {
-				return 0, nil
+			if _, err = tx.Exec(ctx, qry); err == nil {
+				if err = tx.Commit(ctx); err == nil {
+					return 0, nil
+				}
 			}
 		}
+		tx.Rollback(ctx)
+		return 0, err
 	} else {
 		return 0, err
 	}
 }
 
-func db_update(ctx context.Context, obj any, tx pgx.Tx, pool *pgxpool.Pool, tbln string, colMap map[string]string, where map[string]string) error {
+func db_update(ctx context.Context, obj any, tx pgx.Tx, pool *pgxpool.Pool, tbln string, dfm *dbFldMap, where map[string]string) error {
 	mk := func(obj any) string {
-		cols := make([]string, 0, len(colMap))
-		for col := range colMap {
-			cols = append(cols, col)
-		}
 		var sb bytes.Buffer
-		rfl := &rflt{}
+		rfl := &rflt{}	// Empty type that has the reflection convenience functions.
 		sb.WriteString(fmt.Sprintf("UPDATE %s SET ", tbln))
-		for i, col := range cols {
-			fn := colMap[col]
-			sv := fmt.Sprintf("'%s'", rfl.getString(obj, fn))
-			sb.WriteString(col + " = " + sv)
-			if i < len(cols)-1 {
+		for j, colN := range dfm.cols {
+			//fv := rfl.getFieldValue(obj, dfm.c2fs[colN])
+			fv := rfl.getFieldValueAsString(obj, dfm.c2fs[colN])
+			cv := dfm.getColumnValueAsString(colN, fv)
+			sb.WriteString(colN + " = " + cv)
+			if j < len(dfm.cols)-1 {
 				sb.WriteString(", ")
 			}
 		}
 		sb.WriteString(" WHERE ")
 		cnt := 0
-		for col, val := range where {
-			sb.WriteString(col + " = '" + val + "'")
+		for colN, val := range where {
+			sb.WriteString(colN + " = " + val)
 			cnt++
 			if cnt < len(where) {
 				sb.WriteString(", ")
@@ -297,6 +296,9 @@ type dbFldMap struct {
 	cols []string
 	f2cs map[string]string // fields to columns
 	c2fs map[string]string // columns to fields
+	c2tp map[string]string // columns to column types
+	c2nl map[string]bool   // columns to nullable
+	c2df map[string]string // columns to default values
 	unqF []string
 	unqC []string
 }
@@ -307,6 +309,9 @@ func newDbFldMap(pool *pgxpool.Pool, tbln string, f2c map[string]string, obj any
 		cols: []string{},
 		f2cs: map[string]string{},
 		c2fs: map[string]string{},
+		c2tp: map[string]string{},
+		c2df: map[string]string{},
+		c2nl: map[string]bool{},
 		unqF: []string{},
 		unqC: []string{},
 	}
@@ -321,12 +326,24 @@ func newDbFldMap(pool *pgxpool.Pool, tbln string, f2c map[string]string, obj any
 		schm = toks[0]
 		_tbl = toks[1]
 	}
-	qry := fmt.Sprintf("select column_name, data_type from information_schema.columns where table_schema = '%s' and table_name = '%s';", schm, _tbl)
+	qry := fmt.Sprintf("select column_name, data_type, is_nullable, column_default from information_schema.columns where table_schema = '%s' and table_name = '%s';", schm, _tbl)
 	if rows, err := pool.Query(context.Background(), qry); err == nil {
 		for rows.Next() {
-			var coln, colt string
-			rows.Scan(&coln, &colt)
+			var coln, colt, null string
+			var dflt sql.NullString
+			rows.Scan(&coln, &colt, &null, &dflt)
 			dfm.cols = append(dfm.cols, coln)
+			dfm.c2tp[coln] = colt
+			dfm.c2nl[coln] = null == "YES"
+			if dflt.Valid {
+				if dflt.String == "''::text" {
+					dfm.c2df[coln] = "''"
+				} else if dflt.String == "'{}'::text[]" {
+					dfm.c2df[coln] = "'{}'"
+				} else {
+					dfm.c2df[coln] = dflt.String
+				}
+			}
 		}
 		rows.Close()
 	}
@@ -368,6 +385,24 @@ func newDbFldMap(pool *pgxpool.Pool, tbln string, f2c map[string]string, obj any
 	}
 	return dfm
 }
+func (dfm *dbFldMap) getColumnValueAsString(coln, colv string) string {
+	// types: integer, bigint, text, boolean, numeric, ARRAY, date, time, timestamp, timestamp without time zone
+	if colv == "" {
+		if dflt, ok := dfm.c2df[coln]; ok {
+			return dflt
+		} else if null, ok := dfm.c2nl[coln]; ok {
+			if null {
+				return "NULL"
+			}
+		}
+	}
+	if ct := dfm.c2tp[coln]; ct == "ARRAY" {
+		// Special handling if the column type is an array
+		// The colv will already be comma-separated, so just need to wrap
+		return fmt.Sprintf("'{%s}'", colv)
+	}
+	return fmt.Sprintf("'%s'", colv)
+}
 
 func dyn_select(tbln string, cols map[string]string, where, sort string) string {
 	var sb bytes.Buffer
@@ -406,6 +441,7 @@ func dyn_select(tbln string, cols map[string]string, where, sort string) string 
 }
 func dyn_insert(tbln string, dfm *dbFldMap, objs []any, ignoreConflicts bool) string {
 	// Start building the insert query.
+	// types: integer, bigint, text, boolean, numeric, ARRAY, timestamp without time zone
 	var sb bytes.Buffer
 	sb.WriteString(fmt.Sprintf("INSERT INTO %s ", tbln))
 	sb.WriteString(fmt.Sprintf("( %s )", strings.Join(dfm.cols, ", ")))
@@ -416,9 +452,8 @@ func dyn_insert(tbln string, dfm *dbFldMap, objs []any, ignoreConflicts bool) st
 		sb.WriteString(" ( ")
 		for j, colN := range dfm.cols {
 			fv := rfl.getFieldValueAsString(obj, dfm.c2fs[colN])
-			sb.WriteString("'")
-			sb.WriteString(fv)
-			sb.WriteString("'")
+			cv := dfm.getColumnValueAsString(colN, fv)
+			sb.WriteString(cv)
 			if j < len(dfm.cols)-1 {
 				sb.WriteString(", ")
 			}

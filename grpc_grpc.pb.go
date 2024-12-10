@@ -19,9 +19,8 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Atlas_Ping_FullMethodName     = "/main.Atlas/Ping"
-	Atlas_NewScrub_FullMethodName = "/main.Atlas/NewScrub"
-	Atlas_Rebates_FullMethodName  = "/main.Atlas/Rebates"
+	Atlas_Ping_FullMethodName    = "/main.Atlas/Ping"
+	Atlas_Rebates_FullMethodName = "/main.Atlas/Rebates"
 )
 
 // AtlasClient is the client API for Atlas service.
@@ -29,8 +28,7 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type AtlasClient interface {
 	Ping(ctx context.Context, in *Req, opts ...grpc.CallOption) (*Res, error)
-	NewScrub(ctx context.Context, in *Scrub, opts ...grpc.CallOption) (*ScrubRes, error)
-	Rebates(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[Rebate, Res], error)
+	Rebates(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[Rebate, Rebate], error)
 }
 
 type atlasClient struct {
@@ -51,36 +49,25 @@ func (c *atlasClient) Ping(ctx context.Context, in *Req, opts ...grpc.CallOption
 	return out, nil
 }
 
-func (c *atlasClient) NewScrub(ctx context.Context, in *Scrub, opts ...grpc.CallOption) (*ScrubRes, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ScrubRes)
-	err := c.cc.Invoke(ctx, Atlas_NewScrub_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *atlasClient) Rebates(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[Rebate, Res], error) {
+func (c *atlasClient) Rebates(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[Rebate, Rebate], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &Atlas_ServiceDesc.Streams[0], Atlas_Rebates_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &grpc.GenericClientStream[Rebate, Res]{ClientStream: stream}
+	x := &grpc.GenericClientStream[Rebate, Rebate]{ClientStream: stream}
 	return x, nil
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type Atlas_RebatesClient = grpc.ClientStreamingClient[Rebate, Res]
+type Atlas_RebatesClient = grpc.BidiStreamingClient[Rebate, Rebate]
 
 // AtlasServer is the server API for Atlas service.
 // All implementations must embed UnimplementedAtlasServer
 // for forward compatibility.
 type AtlasServer interface {
 	Ping(context.Context, *Req) (*Res, error)
-	NewScrub(context.Context, *Scrub) (*ScrubRes, error)
-	Rebates(grpc.ClientStreamingServer[Rebate, Res]) error
+	Rebates(grpc.BidiStreamingServer[Rebate, Rebate]) error
 	mustEmbedUnimplementedAtlasServer()
 }
 
@@ -94,10 +81,7 @@ type UnimplementedAtlasServer struct{}
 func (UnimplementedAtlasServer) Ping(context.Context, *Req) (*Res, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Ping not implemented")
 }
-func (UnimplementedAtlasServer) NewScrub(context.Context, *Scrub) (*ScrubRes, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method NewScrub not implemented")
-}
-func (UnimplementedAtlasServer) Rebates(grpc.ClientStreamingServer[Rebate, Res]) error {
+func (UnimplementedAtlasServer) Rebates(grpc.BidiStreamingServer[Rebate, Rebate]) error {
 	return status.Errorf(codes.Unimplemented, "method Rebates not implemented")
 }
 func (UnimplementedAtlasServer) mustEmbedUnimplementedAtlasServer() {}
@@ -139,30 +123,12 @@ func _Atlas_Ping_Handler(srv interface{}, ctx context.Context, dec func(interfac
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Atlas_NewScrub_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Scrub)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(AtlasServer).NewScrub(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: Atlas_NewScrub_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AtlasServer).NewScrub(ctx, req.(*Scrub))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _Atlas_Rebates_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(AtlasServer).Rebates(&grpc.GenericServerStream[Rebate, Res]{ServerStream: stream})
+	return srv.(AtlasServer).Rebates(&grpc.GenericServerStream[Rebate, Rebate]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type Atlas_RebatesServer = grpc.ClientStreamingServer[Rebate, Res]
+type Atlas_RebatesServer = grpc.BidiStreamingServer[Rebate, Rebate]
 
 // Atlas_ServiceDesc is the grpc.ServiceDesc for Atlas service.
 // It's only intended for direct use with grpc.RegisterService,
@@ -175,15 +141,12 @@ var Atlas_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "Ping",
 			Handler:    _Atlas_Ping_Handler,
 		},
-		{
-			MethodName: "NewScrub",
-			Handler:    _Atlas_NewScrub_Handler,
-		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
 			StreamName:    "Rebates",
 			Handler:       _Atlas_Rebates_Handler,
+			ServerStreams: true,
 			ClientStreams: true,
 		},
 	},
@@ -205,7 +168,6 @@ const (
 	Titan_ClaimsUsed_FullMethodName           = "/main.Titan/ClaimsUsed"
 	Titan_RebateClaims_FullMethodName         = "/main.Titan/RebateClaims"
 	Titan_RebateMetas_FullMethodName          = "/main.Titan/RebateMetas"
-	Titan_ScrubDone_FullMethodName            = "/main.Titan/ScrubDone"
 )
 
 // TitanClient is the client API for Titan service.
@@ -226,7 +188,6 @@ type TitanClient interface {
 	ClaimsUsed(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[ClaimUse, Res], error)
 	RebateClaims(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[RebateClaim, Res], error)
 	RebateMetas(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[RebateMeta, Res], error)
-	ScrubDone(ctx context.Context, in *Metrics, opts ...grpc.CallOption) (*Res, error)
 }
 
 type titanClient struct {
@@ -464,16 +425,6 @@ func (c *titanClient) RebateMetas(ctx context.Context, opts ...grpc.CallOption) 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type Titan_RebateMetasClient = grpc.ClientStreamingClient[RebateMeta, Res]
 
-func (c *titanClient) ScrubDone(ctx context.Context, in *Metrics, opts ...grpc.CallOption) (*Res, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(Res)
-	err := c.cc.Invoke(ctx, Titan_ScrubDone_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 // TitanServer is the server API for Titan service.
 // All implementations must embed UnimplementedTitanServer
 // for forward compatibility.
@@ -492,7 +443,6 @@ type TitanServer interface {
 	ClaimsUsed(grpc.ClientStreamingServer[ClaimUse, Res]) error
 	RebateClaims(grpc.ClientStreamingServer[RebateClaim, Res]) error
 	RebateMetas(grpc.ClientStreamingServer[RebateMeta, Res]) error
-	ScrubDone(context.Context, *Metrics) (*Res, error)
 	mustEmbedUnimplementedTitanServer()
 }
 
@@ -544,9 +494,6 @@ func (UnimplementedTitanServer) RebateClaims(grpc.ClientStreamingServer[RebateCl
 }
 func (UnimplementedTitanServer) RebateMetas(grpc.ClientStreamingServer[RebateMeta, Res]) error {
 	return status.Errorf(codes.Unimplemented, "method RebateMetas not implemented")
-}
-func (UnimplementedTitanServer) ScrubDone(context.Context, *Metrics) (*Res, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ScrubDone not implemented")
 }
 func (UnimplementedTitanServer) mustEmbedUnimplementedTitanServer() {}
 func (UnimplementedTitanServer) testEmbeddedByValue()               {}
@@ -710,24 +657,6 @@ func _Titan_RebateMetas_Handler(srv interface{}, stream grpc.ServerStream) error
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type Titan_RebateMetasServer = grpc.ClientStreamingServer[RebateMeta, Res]
 
-func _Titan_ScrubDone_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Metrics)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(TitanServer).ScrubDone(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: Titan_ScrubDone_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(TitanServer).ScrubDone(ctx, req.(*Metrics))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 // Titan_ServiceDesc is the grpc.ServiceDesc for Titan service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -738,10 +667,6 @@ var Titan_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Ping",
 			Handler:    _Titan_Ping_Handler,
-		},
-		{
-			MethodName: "ScrubDone",
-			Handler:    _Titan_ScrubDone_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
