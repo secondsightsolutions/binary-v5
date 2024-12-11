@@ -66,8 +66,6 @@ func (spis *SPIs) load(c *cache) {
     spis.Lock()
     defer spis.Unlock()
     if len(spis.idMap) == 0 && len(spis.deaMap) == 0 {
-        c.Lock()
-        defer c.Unlock()
 		for _, row := range c.rows {
             spi := row.elem.(*SPI)
 			spis.addSPI(spi)

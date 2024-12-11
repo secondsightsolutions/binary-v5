@@ -212,3 +212,147 @@ CREATE TABLE atlas.auth (
     enb  bool not null default true,
 	CONSTRAINT auth_pkey PRIMARY KEY (manu, proc, auth, kind)
 );
+
+-- For tests
+CREATE TABLE atlas.test_rebates (
+    test  text not null,
+    scid  bigint not null,
+    rbid  bigint not null,
+    indx  bigint not null default 0,
+    rxn   text not null default '',
+    hrxn  text not null default '',
+    ndc   text not null default '',
+    spid  text not null default '',
+    prid  text not null default '',
+    dos   text not null default '',
+    stat  text not null default '',
+    excl  text not null default '',
+    errc  text not null default '',
+    errm  text not null default '',
+    spmt  text not null default '',
+    CONSTRAINT test_rebates_pk PRIMARY KEY (test, scid, rbid)
+);
+CREATE INDEX ON atlas.test_rebates(test);
+
+CREATE TABLE atlas.test_claims (
+    test text not null,
+    shrt text not null,
+    i340 text not null,
+    ndc  text not null,
+    spid text not null,
+    prid text not null default '',
+    hrxn text not null,
+    hfrx text not null default '',
+    hdos text not null,
+    hdop text not null,
+    doc  bigint not null default 0,
+    dos  bigint not null default 0,
+    dop  bigint not null default 0,
+    netw text not null,
+    prnm text not null,
+    chnm text not null default '',
+    elig bool not null default true,
+    susp bool not null default false,
+    cnfm bool not null default true,
+    qty  numeric not null default 0,
+    manu text not null,
+    ihph text array not null default '{}',
+    CONSTRAINT test_claims_pk PRIMARY KEY (test, shrt)
+);
+CREATE INDEX ON atlas.test_claims(test);
+
+CREATE TABLE atlas.test_entities (
+    test text   not null,
+    i340 text   not null,
+    strt bigint not null default 0,
+    term bigint not null default 0,
+    dop  bigint not null default 0,
+    stat text   not null default '',
+    CONSTRAINT test_entities_pk PRIMARY KEY (test, i340)
+);
+CREATE INDEX ON atlas.test_entities(test);
+
+CREATE TABLE atlas.test_pharmacies (
+    test text not null,
+    i340 text not null,
+    phid text not null,
+    ncps text array not null default '{}',
+    npis text array not null default '{}',
+    deas text array not null default '{}',
+    chnm text not null default '',
+    stat text not null default '',
+    CONSTRAINT test_pharmacies_pk PRIMARY KEY (test, i340, phid)
+);
+CREATE INDEX ON atlas.test_pharmacies(test);
+
+CREATE TABLE atlas.test_ndcs (
+    test text not null,
+    ndc  text not null,
+    name text not null,
+    netw text not null default 'retail',
+    CONSTRAINT test_ndcs_pk PRIMARY KEY (test, ndc)
+);
+CREATE INDEX ON atlas.test_ndcs(test);
+
+CREATE TABLE atlas.test_spis (
+    test text not null,
+    ncp  text not null,
+    npi  text not null default '',
+    dea  text not null default '',
+    sto  text not null default '',
+    nam  text not null default '',
+    lbn  text not null default '',
+    chn  text not null default '',
+    cde  text not null default '',
+    CONSTRAINT test_spis_pk PRIMARY KEY (test, ncp)
+);
+CREATE INDEX ON atlas.test_claims(test);
+
+CREATE TABLE atlas.test_desigs (
+    test text not null,
+    i340 text not null,
+    phid text not null,
+    netw text not null default 'retail',
+    flag text not null default '',
+    hin  text not null default '',
+    assg boolean not null default true,
+    term boolean not null default false,
+    excl boolean not null default false,
+    xdat bigint not null default 0,
+    dlat bigint not null default 0,
+    xsat bigint not null default 0,
+    crat bigint not null default 0,
+    cpat bigint not null default 0,
+    CONSTRAINT test_claims_pk PRIMARY KEY (test, i340, phid)
+);
+CREATE INDEX ON atlas.test_claims(test);
+
+CREATE TABLE atlas.test_ldns (
+    test text not null,
+    netw text not null,
+    phid text not null,
+    assg boolean not null default true,
+    term boolean not null default false,
+    CONSTRAINT test_ldns_pk PRIMARY KEY (test, netw, phid)
+);
+CREATE INDEX ON atlas.test_ldns(test);
+
+CREATE TABLE atlas.test_esp1 (
+    test text   not null,
+    ndc  text   not null,
+    strt bigint not null default 0,
+    term bigint not null default 0,
+    CONSTRAINT test_esp1_pk PRIMARY KEY (test, ndc)
+);
+CREATE INDEX ON atlas.test_esp1(test, ndc);
+
+CREATE TABLE atlas.test_eligibilities (
+    test text   not null,
+    i340 text   not null,
+    phid text   not null,
+    netw text   not null default 'retail',
+    strt bigint not null default 0,
+    term bigint not null default 0,
+    CONSTRAINT test_eligibilities_pk PRIMARY KEY (test, i340, phid)
+);
+CREATE INDEX ON atlas.test_eligibilities(test);

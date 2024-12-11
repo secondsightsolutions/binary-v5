@@ -204,8 +204,7 @@ message Entity {
     string i340  = 1;
     int64  strt  = 2;
     int64  term  = 3;
-    string state = 4;
-
+    string stat = 4;
     repeated Designation desigs = 10;
 }
 message Pharmacy {
@@ -215,7 +214,7 @@ message Pharmacy {
     string npi  = 4;
     string dea  = 5;
     string chnm = 6;
-    string state = 10;
+    string stat = 10;
     repeated string ncps = 7;
     repeated string npis = 8;
     repeated string deas = 9;
@@ -269,7 +268,7 @@ message ESP1PharmNDC {
     int64   term  = 4;
 }
 message Eligibility {
-    int64  id   = 1;     // id
+    int64  id     = 1;   // id
     string i340   = 2;   // id_340b
     string phid   = 3;   // pharmacy_id
     string manu   = 4;   // manufacturer
@@ -319,10 +318,22 @@ message Metrics {
     int32   dos_bef_dof   = 21;
     int32   dos_aft_dof   = 22;
 }
-
+message TestData {
+    repeated Claim        claims     = 1;
+    repeated Entity       entities   = 2;
+    repeated Pharmacy     pharmacies = 3;
+    repeated NDC          ndcs       = 4;
+    repeated SPI          spis       = 5;
+    repeated Designation  desigs     = 6;
+    repeated LDN          ldns       = 7;
+    repeated ESP1PharmNDC esp1       = 8;
+    repeated Eligibility  ledger     = 9;
+    string name = 10;
+}
 service Atlas {
     rpc Ping(Req)                           returns (Res) {}
     rpc Rebates(stream Rebate)              returns (stream Rebate) {}
+    rpc UploadTest(TestData)                returns (Res) {}
 }
 
 service Titan {

@@ -18,9 +18,9 @@ type claim struct {
 }
 type scrub struct {
 	sr   *Scrub
-	ca   *cache_set
+	cs   *cache_set
 	spis *SPIs
-	clms []*claim
+	clms *cache
 	scid int64
 	slot string
 	outf string
@@ -57,10 +57,9 @@ type scrub struct {
 // 	rderr error
 // }
 
-func new_scrub(s *Scrub) *scrub {
-	return &scrub{
-		ca:   nil,
-		clms: []*claim{},
+func new_scrub(s *Scrub, stop chan any) *scrub {
+	scrb := &scrub{
+		cs:   nil,
 		spis: atlas.spis,
 		scid: s.Scid,
 		sr:   s,
@@ -71,13 +70,38 @@ func new_scrub(s *Scrub) *scrub {
 		metr: &Metrics{},
 		lckM: sync.Mutex{},
 	}
+	scrb.cs = atlas.ca.clone()
+	if scrb.sr.Test != "" {
+		setCache[Rebate](		scrb, &scrb.cs.rbts, "atlas.test_rebates",      "rbts", stop)
+		setCache[Claim](		scrb, &scrb.cs.clms, "atlas.test_claims", 		"clms", stop)
+		setCache[Entity](		scrb, &scrb.cs.ents, "atlas.test_entities", 	"ents", stop)
+		setCache[Pharmacy](		scrb, &scrb.cs.phms, "atlas.test_pharmacies",	"phms", stop)
+		setCache[NDC](			scrb, &scrb.cs.ndcs, "atlas.test_ndcs", 		"ndcs", stop)
+		setCache[SPI](			scrb, &scrb.cs.spis, "atlas.test_spis", 		"spis", stop)
+		setCache[Designation](	scrb, &scrb.cs.desg, "atlas.test_desigs", 		"desg", stop)
+		setCache[LDN](			scrb, &scrb.cs.ldns, "atlas.test_ldns", 		"ldns", stop)
+		setCache[ESP1PharmNDC](	scrb, &scrb.cs.esp1, "atlas.test_esp1", 		"esp1", stop)
+		setCache[Eligibility](	scrb, &scrb.cs.ledg, "atlas.test_eligibilities","elig", stop)
+	}
+	if scrb.cs.spis != atlas.ca.spis {
+		scrb.spis = newSPIs()
+		scrb.spis.load(scrb.cs.spis)
+	}
+	scrb.clms = new_cache("claims", scrb.cs.clms.rows)
+	return scrb
+}
+func setCache[T any](scrb *scrub, ca **cache, tbln, name string, stop chan any) {
+	list := read_db[T](atlas.pools["atlas"], "atlas", tbln, nil, fmt.Sprintf(" test = '%s' ", scrb.sr.Test), stop)
+	if len(list) > 0 {
+		*ca = new_cache(name, list)
+	}
 }
 
 func (sc *scrub) run() {
 	wgrp := sync.WaitGroup{}
 	wgrp.Add(2)
+	go sc.prep_rebates(&wgrp) // Filters/prepares rebates based on policy.
 	go sc.prep_claims(&wgrp)  // Filters/prepares claims based on policy.
-	go sc.recv_rebates(&wgrp) // Get rebates from input source and write into rebates table.
 	wgrp.Wait()
 
 	chn1 := make(chan *Rebate, 100000) // Connects rebate database reader to the workers.
@@ -94,19 +118,16 @@ func (sc *scrub) run() {
 
 }
 
+func (sc *scrub) prep_rebates(wgrp *sync.WaitGroup) {
+	defer wgrp.Done()
+	sc.plcy.prepRebates(sc)
+}
+
 func (sc *scrub) prep_claims(wgrp *sync.WaitGroup) {
 	defer wgrp.Done()
-	sc.clms = make([]*claim, 0, len(sc.ca.clms.rows))
-	for _, row := range sc.ca.clms.rows {
-		Clm := row.elem.(*Claim)
-		sc.clms = append(sc.clms, &claim{clm: Clm})
-	}
 	sc.plcy.prepClaims(sc)
 }
-func (sc *scrub) recv_rebates(wgrp *sync.WaitGroup) {
-	defer wgrp.Done()
-	db_insert(atlas.pools["atlas"], "atlas", "atlas.rebates", nil, sc.rbtC, 5000, false)
-}
+
 func (sc *scrub) pull_rebates(wgrp *sync.WaitGroup, out chan<- *Rebate) {
 	defer wgrp.Done()
 	defer close(out)

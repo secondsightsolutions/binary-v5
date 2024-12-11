@@ -19,8 +19,9 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Atlas_Ping_FullMethodName    = "/main.Atlas/Ping"
-	Atlas_Rebates_FullMethodName = "/main.Atlas/Rebates"
+	Atlas_Ping_FullMethodName       = "/main.Atlas/Ping"
+	Atlas_Rebates_FullMethodName    = "/main.Atlas/Rebates"
+	Atlas_UploadTest_FullMethodName = "/main.Atlas/UploadTest"
 )
 
 // AtlasClient is the client API for Atlas service.
@@ -29,6 +30,7 @@ const (
 type AtlasClient interface {
 	Ping(ctx context.Context, in *Req, opts ...grpc.CallOption) (*Res, error)
 	Rebates(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[Rebate, Rebate], error)
+	UploadTest(ctx context.Context, in *TestData, opts ...grpc.CallOption) (*Res, error)
 }
 
 type atlasClient struct {
@@ -62,12 +64,23 @@ func (c *atlasClient) Rebates(ctx context.Context, opts ...grpc.CallOption) (grp
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type Atlas_RebatesClient = grpc.BidiStreamingClient[Rebate, Rebate]
 
+func (c *atlasClient) UploadTest(ctx context.Context, in *TestData, opts ...grpc.CallOption) (*Res, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Res)
+	err := c.cc.Invoke(ctx, Atlas_UploadTest_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AtlasServer is the server API for Atlas service.
 // All implementations must embed UnimplementedAtlasServer
 // for forward compatibility.
 type AtlasServer interface {
 	Ping(context.Context, *Req) (*Res, error)
 	Rebates(grpc.BidiStreamingServer[Rebate, Rebate]) error
+	UploadTest(context.Context, *TestData) (*Res, error)
 	mustEmbedUnimplementedAtlasServer()
 }
 
@@ -83,6 +96,9 @@ func (UnimplementedAtlasServer) Ping(context.Context, *Req) (*Res, error) {
 }
 func (UnimplementedAtlasServer) Rebates(grpc.BidiStreamingServer[Rebate, Rebate]) error {
 	return status.Errorf(codes.Unimplemented, "method Rebates not implemented")
+}
+func (UnimplementedAtlasServer) UploadTest(context.Context, *TestData) (*Res, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UploadTest not implemented")
 }
 func (UnimplementedAtlasServer) mustEmbedUnimplementedAtlasServer() {}
 func (UnimplementedAtlasServer) testEmbeddedByValue()               {}
@@ -130,6 +146,24 @@ func _Atlas_Rebates_Handler(srv interface{}, stream grpc.ServerStream) error {
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type Atlas_RebatesServer = grpc.BidiStreamingServer[Rebate, Rebate]
 
+func _Atlas_UploadTest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TestData)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AtlasServer).UploadTest(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Atlas_UploadTest_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AtlasServer).UploadTest(ctx, req.(*TestData))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Atlas_ServiceDesc is the grpc.ServiceDesc for Atlas service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -140,6 +174,10 @@ var Atlas_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Ping",
 			Handler:    _Atlas_Ping_Handler,
+		},
+		{
+			MethodName: "UploadTest",
+			Handler:    _Atlas_UploadTest_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

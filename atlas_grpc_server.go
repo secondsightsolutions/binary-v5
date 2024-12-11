@@ -37,36 +37,52 @@ func (s *atlasServer) Rebates(strm grpc.BidiStreamingServer[Rebate, Rebate]) err
 		Cmdl: metaGet(strm.Context(), "cmdl"),
 		Test: metaGet(strm.Context(), "test"),
 	}
+
+	// A scrub is done in four steps:
+	// 1. create a new scrub in scrubs table from info in metadata.
+	// 2. Read in the rebates from the client (if not pre-loaded) and save them to the Rebates table under the new scid.
+	// 3. Run the scrub, which will read rebates from table and update them when done.
+	// 4. Stream the rebates back down to the client.
+	// Note that an option may be to stream back rebates in real time.
+
+	pool := atlas.pools["atlas"]
+
 	// Create the scrub row from the metadata on the stream.
-	if scid, err := db_insert_one(strm.Context(), atlas.pools["atlas"], "atlas.scrubs", scr, "scid"); err == nil {
+	if scid, err := db_insert_one(strm.Context(), pool, "atlas.scrubs", scr, "scid"); err == nil {
 		scr.Scid = scid
 	} else {
 		fmt.Printf("yes, NewScrub() failed with %s\n", err.Error())
 		return err
 	}
-	stop := make(chan any)
-	chnT, chnR := strm_fmto_clnt("atlas", "", strm, stop)
-
-	// Pull in the rebates from the shell (client) and write them into the rebates table.
-	if cnt, seq, err := db_insert(atlas.pools["atlas"], "atlas", "atlas.rebates", nil, chnT, 5000, false); err == nil {
-		log_sync(appl, "Rebates", "atlas.Rebates", manu, "", 0, cnt, seq, err, 0)
-	} else {
-		log_sync(appl, "Rebates", "atlas.Rebates", manu, "db_insert failed", 0, cnt, seq, err, 0)
-	}
 
 	// Create the in-memory "scrub" and scrub the rebates
-	scrb := new_scrub(scr)
-	scrb.ca = atlas.ca.clone()
-	if scrb.ca.spis != atlas.ca.spis {
-		scrb.spis = newSPIs()
-		scrb.spis.load(scrb.ca.spis)
+	stop := make(chan any)
+	scrb := new_scrub(scr, stop)
+	
+	// Now create the two-way connector with the client.
+	// The input side are the rebates coming from the client, to be inserted into db.
+	// The output side is where/how we send rebates from the rebates table back down to the client.
+	
+	chnT, chnR := strm_fmto_clnt("atlas", "", strm, stop)
+
+	if scrb.cs.rbts != nil {
+		// Insert the rebates from test_rebates into the Rebates table (we won't upload them).
+		
+	} else {
+		// Pull in the rebates from the shell (client) and write them into the rebates table.
+		if cnt, seq, err := db_insert(pool, "atlas", "atlas.rebates", nil, chnT, 5000, "Rbid", false); err == nil {
+			log_sync(appl, "Rebates", "atlas.Rebates", manu, "", 0, cnt, seq, err, 0)
+		} else {
+			log_sync(appl, "Rebates", "atlas.Rebates", manu, "db_insert failed", 0, cnt, seq, err, 0)
+		}
 	}
-	atlas.add_scrub(scrb)
-	go scrb.run()
+	
+	atlas.scrubs[scrb.scid] = scrb
+	scrb.run()
 	
 	// Send the rebates to the shell (client) on the other channel of the stream.
 	whr := fmt.Sprintf("scid = %d", scrb.scid)
-	if chn, err := db_select[Rebate](atlas.pools["atlas"], "atlas.rebates", nil, whr, "sort?", stop); err == nil {
+	if chn, err := db_select[Rebate](pool, "atlas.rebates", nil, whr, "Rbid", stop); err == nil {
 		for rbt := range chn {
 			chnR <-rbt
 		}

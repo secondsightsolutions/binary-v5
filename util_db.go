@@ -118,7 +118,7 @@ func db_select[T any](pool *pgxpool.Pool, tbln string, cols map[string]string, w
 	}
 }
 
-func db_insert[T any](pool *pgxpool.Pool, appl, tbln string, cols map[string]string, fm <-chan *T, batch int, replace bool) (int64, int64, error) {
+func db_insert[T any](pool *pgxpool.Pool, appl, tbln string, cols map[string]string, fm <-chan *T, batch int, idcol string, replace bool) (int64, int64, error) {
 	var dfm *dbFldMap
 	ctx := context.Background()
 	rfl := &rflt{}
@@ -143,6 +143,9 @@ func db_insert[T any](pool *pgxpool.Pool, appl, tbln string, cols map[string]str
 				if len(dfm.unqC) > 0 || len(dfm.unqF) > 0 {
 					log(appl, "db_insert", "tbln=%s uniq-cols:%s uniq-flds: %s", 0, nil, tbln, strings.Join(dfm.unqC, ","), strings.Join(dfm.unqF, ","))
 				}
+			}
+			if idcol != "" {
+				rfl.setFieldValue(obj, idcol, cnt)	// Sets Rbid to a unique value within this scrub insert.
 			}
 			cnt++
 			seqn := rfl.getFieldValueAsInt64(obj, "Seq")

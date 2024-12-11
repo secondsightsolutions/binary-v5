@@ -14,7 +14,7 @@ type Atlas struct {
 	opts     *Opts
 	titan    TitanClient
 	atlas    AtlasServer
-	scrubs   []*scrub
+	scrubs   map[int64]*scrub
 	pools    map[string]*pgxpool.Pool
 	TLSCert  *tls.Certificate
 	X509cert *x509.Certificate
@@ -28,7 +28,7 @@ var atlas *Atlas
 func run_atlas(wg *sync.WaitGroup, opts *Opts, stop chan any) {
 	defer wg.Done()
 
-	atlas = &Atlas{atlas: &atlasServer{}, pools: map[string]*pgxpool.Pool{}, spis: newSPIs(), opts: opts}
+	atlas = &Atlas{atlas: &atlasServer{}, scrubs: map[int64]*scrub{}, pools: map[string]*pgxpool.Pool{}, spis: newSPIs(), opts: opts}
 
 	atlas.pools["atlas"] = db_pool(atlas_host, atlas_port, atlas_name, atlas_user, atlas_pass, true)
 
@@ -49,7 +49,7 @@ func run_atlas(wg *sync.WaitGroup, opts *Opts, stop chan any) {
 		return
 	}
 	readyWG := &sync.WaitGroup{}
-	doneWG := &sync.WaitGroup{}
+	doneWG  := &sync.WaitGroup{}
 	readyWG.Add(4)
 	doneWG.Add(5)
 	go run_datab_ping(readyWG, doneWG, stop, 60, "atlas", atlas.pools)
@@ -112,6 +112,3 @@ func (atlas *Atlas) load(stop chan any) {
 	atlas.ca.done = true
 }
 
-func (atlas *Atlas) add_scrub(s *scrub) {
-	atlas.scrubs = append(atlas.scrubs, s)
-}

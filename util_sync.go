@@ -40,7 +40,7 @@ func sync_fm_server[T any](pool *pgxpool.Pool, appl, tbln, coln string, f func(c
 		// If there's a column name, it's the column name in the sync table, which means we continually add to the target table.
 		if seqn, err := db_sync_get(pool, appl, coln); err == nil {
 			chn := strm_recv_srvr(appl, name, seqn, f, stop)
-			if cnt, seq, err := db_insert(pool, appl, tbln, nil, chn, 5000, false); err == nil {
+			if cnt, seq, err := db_insert(pool, appl, tbln, nil, chn, 5000, "", false); err == nil {
 				if cnt > 0 {
 					if err := db_sync_set(pool, appl, coln, seq); err != nil {
 						log_sync(appl, "sync_fm_server", tbln, manu, "saving seqn failed", seqn, cnt, seq, err, time.Since(strt))
@@ -56,7 +56,7 @@ func sync_fm_server[T any](pool *pgxpool.Pool, appl, tbln, coln string, f func(c
 	} else {
 		// No column name, so it becomes a clean replacement (delete all rows, then insert from scratch)
 		chn := strm_recv_srvr(appl, name, 0, f, stop)
-		if cnt, seq, err := db_insert(pool, appl, tbln, nil, chn, 5000, true); err == nil {
+		if cnt, seq, err := db_insert(pool, appl, tbln, nil, chn, 5000, "", true); err == nil {
 			log_sync(appl, "sync_fm_server", tbln, manu, "", 0, cnt, seq, err, time.Since(strt))
 		} else {
 			log_sync(appl, "sync_fm_server", tbln, manu, "db replace failed", 0, cnt, seq, err, time.Since(strt))
@@ -90,7 +90,7 @@ func sync_fm_client[T,R any](pool *pgxpool.Pool, appl, manu, tbln string, strm g
 	strt := time.Now()
 	stop := make(chan any, 1)
 	chn  := strm_recv_clnt(appl, tbln, strm, stop);
-	if cnt, seq, err := db_insert(pool, appl, tbln, nil, chn, 5000, false); err == nil {
+	if cnt, seq, err := db_insert(pool, appl, tbln, nil, chn, 5000, "", false); err == nil {
 		log_sync(appl, "sync_fm_client", tbln, manu, "", 0, cnt, seq, err, time.Since(strt))
 	} else {
 		log_sync(appl, "sync_fm_client", tbln, manu, "db insert failed", 0, cnt, seq, err, time.Since(strt))

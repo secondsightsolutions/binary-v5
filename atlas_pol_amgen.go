@@ -8,25 +8,21 @@ func amgenPrepRebates(sc *scrub) {
 
 }
 func amgenPrepClaims(sc *scrub) {
-	sc.clms = make([]*claim, 0, len(sc.ca.clms.rows))
-	for _, row := range sc.ca.clms.rows {
-		clm := row.elem.(*Claim)
-		sc.clms = append(sc.clms, &claim{clm: clm})
-	}
-	dt509 := time.Date(2023, time.May,    9, 0, 0, 0, 0, time.UTC)
-	for _, cu := range sc.clms {
-		clm := cu.clm
-		if IsGrantee(clm.I340) || len(clm.Ihph) > 0 {
+	dt509 := time.Date(2023, time.May, 9, 0, 0, 0, 0, time.UTC)
+	for _, row := range sc.clms.rows {
+		clm := row.elem.(*claim)
+		Clm := clm.clm
+		if IsGrantee(Clm.I340) || len(Clm.Ihph) > 0 {
 			continue
 		}
-		clmTm := ParseI64ToTime(clm.Doc)
+		clmTm := ParseI64ToTime(Clm.Doc)
 		if CheckOnAfter(clmTm, &dt509) {
-			if !clm.Cnfm {
-				cu.excl = "clm_not_cnfm"
+			if !Clm.Cnfm {
+				clm.excl = "clm_not_cnfm"
 				continue
 			}
-			if !clm.Elig && !clm.Susp {
-				cu.excl = "not_elig_at_sub"
+			if !Clm.Elig && !Clm.Susp {
+				clm.excl = "not_elig_at_sub"
 			}
 		}
 	}
@@ -41,11 +37,11 @@ func amgenScrubRebate(sc *scrub, rbt *Rebate) {
 	rxn    := rbt.Rxn
 	hrxn,_ := Hash(rxn)
 	
-	clms1 := sc.ca.clms.Find(Fields.Rxn,  rxn)	// Copies of claims. Only do this if policy updates the claim.
-	clms2 := sc.ca.clms.Find(Fields.Frxn, rxn)	// Currently this policy does not, so could use false here.
-	clms3 := sc.ca.clms.Find(Fields.Rxn,  hrxn)
-	clms4 := sc.ca.clms.Find(Fields.Frxn, hrxn)
-	rows  := sort_lists(Fields.Doc, "GetDoc", false, clms1, clms2, clms3, clms4)
+	clms1 := sc.clms.Find(Fields.Rxn,  rxn)	// Copies of claims. Only do this if policy updates the claim.
+	clms2 := sc.clms.Find(Fields.Frxn, rxn)	// Currently this policy does not, so could use false here.
+	clms3 := sc.clms.Find(Fields.Rxn,  hrxn)
+	clms4 := sc.clms.Find(Fields.Frxn, hrxn)
+	rows  := sort_lists("Doc", false, clms1, clms2, clms3, clms4)
 	for _, row := range rows {
 		clm := row.elem.(*Claim)
 		// if clm.Excl != "" {
