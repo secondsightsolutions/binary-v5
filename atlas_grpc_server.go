@@ -24,12 +24,12 @@ func (s *atlasServer) Rebates(strm grpc.BidiStreamingServer[Rebate, Rebate]) err
 	}
 	scr := &Scrub{
 		Auth: metaGet(strm.Context(), "auth"),
-		Manu: metaGet(strm.Context(), "manu"),
+		//Manu: metaGet(strm.Context(), "manu"),
 		Plcy: metaGet(strm.Context(), "plcy"),
 		Kind: metaGet(strm.Context(), "kind"),
 		Name: metaGet(strm.Context(), "name"),
 		Vers: metaGet(strm.Context(), "vers"),
-		Desc: metaGet(strm.Context(), "desc"),
+		Dscr: metaGet(strm.Context(), "dscr"),
 		Hash: metaGet(strm.Context(), "hash"),
 		Host: metaGet(strm.Context(), "host"),
 		Appl: metaGet(strm.Context(), "appl"),

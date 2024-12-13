@@ -76,7 +76,7 @@ func new_cache[T any](name string, list []*T) *cache {
 		ca.Add(obj)
 	}
 	// At this point the main list is naturally sorted by the index.
-	log("atlas", "new_cache", "%-21s / %-20s / rows=%d", time.Since(strt), nil, "cache loaded", name, len(ca.rows))
+	log2("atlas", "new_cache", "cache loaded", name, "", nil, time.Since(strt))
 	return ca
 }
 

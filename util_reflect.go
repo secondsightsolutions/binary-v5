@@ -11,12 +11,12 @@ import (
 
 type rflt struct {}
 
-func new_slice_ptr[T any](len, cap int) []*T {
-	o  := new(T)
-	ot := reflect.TypeOf(o)
-	st := reflect.SliceOf(ot)
-	return reflect.MakeSlice(st, len, cap).Interface().([]*T)
-}
+// func new_slice_ptr[T any](len, cap int) []*T {
+// 	o  := new(T)
+// 	ot := reflect.TypeOf(o)
+// 	st := reflect.SliceOf(ot)
+// 	return reflect.MakeSlice(st, len, cap).Interface().([]*T)
+// }
 // func new_slice[T any](len, cap int) []T {
 // 	o  := new(T)
 // 	ot := reflect.TypeOf(*o)
@@ -271,7 +271,7 @@ func (rfl *rflt) setFieldValue(obj any, fld string, val any) {
 		default:
 		}
 
-	} else if fldV.Bool() {
+	} else if fldV.Kind() == reflect.Bool {
 		switch v := val.(type) {
 		case string:
 			if b, err := strconv.ParseBool(v); err == nil {
@@ -303,5 +303,8 @@ func (rfl *rflt) setFieldValue(obj any, fld string, val any) {
 			fldV.SetBool(v)
 		default:
 		}
+	} else if fldV.Kind() == reflect.Slice {
+	} else {
+		fmt.Printf("setFieldValue(): kind=%s type=%s\n", fldV.Kind().String(), fldV.Type().String())
 	}
 }

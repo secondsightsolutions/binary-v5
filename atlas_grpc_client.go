@@ -24,31 +24,7 @@ func ping() {
 }
 
 func (atlas *Atlas) getClaims(stop chan any) []*Claim {
-	cols := map[string]string{
-		"shrt": "",
-		"i340": "",
-		"ndc" : "",
-		"spid": "",
-		"prid": "",
-		"hrxn": "",
-		"hfrx": "",
-		"hdos": "",
-		"hdop": "",
-		"doc" : "",
-		"dos" : "",
-		"dop" : "",
-		"netw": "",
-		"prnm": "",
-		"chnm": "",
-		"elig": "",
-		"susp": "",
-		"cnfm": "",
-		"qty" : "",
-		"manu": "",
-		"ihph": "",
-	}
-	whr := ""
-	return read_db[Claim](atlas.pools["atlas"], "atlas", "atlas.claims", cols, whr, stop)
+	return read_db[Claim](atlas.pools["atlas"], "atlas", "atlas.claims", nil, "", stop)
 }
 func (atlas *Atlas) getESP1(stop chan any) []*ESP1PharmNDC {
 	return recv_fm("atlas", "esp1", atlas.titan.GetESP1Pharms, stop)
@@ -71,12 +47,13 @@ func (atlas *Atlas) getSPIs(stop chan any) []*SPI {
 
 func (atlas *Atlas) sync(stop chan any) {
 	pool := atlas.pools["atlas"]
+	f2c  := map[string]string{"crat": "created", "rdat": "ready", "srat": "started", "dnat": "done"}
 
-	sync_fm_server(pool, "atlas", "atlas.claims",        "claims",          atlas.titan.GetClaims,    stop)
-	sync_fm_server(pool, "atlas", "atlas.auth",          "auth",            atlas.titan.GetAuths,     stop)
-	sync_to_server(pool, "atlas", "atlas.scrubs",        "scrubs",			atlas.titan.Scrubs,       stop)
-	sync_to_server(pool, "atlas", "atlas.rebates",       "rebates",		    atlas.titan.Rebates,      stop)
-	sync_to_server(pool, "atlas", "atlas.claims_used",   "claim_uses",		atlas.titan.ClaimsUsed,   stop)
-	sync_to_server(pool, "atlas", "atlas.rebate_claims", "rebate_meta",	    atlas.titan.RebateClaims, stop)
-	sync_to_server(pool, "atlas", "atlas.rebate_meta",   "rebate_claims",	atlas.titan.RebateMetas,  stop)
+	sync_fm_server(pool, "atlas", "atlas.claims",        "claims",          nil, atlas.titan.GetClaims,    stop)
+	sync_fm_server(pool, "atlas", "atlas.auth",          "auth",            nil, atlas.titan.GetAuths,     stop)
+	sync_to_server(pool, "atlas", "atlas.scrubs",        "scrubs",			f2c, atlas.titan.Scrubs,       stop)
+	sync_to_server(pool, "atlas", "atlas.rebates",       "rebates",		    nil, atlas.titan.Rebates,      stop)
+	sync_to_server(pool, "atlas", "atlas.claim_uses",    "claim_uses",		nil, atlas.titan.ClaimsUsed,   stop)
+	sync_to_server(pool, "atlas", "atlas.rebate_claims", "rebate_meta",	    nil, atlas.titan.RebateClaims, stop)
+	sync_to_server(pool, "atlas", "atlas.rebate_meta",   "rebate_claims",	nil, atlas.titan.RebateMetas,  stop)
 }

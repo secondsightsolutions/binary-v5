@@ -4,16 +4,16 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"io"
 	"os"
 	"strings"
+	"time"
 
 	grpc "google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 )
 
-func (clt *Shell) connect() {
+func (clt *Shell) connect() (AtlasClient, error) {
 	tgt := fmt.Sprintf("%s:%d", atlas_grpc, atlas_grpc_port)
 	cfg := &tls.Config{
 		Certificates: []tls.Certificate{*clt.TLSCert},
@@ -22,20 +22,27 @@ func (clt *Shell) connect() {
 	crd := credentials.NewTLS(cfg)
 	if conn, err := grpc.NewClient(tgt, grpc.WithTransportCredentials(crd)); err == nil {
 		clt.atlas = NewAtlasClient(conn)
+		return NewAtlasClient(conn), nil
 	} else {
-		log("shell", "connect", "cannot connect to atlas", 0, err)
+		return nil, err
 	}
 }
 
-func (clt *Shell) rebates(stop chan any, rbts chan *Rebate) error {
+func (sh *Shell) rebates(stop chan any, rbts chan *Rebate) (chan *Rebate, error) {
+	if sh.atlas == nil {
+		if clt, err := sh.connect(); err == nil {
+			fmt.Println("shell connected to atlas")
+			sh.atlas = clt
+		}
+	}
 	md  := metadata.New(map[string]string{
-		"auth": clt.opts.auth, 
+		"auth": sh.opts.auth, 
 		"manu": manu,
-		"plcy": clt.opts.policy,
+		"plcy": sh.opts.policy,
 		"kind": kind, 
 		"name": name,
 		"vers": vers,
-		"desc": desc,
+		"dscr": desc,
 		"hash": hash,
 		"host": "",
 		"appl": appl,
@@ -45,38 +52,66 @@ func (clt *Shell) rebates(stop chan any, rbts chan *Rebate) error {
 	})
 	ctx := metadata.NewOutgoingContext(context.Background(), md)
 	c,f := context.WithCancel(ctx)
-	
-	if strm, err := clt.atlas.Rebates(c); err == nil {
-		if hdrs, err := strm.Header();err == nil {
-			clt.scid = metaValueInt64(hdrs, "scid")
-		}
-		for rbt := range rbts {
-			select {
-			case <-stop:
-				f()
-				return nil
-			default:
-				if err := strm.Send(rbt); err != nil {
-					f()
-					return err
-				}
-			}
-		}
-		strm.CloseSend()
-		for {
-			if res, err := strm.Recv(); err == nil {
-				fmt.Printf("res: %v\n", res)
-			} else if err == io.EOF {
-				break
+	dur := time.Duration(0) * time.Second
+	out := make(chan *Rebate, 1000)
+
+	defer f()
+	for {
+		if strm, err := sh.atlas.Rebates(c); err == nil {
+			if hdrs, err := strm.Header(); err == nil {
+				sh.scid = metaValueInt64(hdrs, "scid")
+				fmt.Printf("shell.Rebates() received scid=%d\n", sh.scid)
 			} else {
-				fmt.Printf("error: %s\n", err.Error())
+				fmt.Printf("shell.Rebates() cannot access headers, err=%s\n", err.Error())
 			}
+
+			// We have the scid (scrub_id). Now start sending up the rebates.
+			go func() {
+				fmt.Printf("shell.Rebates() starting send loop\n")
+				for rbt := range rbts {
+					fmt.Printf("shell.Rebates() received input rebate=(%v)\n", rbt)
+					select {
+					case <-stop:
+						goto done
+					case <-time.After(dur):
+						if err := strm.Send(rbt); err != nil {
+							fmt.Printf("shell.Rebates() failed to send rebate=(%v) err=%s\n", rbt, err.Error())
+							if strings.Contains(err.Error(), "Unavailable") {
+								log("shell", "rebates", "error sending rebates (network error, retrying)", 0, err)
+								dur = time.Duration(5) * time.Second
+							} else {
+								log("shell", "rebates", "error sending rebates (giving up)", 0, err)
+								goto done
+							}
+						} else {
+							dur = time.Duration(0) * time.Second
+							fmt.Printf("shell.Rebates() successfully sent rebate=(%v)\n", rbt)
+						}
+					}
+				}
+				done:
+				fmt.Printf("shell.Rebates() finished send loop\n")
+				strm.CloseSend()
+			}()
+			
+			go func() {
+				fmt.Printf("shell.Rebates() starting recv loop\n")
+				for {
+					if rbt, err := strm.Recv(); err == nil {
+						fmt.Printf("shell.Rebates() successfully recv from server rebate=(%v)\n", rbt)
+						out <-rbt
+					} else {
+						fmt.Printf("shell.Rebates() failed to recv from server err=%s\n", err.Error())
+						break
+					}
+				}
+				fmt.Printf("shell.Rebates() finished recv loop\n")
+			}()
+			return out, nil
+		} else {
+			//fmt.Printf("shell.Rebates() cannot connect to atlas, err=%s\n", err.Error())
+			time.Sleep(time.Duration(5)*time.Second)
 		}
-		f()
-	} else {
-		f()
-		return err
 	}
-	return nil
 }
 

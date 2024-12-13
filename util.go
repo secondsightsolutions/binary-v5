@@ -356,6 +356,21 @@ func renderCols(hdrs []string, row map[string]string) string {
 // rpc error: code = Unknown desc = ERROR: null value in column "plcy" of relation "scrubs" violates not-null constraint (SQLSTATE 23502)
 // rpc error: code = Unknown desc = ERROR: 
 // rpc error: code = Unavailable desc = connection error: desc = "transport: Error while dialing: dial tcp 127.0.0.1:23460: connect: connection refused
+
+func log_sync(appl, title, tbln, manu, more string, last, rows, seqn int64, err error, durn time.Duration) {
+	str := fmt.Sprintf("last=%d rows=%d seqn=%d", last, rows, seqn)
+	log3(appl, title, tbln, manu, str, more, err, durn)
+}
+
+func log3(appl, title, part1, part2, part3, more string, err error, durn time.Duration) {
+	msg := fmt.Sprintf("%-28s / %-20s / %-21s %s", part1, part2, part3, more)
+	log(appl, title, msg, durn, err)
+}
+
+func log2(appl, title, part1, part2, more string, err error, durn time.Duration) {
+	msg := fmt.Sprintf("%-28s / %-20s %s", part1, part2, more)
+	log(appl, title, msg, durn, err)
+}
 func log(app, fcn, msg string, dur time.Duration, err error, args ...any) {
 	mesg := fmt.Sprintf(msg, args...)
 	mil  := dur.Milliseconds() % 1000

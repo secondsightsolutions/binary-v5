@@ -76,15 +76,17 @@ openssl verify -CAfile ca-cert.pem cert.pem
 ./make/crypt --phrase=${V5_APPL_PHRS} --encrypt=pkey.pem --output=pkey.pem.b64
 base64 -i cert.pem > cert.pem.b64
 }
+
+export V5_APPL_ENVR=$envr
+export V5_APPL_VERS="$(date '+%s')"
+export V5_APPL_HASH=$(git rev-parse --short HEAD)
+
+# If our cached env values from azure not found, read from azure.
+if [ ! -f "build.${envr}.env" ]; then
 export V5_APPL_CACR="$(az keyvault secret show --vault-name v5-atlas-vault  --name ca-cert | jq .value | tr -d '"')"
 export V5_APPL_PKEY="$(az keyvault secret show --vault-name v5-atlas-vault  --name ca-pkey | jq .value | tr -d '"')"
 export V5_APPL_PHRS="$(az keyvault secret show --vault-name v5-atlas-vault  --name phrase  | jq .value | tr -d '"')"
 export V5_APPL_SALT="$(az keyvault secret show --vault-name v5-atlas-vault  --name salt    | jq .value | tr -d '"')"
-export V5_APPL_ENVR=$envr
-export V5_APPL_VERS="$(date '+%s')"
-export V5_APPL_HASH=hash=$(git rev-parse --short HEAD)
-
-if [ "$name" == "brg" ] || [ "$appl" == "atlas" ];then
 export V5_ATLAS_HOST="$(az appconfig kv show -n v5-atlas-config --key atlas_db_host --label ${envr} | jq .value | tr -d '"')"
 export V5_ATLAS_PORT="$(az appconfig kv show -n v5-atlas-config --key atlas_db_port --label ${envr} | jq .value | tr -d '"')"
 export V5_ATLAS_NAME="$(az appconfig kv show -n v5-atlas-config --key atlas_db_name --label ${envr} | jq .value | tr -d '"')"
@@ -97,9 +99,6 @@ export V5_ATLAS_OGKY="$(az appconfig kv show -n v5-atlas-config --key atlas_ogky
 make_cert atlas ${V5_ATLAS_GRPC}
 export V5_ATLAS_CERT="$(cat cert.pem.b64)"
 export V5_ATLAS_PKEY="$(cat pkey.pem.b64)"
-fi
-
-if [ "$name" == "brg" ] || [ "$appl" == "titan" ];then
 export V5_TITAN_HOST="$(az appconfig kv show -n v5-atlas-config --key titan_db_host --label ${envr} | jq .value | tr -d '"')"
 export V5_TITAN_PORT="$(az appconfig kv show -n v5-atlas-config --key titan_db_port --label ${envr} | jq .value | tr -d '"')"
 export V5_TITAN_NAME="$(az appconfig kv show -n v5-atlas-config --key titan_db_name --label ${envr} | jq .value | tr -d '"')"
@@ -121,13 +120,51 @@ export V5_TITAN_OGKY="$(az appconfig kv show -n v5-atlas-config --key titan_ogky
 make_cert titan ${V5_TITAN_GRPC}
 export V5_TITAN_CERT="$(cat cert.pem.b64)"
 export V5_TITAN_PKEY="$(cat pkey.pem.b64)"
-fi
-
-if [ "$name" == "brg" ] || [ "$appl" == "shell" ];then
 export V5_ATLAS_GRPC="$(az appconfig kv show -n v5-atlas-config --key atlas_grpc --label ${envr} | jq .value | tr -d '"')"
 make_cert shell 127.0.0.1
 export V5_SHELL_CERT="$(cat cert.pem.b64)"
 export V5_SHELL_PKEY="$(cat pkey.pem.b64)"
+
+echo "export V5_APPL_CACR=$V5_APPL_CACR" > build.${envr}.env
+echo "export V5_APPL_PKEY=$V5_APPL_PKEY" >> build.${envr}.env
+echo "export V5_APPL_PHRS=$V5_APPL_PHRS" >> build.${envr}.env
+echo "export V5_APPL_SALT=$V5_APPL_SALT" >> build.${envr}.env
+echo "export V5_ATLAS_HOST=$V5_ATLAS_HOST" >> build.${envr}.env
+echo "export V5_ATLAS_PORT=$V5_ATLAS_PORT" >> build.${envr}.env
+echo "export V5_ATLAS_NAME=$V5_ATLAS_NAME" >> build.${envr}.env
+echo "export V5_ATLAS_USER=$V5_ATLAS_USER" >> build.${envr}.env
+echo "export V5_ATLAS_PASS=$V5_ATLAS_PASS" >> build.${envr}.env
+echo "export V5_ATLAS_GRPC=$V5_ATLAS_GRPC" >> build.${envr}.env
+echo "export V5_TITAN_GRPC=$V5_TITAN_GRPC" >> build.${envr}.env
+echo "export V5_ATLAS_OGTM=$V5_ATLAS_OGTM" >> build.${envr}.env
+echo "export V5_ATLAS_OGKY=$V5_ATLAS_OGKY" >> build.${envr}.env
+echo "export V5_ATLAS_CERT=$V5_ATLAS_CERT" >> build.${envr}.env
+echo "export V5_ATLAS_PKEY=$V5_ATLAS_PKEY" >> build.${envr}.env
+echo "export V5_TITAN_HOST=$V5_TITAN_HOST" >> build.${envr}.env
+echo "export V5_TITAN_PORT=$V5_TITAN_PORT" >> build.${envr}.env
+echo "export V5_TITAN_NAME=$V5_TITAN_NAME" >> build.${envr}.env
+echo "export V5_TITAN_USER=$V5_TITAN_USER" >> build.${envr}.env
+echo "export V5_TITAN_PASS=$V5_TITAN_PASS" >> build.${envr}.env
+echo "export V5_CITUS_HOST=$V5_CITUS_HOST" >> build.${envr}.env
+echo "export V5_CITUS_PORT=$V5_CITUS_PORT" >> build.${envr}.env
+echo "export V5_CITUS_NAME=$V5_CITUS_NAME" >> build.${envr}.env
+echo "export V5_CITUS_USER=$V5_CITUS_USER" >> build.${envr}.env
+echo "export V5_CITUS_PASS=$V5_CITUS_PASS" >> build.${envr}.env
+echo "export V5_ESPDB_HOST=$V5_ESPDB_HOST" >> build.${envr}.env
+echo "export V5_ESPDB_PORT=$V5_ESPDB_PORT" >> build.${envr}.env
+echo "export V5_ESPDB_NAME=$V5_ESPDB_NAME" >> build.${envr}.env
+echo "export V5_ESPDB_USER=$V5_ESPDB_USER" >> build.${envr}.env
+echo "export V5_ESPDB_PASS=$V5_ESPDB_PASS" >> build.${envr}.env
+echo "export V5_TITAN_GRPC=$V5_TITAN_GRPC" >> build.${envr}.env
+echo "export V5_TITAN_OGTM=$V5_TITAN_OGTM" >> build.${envr}.env
+echo "export V5_TITAN_OGKY=$V5_TITAN_OGKY" >> build.${envr}.env
+echo "export V5_TITAN_CERT=$V5_TITAN_CERT" >> build.${envr}.env
+echo "export V5_TITAN_PKEY=$V5_TITAN_PKEY" >> build.${envr}.env
+echo "export V5_ATLAS_GRPC=$V5_ATLAS_GRPC" >> build.${envr}.env
+echo "export V5_SHELL_CERT=$V5_SHELL_CERT" >> build.${envr}.env
+echo "export V5_SHELL_PKEY=$V5_SHELL_PKEY" >> build.${envr}.env
+else
+source build.${envr}.env
 fi
 
 echo -n $name          > embed/name.txt

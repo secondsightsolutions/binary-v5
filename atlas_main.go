@@ -81,9 +81,9 @@ func run_titan_ping(readyWG, doneWG *sync.WaitGroup, stop chan any, intv int, at
 	pingService := func() {
 		strt := time.Now()
 		if _, err := atlas.titan.Ping(metaGRPC(), &Req{}); err == nil {
-			log("atlas", "run_titan_ping", "%-21s", time.Since(strt), err, "ping succeeded")
+			log("atlas", "run_titan_ping", "ping succeeded", time.Since(strt), nil)
 		} else {
-			log("atlas", "run_titan_ping", "%-21s", time.Since(strt), err, "ping failed")
+			log("atlas", "run_titan_ping", "ping failed", time.Since(strt), err)
 		}
 	}
 	pingService()

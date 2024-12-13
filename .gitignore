@@ -7,3 +7,5 @@ dflts.go
 run/
 
 run.sh
+
+*.env

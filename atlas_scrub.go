@@ -110,7 +110,7 @@ func (sc *scrub) run() {
 	out2, in2 := (chan<- *Rebate)(chn2), (<-chan *Rebate)(chn2)
 	wgrp.Add(3)
 	go sc.pull_rebates(&wgrp, out1) // Pull rebates from table in order specified by policy, and feed to rebate workers.
-	go sc.work_rebates(&wgrp, in1, out2, 64, 20)
+	go sc.work_rebates(&wgrp, in1, out2, 2, 20)
 	go sc.save_rebates(&wgrp, in2, 5, 100) // Reads finished rebates from workers and updates the rebates table.
 	wgrp.Wait()
 

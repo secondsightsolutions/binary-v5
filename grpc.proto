@@ -10,11 +10,11 @@ package main;
 message Scrub {
     int64  seq  = 1;
     string auth = 2;
-    string manu = 3;
+    //string manu = 3;
     string plcy = 4;
     string name = 5;
     string vers = 6;
-    string desc = 7;
+    string dscr = 7;
     string hash = 8;
     string host = 9;
     string appl = 10;
@@ -23,6 +23,10 @@ message Scrub {
     string kind = 13;
     string test = 14;
     int64  scid = 15;
+    int64  crat = 16;
+    int64  rdat = 17;
+    int64  srat = 18;
+    int64  dnat = 19;
     string col1 = 21;
     string col2 = 22;
     string col3 = 23;
@@ -73,7 +77,6 @@ message Scrub {
     string col48= 68;
     string col49= 69;
     string col50= 70;
-    map<string,string> data = 71;
 }
 message Rebate {
     int64  seq  = 1;    // sync sequence number
@@ -188,7 +191,7 @@ message Claim {
     bool   cnfm = 19;
     string manu = 20;
     float  qty  = 21;
-    repeated string ihph = 30;
+    string ihph = 30;
 }
 
 message TitanRebate {
@@ -204,8 +207,6 @@ message Entity {
     string i340  = 1;
     int64  strt  = 2;
     int64  term  = 3;
-    string stat = 4;
-    repeated Designation desigs = 10;
 }
 message Pharmacy {
     string i340 = 1;
@@ -214,10 +215,10 @@ message Pharmacy {
     string npi  = 4;
     string dea  = 5;
     string chnm = 6;
-    string stat = 10;
-    repeated string ncps = 7;
-    repeated string npis = 8;
-    repeated string deas = 9;
+    string ncps = 8;
+    string npis = 9;
+    string deas = 10;
+    string state = 11;
 }
 message NDC {
     string ndc  = 1;
@@ -249,8 +250,6 @@ message Designation {
     int64  cpat = 13;
     bool   excl = 14;
     string hin  = 15;
-
-    map<string,string> xtra = 11;
 }
 message LDN {
     string manu = 1;
@@ -258,8 +257,6 @@ message LDN {
     string phid = 3;
     bool   assg = 4;
     bool   term = 5;
-
-    map<string,string> xtra = 10;
 }
 message ESP1PharmNDC {
     string  spid  = 1;
