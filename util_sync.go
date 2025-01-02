@@ -84,7 +84,7 @@ func sync_to_server[T, R any](pool *pgxpool.Pool, appl, tbln, coln string, f fun
 		Log(appl, "sync_to_server", lastTok(tbln, "."), "reading seqn table failed", time.Since(strt), map[string]any{"manu": manu}, err)
 	}
 }
-func sync_fm_client[T,R any](pool *pgxpool.Pool, appl, manu, tbln string, strm grpc.ClientStreamingServer[T,R]) {
+func sync_fm_client[T,R any](pool *pgxpool.Pool, appl, manu, tbln string, strm grpc.ClientStreamingServer[T,R]) (int64, int64, error) {
 	strt := time.Now()
 	stop := make(chan any, 1)
 	dbm  := new_dbmap[T]()
@@ -92,14 +92,17 @@ func sync_fm_client[T,R any](pool *pgxpool.Pool, appl, manu, tbln string, strm g
 	chn  := strm_recv_clnt(appl, tbln, strm, stop);
 	cnt, seq, err := db_insert(pool, appl, tbln, dbm, chn, 5000, "", false)
 	Log(appl, "sync_fm_client", lastTok(tbln, "."), "sync completed", time.Since(strt), map[string]any{"manu": manu, "cnt": cnt, "seq": seq}, err)
+	return cnt, seq, err
 }
-func sync_to_client[T any](pool *pgxpool.Pool, appl, manu, tbln, whr string, dbm *dbmap, strm grpc.ServerStreamingServer[T]) {
+func sync_to_client[T any](pool *pgxpool.Pool, appl, manu, tbln, whr string, dbm *dbmap, strm grpc.ServerStreamingServer[T]) (int64, int64, error) {
 	strt := time.Now()
 	stop := make(chan any, 1)
 	if chn, err := db_select[T](pool, appl, tbln, dbm, whr, "", stop); err == nil {
 		cnt, seq, err := strm_send_clnt(appl, tbln, strm, chn, stop)
 		Log(appl, "sync_to_client", lastTok(tbln, "."), "sync completed", time.Since(strt), map[string]any{"manu": manu, "cnt": cnt, "seq": seq}, err)
+		return cnt, seq, err
 	} else {
 		Log(appl, "sync_to_client", lastTok(tbln, "."), "sync completed", time.Since(strt), map[string]any{"manu": manu}, err)
+		return 0, 0, err
 	}
 }

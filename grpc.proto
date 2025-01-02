@@ -104,9 +104,10 @@ message TitanRebate {
 }
 
 message Entity {
-    string i340  = 1;
-    int64  strt  = 2;
-    int64  term  = 3;
+    int64  seq   = 1;
+    string i340  = 2;
+    int64  strt  = 3;
+    int64  term  = 4;
 }
 message Pharmacy {
     string i340 = 1;
@@ -119,11 +120,14 @@ message Pharmacy {
     string npis = 9;
     string deas = 10;
     string state = 11;
+    int64  seq   = 12;
 }
 message NDC {
-    string ndc  = 1;
-    string name = 2;
-    string netw = 3;
+    string manu = 1;
+    string ndc  = 2;
+    string name = 3;
+    string netw = 4;
+    int64  seq  = 5;
 }
 message SPI {
     string ncp = 1;
@@ -134,6 +138,7 @@ message SPI {
     string lbn = 6;
     string chn = 7;
     string cde = 8;   // NCPDP 340b status code
+    int64  seq = 9;
 }
 message Designation {
     string manu = 1;
@@ -150,6 +155,7 @@ message Designation {
     int64  cpat = 13;
     bool   excl = 14;
     string hin  = 15;
+    int64  seq  = 16;
 }
 message LDN {
     string manu = 1;
@@ -157,15 +163,17 @@ message LDN {
     string phid = 3;
     bool   assg = 4;
     bool   term = 5;
+    int64  seq  = 6;
 }
 message ESP1PharmNDC {
-    string  spid  = 1;
-    string  ndc   = 2;
-    int64   strt  = 3;
-    int64   term  = 4;
+    string  manu = 1;
+    string  spid = 2;
+    string  ndc  = 3;
+    int64   strt = 4;
+    int64   term = 5;
 }
 message Eligibility {
-    int64  id     = 1;   // id
+    int64  seq    = 1;   // id
     string i340   = 2;   // id_340b
     string phid   = 3;   // pharmacy_id
     string manu   = 4;   // manufacturer

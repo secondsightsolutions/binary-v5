@@ -233,7 +233,6 @@ CREATE TABLE atlas.test_entities (
 CREATE INDEX ON atlas.test_entities(test);
 
 CREATE TABLE atlas.test_pharmacies (
-    manu text not null,
     test text not null,
     i340 text not null,
     phid text not null,
@@ -242,7 +241,7 @@ CREATE TABLE atlas.test_pharmacies (
     deas text array not null default '{}',
     chnm text not null default '',
     stat text not null default '',
-    CONSTRAINT test_pharmacies_pk PRIMARY KEY (manu, test, i340, phid)
+    CONSTRAINT test_pharmacies_pk PRIMARY KEY (test, i340, phid)
 );
 CREATE INDEX ON atlas.test_pharmacies(test);
 
@@ -257,7 +256,6 @@ CREATE TABLE atlas.test_ndcs (
 CREATE INDEX ON atlas.test_ndcs(test);
 
 CREATE TABLE atlas.test_spis (
-    manu text not null,
     test text not null,
     ncp  text not null,
     npi  text not null default '',
@@ -267,7 +265,7 @@ CREATE TABLE atlas.test_spis (
     lbn  text not null default '',
     chn  text not null default '',
     cde  text not null default '',
-    CONSTRAINT test_spis_pk PRIMARY KEY (manu, test, ncp)
+    CONSTRAINT test_spis_pk PRIMARY KEY (test, ncp)
 );
 CREATE INDEX ON atlas.test_claims(test);
 
@@ -303,12 +301,11 @@ CREATE TABLE atlas.test_ldns (
 CREATE INDEX ON atlas.test_ldns(test);
 
 CREATE TABLE atlas.test_esp1 (
-    manu text not null,
     test text   not null,
     ndc  text   not null,
     strt bigint not null default 0,
     term bigint not null default 0,
-    CONSTRAINT test_esp1_pk PRIMARY KEY (manu, test, ndc)
+    CONSTRAINT test_esp1_pk PRIMARY KEY (test, ndc)
 );
 CREATE INDEX ON atlas.test_esp1(test, ndc);
 

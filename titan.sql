@@ -85,6 +85,130 @@ CREATE TABLE titan.rebate_claims (
     CONSTRAINT rebate_claims_pk PRIMARY KEY (manu, scid, rbid, shrt)
 );
 
+CREATE TABLE titan.claims (
+    manu text not null,
+    shrt text not null,
+    i340 text not null,
+    ndc  text not null,
+    spid text not null,
+    prid text not null default '',
+    hrxn text not null,
+    hfrx text not null default '',
+    hdos text not null,
+    hdop text not null,
+    doc  bigint not null default 0,
+    dos  bigint not null default 0,
+    dop  bigint not null default 0,
+    netw text not null,
+    prnm text not null,
+    chnm text not null default '',
+    elig bool not null default true,
+    susp bool not null default false,
+    cnfm bool not null default true,
+    qty  numeric not null default 0,
+    ihph text array not null default '{}',
+    seq  bigserial,
+    CONSTRAINT claims_pk PRIMARY KEY(manu, shrt)
+);
+CREATE INDEX ON titan.claims(manu);
+CREATE INDEX ON titan.claims(manu, doc);
+
+CREATE TABLE titan.entities (
+    i340 text   not null,
+    strt bigint not null default 0,
+    term bigint not null default 0,
+    dop  bigint not null default 0,
+    stat text   not null default '',
+    seq  bigint not null primary key
+);
+CREATE INDEX ON titan.entities(seq);
+
+CREATE TABLE titan.pharmacies (
+    i340 text not null,
+    phid text not null,
+    ncps text array not null default '{}',
+    npis text array not null default '{}',
+    deas text array not null default '{}',
+    chnm text not null default '',
+    stat text not null default '',
+    seq  bigint not null primary key
+);
+
+CREATE TABLE titan.ndcs (
+    manu text not null,
+    ndc  text not null,
+    name text not null,
+    netw text not null default 'retail',
+    seq  bigint not null,
+    CONSTRAINT ndcs_pk PRIMARY KEY (manu, ndc)
+);
+CREATE INDEX ON titan.ndcs(manu);
+CREATE INDEX ON titan.ndcs(seq);
+
+CREATE TABLE titan.spis (
+    ncp  text not null primary key,
+    npi  text not null default '',
+    dea  text not null default '',
+    sto  text not null default '',
+    nam  text not null default '',
+    lbn  text not null default '',
+    chn  text not null default '',
+    cde  text not null default '',
+    seq  bigint not null
+);
+CREATE INDEX ON titan.spis(seq);
+
+CREATE TABLE titan.desigs (
+    manu text not null,
+    i340 text not null,
+    phid text not null,
+    netw text not null default 'retail',
+    flag text not null default '',
+    hin  text not null default '',
+    assg boolean not null default true,
+    term boolean not null default false,
+    excl boolean not null default false,
+    xdat bigint not null default 0,
+    dlat bigint not null default 0,
+    xsat bigint not null default 0,
+    crat bigint not null default 0,
+    cpat bigint not null default 0,
+    seq  bigint not null,
+    CONSTRAINT desigs_pk PRIMARY KEY (manu, i340, phid)
+);
+CREATE INDEX ON titan.desigs(manu);
+
+CREATE TABLE titan.ldns (
+    manu text not null,
+    netw text not null,
+    phid text not null,
+    assg boolean not null default true,
+    term boolean not null default false,
+    seq  bigint not null,
+    CONSTRAINT ldns_pk PRIMARY KEY (manu, netw, phid)
+);
+CREATE INDEX ON titan.ldns(manu);
+
+CREATE TABLE titan.esp1 (
+    manu text   not null,
+    spid text   not null,
+    ndc  text   not null,
+    strt bigint not null default 0,
+    term bigint not null default 0,
+    CONSTRAINT esp1_pk PRIMARY KEY (manu, spid, ndc)
+);
+
+CREATE TABLE titan.eligibility (
+    seq  bigint not null primary key,
+    manu text   not null,
+    i340 text   not null,
+    phid text   not null,
+    netw text   not null default 'retail',
+    strt bigint not null default 0,
+    term bigint not null default 0
+);
+CREATE INDEX ON titan.eligibility(manu);
+
 -- PROVISIONING
 
 CREATE TABLE titan.auth (

@@ -134,7 +134,15 @@ func (dbm *dbmap) getColumnValueAsString(coln, fv string) string {
 			if strings.EqualFold(dbf.typ, "ARRAY") {
 				// Special handling if the column type is an array
 				// The fv will already be comma-separated, so just need to wrap
-				return fmt.Sprintf("'{%s}'", fv)
+				// Weirdness - seems sometimes there can be blank entries, so remove them first.
+				toks := strings.Split(fv, ",")
+				list := []string{}
+				for _, tok := range toks {
+					if tok != "" {
+						list = append(list, tok)
+					}
+				}
+				return fmt.Sprintf("'{%s}'", strings.Join(list, ","))
 			}
 		}
 	}

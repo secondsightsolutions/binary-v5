@@ -82,7 +82,6 @@ func db_select[T any](pool *pgxpool.Pool, appl, tbln string, dbm *dbmap, where, 
 		panic("dbmap not initialized with database table")
 	}
 	if tx, err := pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted}); err == nil {
-		//fmt.Printf("db_select: qry=%s\n", qry)
 		if rows, err := tx.Query(ctx, qry); err == nil {
 			go func() {
 				defer tx.Commit(ctx)
@@ -91,7 +90,6 @@ func db_select[T any](pool *pgxpool.Pool, appl, tbln string, dbm *dbmap, where, 
 					select {
 					case <-stop:
 						Log(appl, "db_select", tbln, "got stop signal, returning", 0, nil, nil)
-						//log2(appl, "db_select", "got stop signal, returning", "", "", nil, 0)
 						tx.Rollback(ctx)
 						close(chn)
 						return
@@ -105,17 +103,16 @@ func db_select[T any](pool *pgxpool.Pool, appl, tbln string, dbm *dbmap, where, 
 								}
 								chn <-obj
 							} else {
-								//log(appl, "db_select", "getting row values failed", 0, err)
 								Log(appl, "db_select", tbln, "getting row values failed", 0, nil, err)
+								fmt.Println(qry)
 								tx.Rollback(ctx)
 								close(chn)
 								return
 							}
 						} else {
-							//log(appl, "db_select", "no more rows, closing channel", 0, nil)
 							if err := rows.Err(); err != nil {
-								//log(appl, "db_select", "getting row failed", 0, err)
-								Log(appl, "db_select", tbln, "getting row values failed", 0, nil, err)
+								Log(appl, "db_select", tbln, "getting next row failed", 0, nil, err)
+								fmt.Println(qry)
 							}
 							close(chn)
 							return
@@ -125,7 +122,6 @@ func db_select[T any](pool *pgxpool.Pool, appl, tbln string, dbm *dbmap, where, 
 			}()
 			return chn, nil
 		} else {
-			//log(appl, "db_select", "query failed, NOT closing channel (%s)", 0, err, qry)
 			Log(appl, "db_select", tbln, "query failed, NOT closing channel", 0, nil, err)
 			tx.Rollback(ctx)
 			return nil, err
@@ -148,16 +144,18 @@ func db_insert[T any](pool *pgxpool.Pool, appl, tbln string, dbm *dbmap, fm <-ch
 	if tx, err := pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted}); err == nil {
 		defer tx.Commit(context.Background())
 		if replace {
+			if !strings.HasPrefix(tbln, "titan") && !strings.HasPrefix(tbln, "atlas") {
+				panic("cannot delete rows from " + tbln)
+			}
 			// If we're replacing, then first delete all. Very important that all is done in same transaction!
 			strt := time.Now()
-			if _, err := db_exec(ctx, pool, fmt.Sprintf("DELETE FROM %s", tbln)); err == nil {
-				Log(appl, "db_insert", tbln, "delete rows succeeded", time.Since(strt), nil, nil)
-				//log3(appl, "db_insert", "delete rows succeeded", tbln, fmt.Sprintf("rows=%d", cnt), "", nil, time.Since(strt))
+			if cnt, err := db_exec(ctx, pool, fmt.Sprintf("DELETE FROM %s", tbln)); err == nil {
+				Log(appl, "db_insert", tbln, "delete rows succeeded", time.Since(strt), map[string]any{"cnt": cnt}, nil)
 			} else {
-				Log(appl, "db_insert", tbln, "delete rows failed", time.Since(strt), nil, nil)
-				//log3(appl, "db_insert", "delete rows failed", tbln, fmt.Sprintf("rows=%d", cnt), "", err, time.Since(strt))
+				Log(appl, "db_insert", tbln, "delete rows failed", time.Since(strt), nil, err)
 			}
 		}
+		strt := time.Now()
 		for obj := range fm {
 			if idcol != "" {
 				rfl.setFieldValue(obj, idcol, cnt)	// Sets Rbid to a unique value within this scrub insert.
@@ -170,8 +168,7 @@ func db_insert[T any](pool *pgxpool.Pool, appl, tbln string, dbm *dbmap, fm <-ch
 			lst = append(lst, obj)
 			if len(lst) == batch {
 				if err := db_insert_batch(ctx, tx, pool, tbln, dbm, lst, true); err != nil {
-					Log(appl, "db_insert", tbln, "insert batch rows failed", 0, nil, err)
-					//log3(appl, "db_insert", "insert batch rows failed", tbln, fmt.Sprintf("cnt=%d rows=%d", len(lst), cnt), "", err, 0)
+					Log(appl, "db_insert", tbln, "insert batch rows failed", time.Since(strt), map[string]any{"cnt": cnt, "seq": max}, err)
 					tx.Rollback(ctx)
 					return cnt, max, err
 				}
@@ -183,8 +180,7 @@ func db_insert[T any](pool *pgxpool.Pool, appl, tbln string, dbm *dbmap, fm <-ch
 		}
 		if len(lst) > 0 {
 			if err := db_insert_batch(context.Background(), tx, pool, tbln, dbm, lst, true); err != nil {
-				Log(appl, "db_insert", tbln, "insert batch rows failed (frag)", 0, nil, err)
-				//log3(appl, "db_insert", "insert batch rows failed (fragment)", tbln, fmt.Sprintf("cnt=%d rows=%d", len(lst), cnt), "", err, 0)
+				Log(appl, "db_insert", tbln, "insert batch rows failed (frag)", time.Since(strt), map[string]any{"cnt": cnt, "seq": max}, err)
 				tx.Rollback(context.Background())
 				return cnt, max, err
 			}
@@ -213,6 +209,7 @@ func db_insert_batch(ctx context.Context, tx pgx.Tx, pool *pgxpool.Pool, tbln st
 	_, err := tx.Exec(ctx, qry)
 	if err != nil {
 		tx.Rollback(ctx)
+		fmt.Println(qry)
 	}
 	return err
 }
@@ -492,6 +489,7 @@ func dyn_insert[T any](tbln string, dbm *dbmap, objs []T, ignoreConflicts bool) 
 		for j, colN := range cols {
 			dbf := dbm.byCol(colN)
 			fv  := rfl.getFieldValueAsString(obj, dbf.fld)
+			fv  = strings.ReplaceAll(fv, "'", "")
 			cv  := dbm.getColumnValueAsString(colN, fv)
 			sb.WriteString(cv)
 			if j < len(cols)-1 {
@@ -507,6 +505,20 @@ func dyn_insert[T any](tbln string, dbm *dbmap, objs []T, ignoreConflicts bool) 
 		sb.WriteString(" ON CONFLICT DO NOTHING")
 	}
 	return sb.String()
+}
+func db_max(pool *pgxpool.Pool, tbln, coln string) (int64, error) {
+	if rows, err := pool.Query(context.Background(), fmt.Sprintf("SELECT COALESCE(MAX(%s), 0) seq FROM %s", coln, tbln)); err == nil {
+		defer rows.Close()
+		var seq int64
+		if rows.Next() {
+			err := rows.Scan(&seq)
+			return seq, err
+		} else {
+			return 0, nil
+		}
+	} else {
+		return 0, err
+	}
 }
 
 func ping_db(appl, name string, pool *pgxpool.Pool) {
