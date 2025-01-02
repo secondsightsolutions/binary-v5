@@ -10,7 +10,6 @@ import (
 
 	grpc "google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/metadata"
 )
 
 func (clt *Shell) connect() (AtlasClient, error) {
@@ -35,22 +34,16 @@ func (sh *Shell) rebates(stop chan any, rbts chan *Rebate) (chan *Rebate, error)
 			sh.atlas = clt
 		}
 	}
-	md  := metadata.New(map[string]string{
-		"auth": sh.opts.auth, 
-		"manu": manu,
+	ctx := metaGRPC(map[string]string{
 		"plcy": sh.opts.policy,
-		"kind": kind, 
-		"name": name,
-		"vers": vers,
+		"kind": sh.opts.kind,
 		"dscr": desc,
 		"hash": hash,
 		"host": "",
-		"appl": appl,
 		"hdrs": "",
 		"cmdl": strings.Join(os.Args, " "),
 		"test": "",
 	})
-	ctx := metadata.NewOutgoingContext(context.Background(), md)
 	c,f := context.WithCancel(ctx)
 	dur := time.Duration(0) * time.Second
 	out := make(chan *Rebate, 1000)
@@ -75,12 +68,13 @@ func (sh *Shell) rebates(stop chan any, rbts chan *Rebate) (chan *Rebate, error)
 						goto done
 					case <-time.After(dur):
 						if err := strm.Send(rbt); err != nil {
-							fmt.Printf("shell.Rebates() failed to send rebate=(%v) err=%s\n", rbt, err.Error())
 							if strings.Contains(err.Error(), "Unavailable") {
-								log("shell", "rebates", "error sending rebates (network error, retrying)", 0, err)
+								//log("shell", "rebates", "error sending rebates (network error, retrying)", 0, err)
+								Log("shell", "rebates", "", "error sending rebates (network error, retrying)", 0, nil, nil)
 								dur = time.Duration(5) * time.Second
 							} else {
-								log("shell", "rebates", "error sending rebates (giving up)", 0, err)
+								//log("shell", "rebates", "error sending rebates (giving up)", 0, err)
+								Log("shell", "rebates", "", "error sending rebates (giving up)", 0, nil, nil)
 								goto done
 							}
 						} else {

@@ -20,12 +20,12 @@ var MemUse = struct {
     ready bool
 }{sync.Mutex{}, 0, 0, 0, false, false}
 
-func run_memr_watch(readyWG, doneWG *sync.WaitGroup, stop chan interface{}) {
-    defer readyWG.Done()
-    rgxMem  := regexp.MustCompile(`(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+).*`)
-    durSec  := 0
-    started := make(chan any)
-    go func(chan any) {
+func run_memr_watch(done *sync.WaitGroup, stop chan any) {
+    rgxMem := regexp.MustCompile(`(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+).*`)
+    durSec := 0
+    done.Add(1)
+    go func() {
+        defer done.Done()
         lnx := func() (memUse, memTot int, fnd bool) {
             fnd = true
             cmd := exec.Command("free", "-m")
@@ -89,7 +89,6 @@ func run_memr_watch(readyWG, doneWG *sync.WaitGroup, stop chan interface{}) {
         for {
             select {
             case <-stop:
-                doneWG.Done()
                 return
     
             case <-time.After(time.Duration(durSec)*time.Second):
@@ -111,7 +110,6 @@ func run_memr_watch(readyWG, doneWG *sync.WaitGroup, stop chan interface{}) {
                         MemUse.ready = true
                         MemUse.valid = false
                         MemUse.Unlock()
-                        started <-nil
                         return
                     }
                 }
@@ -122,12 +120,7 @@ func run_memr_watch(readyWG, doneWG *sync.WaitGroup, stop chan interface{}) {
                 MemUse.inuse = memUse
                 MemUse.total = memTot
                 MemUse.Unlock()
-                if started != nil {
-                    started <-nil
-                    started = nil
-                }
             }
         }
-    }(started)
-    <-started
+    }()
 }

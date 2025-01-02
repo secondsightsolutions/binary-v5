@@ -12,8 +12,8 @@ type Opts struct {
     runClient bool
     runAtlas  bool
     runTitan  bool
-    name      string
     auth      string
+    kind      string
     hdrm      string
     csep      string
     fileIn    string
@@ -24,61 +24,67 @@ type Opts struct {
 
 func options() *Opts {
     opts := &Opts{}
-    flag.BoolVar(&opts.runVers, "version",  false, "Print application details and exit")
+    flag.BoolVar(&opts.runVers, "version", false,       "Print application details and exit")
+    flag.StringVar(&opts.kind,  "kind",    "pharmacy",  "Scrub type (pharmacy, medical, etc.)")
 
     if strings.EqualFold(name, "brg") {
-        flag.BoolVar(&opts.runClient, "client",  opts.runClient, "Run client")
-        flag.BoolVar(&opts.runAtlas,  "atlas",   opts.runAtlas,  "Run atlas")
-        flag.BoolVar(&opts.runTitan,  "titan",   opts.runTitan,  "Run titan")
-        flag.BoolVar(&opts.runPing,   "ping",    false,          "Ping the server and exit")
-        flag.BoolVar(&opts.runConf,   "config",  false,          "Print application configuration and exit")
-        flag.StringVar(&opts.auth,    "auth",    "",             "Authorization token")
-        flag.StringVar(&opts.fileIn,  "in",      "",             "Rebate input file")
-        flag.StringVar(&opts.fileOut, "out",     "",             "Rebate output file")
-        flag.StringVar(&opts.policy,  "policy",  "default",      "Rebate output file")
-        flag.StringVar(&opts.hdrm,    "hdrs",    "",             "Header map (cust1:std1,cust2:std2,...)")
-        flag.StringVar(&opts.csep,    "csep",    ",",            "Rebate file column separator")
-        flag.StringVar(&manu,         "manu",    manu,           "Manufacturer name")
-        flag.StringVar(&opts.name,    "proc",    name,           "Run as processor name")
-        flag.StringVar(&opts.test,    "test",    "",             "Test directory")
-        
-        if strings.EqualFold(appl, "shell") {
-            opts.runClient = true
-        } else if strings.EqualFold(appl, "atlas") {
-            opts.runAtlas = true
-        } else if strings.EqualFold(appl, "titan") {
-            opts.runTitan = true
-        }
-
+        flag.BoolVar(&opts.runClient, "client",  false,         "Run client")
+        flag.BoolVar(&opts.runAtlas,  "atlas",   false,         "Run atlas")
+        flag.BoolVar(&opts.runTitan,  "titan",   true,          "Run titan")
+        flag.BoolVar(&opts.runPing,   "ping",    false,         "Ping the server and exit")
+        flag.BoolVar(&opts.runConf,   "config",  false,         "Print application configuration and exit")
+        flag.StringVar(&opts.auth,    "auth",    "",            "Authorization token")
+        flag.StringVar(&opts.fileIn,  "in",      "",            "Rebate input file")
+        flag.StringVar(&opts.fileOut, "out",     "",            "Rebate output file")
+        flag.StringVar(&opts.policy,  "policy",  "default",     "Rebate output file")
+        flag.StringVar(&opts.hdrm,    "hdrs",    "",            "Header map (cust1:std1,cust2:std2,...)")
+        flag.StringVar(&opts.csep,    "csep",    ",",           "Rebate file column separator")
+        flag.StringVar(&manu,         "manu",    manu,          "Manufacturer name")
+        flag.StringVar(&name,         "proc",    name,          "Run as processor name")
+        flag.StringVar(&opts.test,    "test",    "",            "Test directory")
+       
+    } else if Type == "manu" {
+        flag.BoolVar(&opts.runClient, "client",  false,         "Run client")
+        flag.BoolVar(&opts.runPing,   "ping",    false,         "Ping the server and exit")
+        flag.BoolVar(&opts.runConf,   "config",  false,         "Print application configuration and exit")
+        flag.StringVar(&opts.auth,    "auth",    "",            "Authorization token")
+        flag.StringVar(&opts.fileIn,  "in",      "",            "Rebate input file")
+        flag.StringVar(&opts.fileOut, "out",     "",            "Rebate output file")
+        flag.StringVar(&opts.policy,  "policy",  "default",     "Rebate output file")
+        flag.StringVar(&opts.hdrm,    "hdrs",    "",            "Header map (cust1:std1,cust2:std2,...)")
+        flag.StringVar(&opts.csep,    "csep",    ",",           "Rebate file column separator")
     } else {
-        if strings.EqualFold(appl, "shell") {
-            opts.runClient = true
-            flag.BoolVar(&opts.runPing,   "ping",    false,     "Ping the server and exit")
-            flag.StringVar(&opts.auth,    "auth",    "",        "Authorization token")
-            flag.StringVar(&opts.fileIn,  "in",      "",        "Rebate input file")
-            flag.StringVar(&opts.fileOut, "out",     "",        "Rebate output file")
-            flag.StringVar(&opts.policy,  "policy",  "default", "Rebate output file")
-            flag.StringVar(&opts.hdrm,    "hdrs",    "",        "Header map (cust1:std1,cust2:std2,...)")
-            flag.StringVar(&opts.csep,    "csep",    ",",       "Rebate file column separator")
-            if Type == "proc" {
-                flag.StringVar(&manu, "manu", manu, "Manufacturer name")
-            }
-        } else if strings.EqualFold(appl, "atlas") {
-            opts.runAtlas = true
-            flag.BoolVar(&opts.runPing, "ping",     false, "Ping the server and exit")
+        flag.BoolVar(&opts.runPing,   "ping",    false,         "Ping the server and exit")
+        flag.BoolVar(&opts.runConf,   "config",  false,         "Print application configuration and exit")
+        flag.StringVar(&opts.auth,    "auth",    "",            "Authorization token")
+        flag.StringVar(&opts.fileIn,  "in",      "",            "Rebate input file")
+        flag.StringVar(&opts.fileOut, "out",     "",            "Rebate output file")
+        flag.StringVar(&opts.policy,  "policy",  "default",     "Rebate output file")
+        flag.StringVar(&opts.hdrm,    "hdrs",    "",            "Header map (cust1:std1,cust2:std2,...)")
+        flag.StringVar(&opts.csep,    "csep",    ",",           "Rebate file column separator")
+    }
 
-        } else if strings.EqualFold(appl, "titan") {
-            exit(nil, 99, "cannot run a titan build with name %s", name)
+    flag.Parse()
+
+    if !opts.runVers && !opts.runConf && !opts.runPing {
+        if name != "brg" {
+            if Type == "manu" {
+                if !opts.runClient {
+                    opts.runAtlas = true
+                }
+            } else {
+                opts.runClient = true
+            }
         }
     }
-    flag.Parse()
-    if appl == "shell" && !opts.runPing && !opts.runVers && !opts.runConf {
-        if manu == "" {
-            exit(nil, 1, "missing manu")
-        }
-        if opts.fileIn == "" {
-            exit(nil, 2, "missing rebate file")
-        }
+    if (opts.runClient || opts.runAtlas) && manu == "" {
+        exit(nil, 1, "missing manu")
+    }
+    if opts.runClient && opts.fileIn == "" {
+        exit(nil, 2, "missing rebate file")
+    }
+    if opts.runClient && opts.auth == "" {
+        exit(nil, 3, "missing auth token")
     }
     return opts
 }

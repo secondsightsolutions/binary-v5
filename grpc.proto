@@ -27,56 +27,6 @@ message Scrub {
     int64  rdat = 17;
     int64  srat = 18;
     int64  dnat = 19;
-    string col1 = 21;
-    string col2 = 22;
-    string col3 = 23;
-    string col4 = 24;
-    string col5 = 25;
-    string col6 = 26;
-    string col7 = 27;
-    string col8 = 28;
-    string col9 = 29;
-    string col10= 30;
-    string col11= 31;
-    string col12= 32;
-    string col13= 33;
-    string col14= 34;
-    string col15= 35;
-    string col16= 36;
-    string col17= 37;
-    string col18= 38;
-    string col19= 39;
-    string col20= 40;
-    string col21= 41;
-    string col22= 42;
-    string col23= 43;
-    string col24= 44;
-    string col25= 45;
-    string col26= 46;
-    string col27= 47;
-    string col28= 48;
-    string col29= 49;
-    string col30= 50;
-    string col31= 51;
-    string col32= 52;
-    string col33= 53;
-    string col34= 54;
-    string col35= 55;
-    string col36= 56;
-    string col37= 57;
-    string col38= 58;
-    string col39= 59;
-    string col40= 60;
-    string col41= 61;
-    string col42= 62;
-    string col43= 63;
-    string col44= 64;
-    string col45= 65;
-    string col46= 66;
-    string col47= 67;
-    string col48= 68;
-    string col49= 69;
-    string col50= 70;
 }
 message Rebate {
     int64  seq  = 1;    // sync sequence number
@@ -98,56 +48,6 @@ message Rebate {
     string fndc = 17;   // formatted ndc
     string frxn = 18;   // formatted rxn
     string fprd = 19;   // formatted prid
-    string col1 = 21;
-    string col2 = 22;
-    string col3 = 23;
-    string col4 = 24;
-    string col5 = 25;
-    string col6 = 26;
-    string col7 = 27;
-    string col8 = 28;
-    string col9 = 29;
-    string col10= 30;
-    string col11= 31;
-    string col12= 32;
-    string col13= 33;
-    string col14= 34;
-    string col15= 35;
-    string col16= 36;
-    string col17= 37;
-    string col18= 38;
-    string col19= 39;
-    string col20= 40;
-    string col21= 41;
-    string col22= 42;
-    string col23= 43;
-    string col24= 44;
-    string col25= 45;
-    string col26= 46;
-    string col27= 47;
-    string col28= 48;
-    string col29= 49;
-    string col30= 50;
-    string col31= 51;
-    string col32= 52;
-    string col33= 53;
-    string col34= 54;
-    string col35= 55;
-    string col36= 56;
-    string col37= 57;
-    string col38= 58;
-    string col39= 59;
-    string col40= 60;
-    string col41= 61;
-    string col42= 62;
-    string col43= 63;
-    string col44= 64;
-    string col45= 65;
-    string col46= 66;
-    string col47= 67;
-    string col48= 68;
-    string col49= 69;
-    string col50= 70;
 }
 message ClaimUse {
     int64  seq  = 1;
@@ -348,5 +248,4 @@ service Titan {
     rpc Rebates(stream TitanRebate)         returns (Res) {}
     rpc ClaimsUsed(stream ClaimUse)         returns (Res) {}
     rpc RebateClaims(stream RebateClaim)    returns (Res) {}
-    rpc RebateMetas(stream RebateMeta)      returns (Res) {}
 }

@@ -7,6 +7,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type rflt struct {}
@@ -102,6 +104,8 @@ func (rfl *rflt) getFieldValueAsInt64(obj any, name string) int64 {
 		}
 	} else if fld.Kind() == reflect.Slice {
 		fv = int64(0)
+	} else {
+		fv = 0
 	}
 	return fv
 }
@@ -126,7 +130,24 @@ func (rfl *rflt) getFieldValue(obj any, name string) any {
 }
 
 func (rfl *rflt) setFieldValue(obj any, fld string, val any) {
+	pgn_float64 := func(v pgtype.Numeric) float64 {
+		if flt, err := v.Float64Value(); err == nil {
+			if flt.Valid {
+				return flt.Float64
+			}
+		}
+		return 0.0
+	}
+	pgn_int64 := func(v pgtype.Numeric) int64 {
+		if int, err := v.Int64Value(); err == nil {
+			if int.Valid {
+				return int.Int64
+			}
+		}
+		return 0
+	}
 	flds := rfl.fields(obj)
+	//fmt.Printf("rflt:setFieldValue(): fld=%s val=%v valT=%T (flds=%s)\n", fld, val, val, strings.Join(flds, ","))
 	_fld := ""
 	if slices.Contains(flds, fld) {			// First check for exact case match.
 		_fld = fld
@@ -172,6 +193,8 @@ func (rfl *rflt) setFieldValue(obj any, fld string, val any) {
 			fldV.SetString(fmt.Sprintf("%d", v))
 		case bool:
 			fldV.SetString(fmt.Sprintf("%v", v))
+		case pgtype.Numeric:
+			fldV.SetString(fmt.Sprintf("%f", pgn_float64(v)))
 		default:
 		}
 		
@@ -203,6 +226,8 @@ func (rfl *rflt) setFieldValue(obj any, fld string, val any) {
 			fldV.SetFloat(float64(v))
 		case int64:
 			fldV.SetFloat(float64(v))
+		case pgtype.Numeric:
+			fldV.SetFloat(pgn_float64(v))
 		case bool:
 		default:
 		}
@@ -235,6 +260,8 @@ func (rfl *rflt) setFieldValue(obj any, fld string, val any) {
 			fldV.SetUint(uint64(v))
 		case int64:
 			fldV.SetUint(uint64(v))
+		case pgtype.Numeric:
+			fldV.SetInt(pgn_int64(v))
 		case bool:
 		default:
 		}
@@ -267,6 +294,8 @@ func (rfl *rflt) setFieldValue(obj any, fld string, val any) {
 			fldV.SetInt(int64(v))
 		case int64:
 			fldV.SetInt(int64(v))
+		case pgtype.Numeric:
+			fldV.SetInt(pgn_int64(v))
 		case bool:
 		default:
 		}
@@ -301,6 +330,8 @@ func (rfl *rflt) setFieldValue(obj any, fld string, val any) {
 			fldV.SetBool(v != 0)
 		case bool:
 			fldV.SetBool(v)
+		case pgtype.Numeric:
+			fldV.SetBool(pgn_int64(v) != 0)
 		default:
 		}
 	} else if fldV.Kind() == reflect.Slice {

@@ -28,79 +28,78 @@ func db_sync_set(pool *pgxpool.Pool, appl, coln string, seq int64) error {
 	return nil
 }
 
-func sync_fm_server[T any](pool *pgxpool.Pool, appl, tbln, coln string, colmap map[string]string, f func(context.Context, *SyncReq, ...grpc.CallOption) (grpc.ServerStreamingClient[T], error), stop chan any) {
+func sync_fm_server[T any](pool *pgxpool.Pool, appl, tbln, coln string, f func(context.Context, *SyncReq, ...grpc.CallOption) (grpc.ServerStreamingClient[T], error), stop chan any) {
 	strt := time.Now()
 	name := tbln
+	dbm  := new_dbmap[T]()
+	dbm.table(pool, tbln)
 	if coln != "" {
 		// If there's a column name, it's the column name in the sync table, which means we continually add to the target table.
 		if seqn, err := db_sync_get(pool, appl, coln); err == nil {
 			chn := strm_recv_srvr(appl, name, seqn, f, stop)
-			if cnt, seq, err := db_insert(pool, appl, tbln, colmap, chn, 5000, "", false); err == nil {
+			if cnt, seq, err := db_insert(pool, appl, tbln, dbm, chn, 5000, "", false); err == nil {
 				if cnt > 0 {
-					if err := db_sync_set(pool, appl, coln, seq); err != nil {
-						log_sync(appl, "sync_fm_server", tbln, manu, "saving seqn failed", seqn, cnt, seq, err, time.Since(strt))
+					if err := db_sync_set(pool, appl, coln, seq); err == nil {
+						Log(appl, "sync_fm_server", lastTok(tbln, "."), "sync completed", time.Since(strt), map[string]any{"manu": manu, "cnt": cnt, "seq": seq}, nil)
+					} else {
+						Log(appl, "sync_fm_server", lastTok(tbln, "."), "saving seqn failed", time.Since(strt), map[string]any{"manu": manu, "cnt": cnt, "seq": seq}, err)
 					}
+				} else {
+					Log(appl, "sync_fm_server", lastTok(tbln, "."), "no rows inserted", time.Since(strt), map[string]any{"manu": manu, "cnt": cnt, "seq": seq}, err)
 				}
-				log_sync(appl, "sync_fm_server", tbln, manu, "", seqn, cnt, seq, err, time.Since(strt))
 			} else {
-				log_sync(appl, "sync_fm_server", tbln, manu, "db insert failed", seqn, cnt, seq, err, time.Since(strt))
+				Log(appl, "sync_fm_server", lastTok(tbln, "."), "db insert (append)", time.Since(strt), map[string]any{"manu": manu, "cnt": cnt, "seq": seq}, err)
 			}
 		} else {
-			log_sync(appl, "sync_fm_server", tbln, manu, "read from seq table failed", 0, 0, 0, err, time.Since(strt))
+			Log(appl, "sync_fm_server", lastTok(tbln, "."), "reading seqn failed", time.Since(strt), map[string]any{"manu": manu}, err)
 		}
 	} else {
 		// No column name, so it becomes a clean replacement (delete all rows, then insert from scratch)
 		chn := strm_recv_srvr(appl, name, 0, f, stop)
-		if cnt, seq, err := db_insert(pool, appl, tbln, nil, chn, 5000, "", true); err == nil {
-			log_sync(appl, "sync_fm_server", tbln, manu, "", 0, cnt, seq, err, time.Since(strt))
-		} else {
-			log_sync(appl, "sync_fm_server", tbln, manu, "db replace failed", 0, cnt, seq, err, time.Since(strt))
-		}
+		cnt, seq, err := db_insert(pool, appl, tbln, dbm, chn, 5000, "", true)
+		Log(appl, "sync_fm_server", lastTok(tbln, "."), "db insert (replace)", time.Since(strt), map[string]any{"manu": manu, "cnt": cnt, "seq": seq}, err)
 	}
-	
 }
-func sync_to_server[T, R any](pool *pgxpool.Pool, appl, tbln, coln string, f2c map[string]string, f func(context.Context, ...grpc.CallOption) (grpc.ClientStreamingClient[T, R], error), stop chan any) {
+func sync_to_server[T, R any](pool *pgxpool.Pool, appl, tbln, coln string, f func(context.Context, ...grpc.CallOption) (grpc.ClientStreamingClient[T, R], error), stop chan any) {
 	strt := time.Now()
+	dbm  := new_dbmap[T]()
+	dbm.table(pool, tbln)
 	if seqn, err := db_sync_get(pool, appl, coln); err == nil {
 		whr := fmt.Sprintf("seq > %d ", seqn)
-		if chn, err := db_select[T](pool, tbln, f2c, whr, "", stop); err == nil {
+		if chn, err := db_select[T](pool, appl, tbln, dbm, whr, "", stop); err == nil {
 			if cnt, seq, err := strm_send_srvr(appl, tbln, f, chn, stop); err == nil {
 				if cnt > 0 {
 					if err := db_sync_set(pool, appl, coln, seq); err != nil {
-						log_sync(appl, "sync_to_server", tbln, manu, "saving seqn failed", seqn, cnt, seq, err, time.Since(strt))
+						Log(appl, "sync_to_server", lastTok(tbln, "."), "saving seqn failed", time.Since(strt), map[string]any{"manu": manu, "cnt": cnt, "seq": seq}, err)
 					}
 				}
-				log_sync(appl, "sync_to_server", tbln, manu, "", seqn, cnt, seq, err, time.Since(strt))
+				Log(appl, "sync_to_server", lastTok(tbln, "."), "sync completed", time.Since(strt), map[string]any{"manu": manu, "cnt": cnt, "seq": seq}, nil)
 			} else {
-				log_sync(appl, "sync_to_server", tbln, manu, "send on stream failed", seqn, cnt, seq, err, time.Since(strt))
+				Log(appl, "sync_to_server", lastTok(tbln, "."), "stream send failed", time.Since(strt), map[string]any{"manu": manu, "cnt": cnt, "seq": seq}, err)
 			}
 		} else {
-			log_sync(appl, "sync_to_server", tbln, manu, "read from source table failed", seqn, 0, 0, err, time.Since(strt))
+			Log(appl, "sync_to_server", lastTok(tbln, "."), "reading source table failed", time.Since(strt), map[string]any{"manu": manu}, err)
 		}
 	} else {
-		log_sync(appl, "sync_to_server", tbln, manu, "read from seq table failed", 0, 0, 0, err, time.Since(strt))
+		Log(appl, "sync_to_server", lastTok(tbln, "."), "reading seqn table failed", time.Since(strt), map[string]any{"manu": manu}, err)
 	}
 }
 func sync_fm_client[T,R any](pool *pgxpool.Pool, appl, manu, tbln string, strm grpc.ClientStreamingServer[T,R]) {
 	strt := time.Now()
 	stop := make(chan any, 1)
+	dbm  := new_dbmap[T]()
+	dbm.table(pool, tbln)
 	chn  := strm_recv_clnt(appl, tbln, strm, stop);
-	if cnt, seq, err := db_insert(pool, appl, tbln, nil, chn, 5000, "", false); err == nil {
-		log_sync(appl, "sync_fm_client", tbln, manu, "", 0, cnt, seq, err, time.Since(strt))
-	} else {
-		log_sync(appl, "sync_fm_client", tbln, manu, "db insert failed", 0, cnt, seq, err, time.Since(strt))
-	}
+	cnt, seq, err := db_insert(pool, appl, tbln, dbm, chn, 5000, "", false)
+	Log(appl, "sync_fm_client", lastTok(tbln, "."), "sync completed", time.Since(strt), map[string]any{"manu": manu, "cnt": cnt, "seq": seq}, err)
 }
-func sync_to_client[T any](pool *pgxpool.Pool, appl, manu, tbln, whr string, f2c map[string]string, strm grpc.ServerStreamingServer[T]) {
+func sync_to_client[T any](pool *pgxpool.Pool, appl, manu, tbln, whr string, dbm *dbmap, strm grpc.ServerStreamingServer[T]) {
 	strt := time.Now()
 	stop := make(chan any, 1)
-	if chn, err := db_select[T](pool, tbln, f2c, whr, "", stop); err == nil {
-		if cnt, seq, err := strm_send_clnt(appl, tbln, strm, chn, stop); err == nil {
-			log_sync(appl, "sync_to_client", tbln, manu, "", 0, cnt, seq, err, time.Since(strt))
-		} else {
-			log_sync(appl, "sync_to_client", tbln, manu, "send on stream failed", 0, cnt, seq, err, time.Since(strt))
-		}
+	if chn, err := db_select[T](pool, appl, tbln, dbm, whr, "", stop); err == nil {
+		cnt, seq, err := strm_send_clnt(appl, tbln, strm, chn, stop)
+		Log(appl, "sync_to_client", lastTok(tbln, "."), "sync completed", time.Since(strt), map[string]any{"manu": manu, "cnt": cnt, "seq": seq}, err)
 	} else {
-		log_sync(appl, "sync_to_client", tbln, manu, "read from source table failed", 0, 0, 0, err, time.Since(strt))
+		Log(appl, "sync_to_client", lastTok(tbln, "."), "sync completed", time.Since(strt), map[string]any{"manu": manu}, err)
 	}
 }

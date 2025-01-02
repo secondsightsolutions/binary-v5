@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"sync"
 )
 
 type Shell struct {
@@ -20,9 +19,7 @@ type Shell struct {
 
 var shell *Shell
 
-func run_shell(wg *sync.WaitGroup, opts *Opts, stop chan any) {
-	defer wg.Done()
-
+func run_shell(opts *Opts, stop chan any) {
 	//memoryWatch(stop)
 
 	hdrm := map[string]string{}
@@ -41,7 +38,7 @@ func run_shell(wg *sync.WaitGroup, opts *Opts, stop chan any) {
 	var err error
 	shell = &Shell{opts: opts}
 	if shell.TLSCert, shell.X509cert, err = CryptInit(shell_cert, cacr, "", shell_pkey, salt, phrs); err != nil {
-		log("shell", "run_shell", "cannot initialize crypto", 0, err)
+		Log("shell", "run_shell", "", "cannot initialize crypto", 0, nil, err)
 		exit(nil, 1, fmt.Sprintf("shell cannot initialize crypto: %s", err.Error()))
 	}
 	

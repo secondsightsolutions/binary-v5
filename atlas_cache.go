@@ -4,6 +4,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -66,18 +67,39 @@ func (cs *cache_set) clone() *cache_set {
     }
     return ncs
 }
-func new_cache[T any](name string, list []*T) *cache {
-	strt := time.Now()
+func new_cache[T any]() *cache {
 	ca := &cache{
 		views: map[string]*view{},
 		rows:  []*row{},
 	}
-	for _, obj := range list {
-		ca.Add(obj)
-	}
-	// At this point the main list is naturally sorted by the index.
-	log2("atlas", "new_cache", "cache loaded", name, "", nil, time.Since(strt))
 	return ca
+}
+func load_cache[T any](stop chan any, done *sync.WaitGroup, c **cache, name string, f func(chan any, int64) chan *T) {
+	ca := new_cache[T]()
+	*c = ca
+	done.Add(1)
+	go func() {
+		defer done.Done()
+		cnt  := 0
+		seq  := int64(0)
+		strt := time.Now()
+		rfl  := &rflt{}
+		fm   := f(stop, seq)
+		for {
+			select {
+			case <-stop:
+				Log("atlas", "load_cache", name, "received stop signal, returning", time.Since(strt), map[string]any{"cnt": cnt, "seq": seq}, nil)
+				return
+			case obj, ok := <-fm:
+				if !ok {
+					Log("atlas", "load_cache", name, "cache loaded from stream", time.Since(strt), map[string]any{"cnt": cnt, "seq": seq}, nil)
+					return
+				}
+				seq = rfl.getFieldValueAsInt64(obj, "Seq")
+				ca.Add(obj)
+			}
+		}
+	}()
 }
 
 func (c *cache) Find(keyn, keyv string) []*row {

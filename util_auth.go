@@ -67,8 +67,11 @@ func validate_client(ctx context.Context, pool *pgxpool.Pool, schm string) error
 	}
 }
 
-func metaGRPC() context.Context {
-	md  := metadata.Pairs("name", name, "auth", opts.auth, "vers", vers, "manu", manu, "kind", kind)
+func metaGRPC(args map[string]string) context.Context {
+	md  := metadata.Pairs("name", name, "auth", opts.auth, "kind", opts.kind, "vers", vers, "manu", manu)
+	for k, v := range args {
+		md.Set(k, v)
+	}
 	ctx := metadata.NewOutgoingContext(context.Background(), md)
 	return ctx
 }

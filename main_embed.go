@@ -9,14 +9,8 @@ var (
 	//go:embed embed/name.txt
 	name string
 
-	//go:embed embed/appl.txt
-	appl string
-
 	//go:embed embed/type.txt
-	Type string
-
-	//go:embed embed/kind.txt
-	kind string
+	Type string // manu or proc
 
 	//go:embed embed/manu.txt
 	manu string

@@ -23,37 +23,28 @@ func (atlas *Atlas) connect() {
 func ping() {
 }
 
-func (atlas *Atlas) getClaims(stop chan any) []*Claim {
-	return read_db[Claim](atlas.pools["atlas"], "atlas", "atlas.claims", nil, "", stop)
+func (atlas *Atlas) getClaims(stop chan any, seq int64) chan *Claim {
+	chn, err := db_select[Claim](atlas.pools["atlas"], "atlas", "atlas.claims", nil, "", "", stop)
+	if err != nil {
+		close(chn)
+	}
+	return chn
 }
-func (atlas *Atlas) getESP1(stop chan any) []*ESP1PharmNDC {
-	return recv_fm("atlas", "esp1", atlas.titan.GetESP1Pharms, stop)
+func (atlas *Atlas) getESP1(stop chan any, seq int64) chan *ESP1PharmNDC {
+	return strm_recv_srvr[ESP1PharmNDC]("atlas", "esp1", seq, atlas.titan.GetESP1Pharms, stop);
 }
-func (atlas *Atlas) getEntities(stop chan any) []*Entity {
-	return recv_fm("atlas", "ents", atlas.titan.GetEntities, stop)
+func (atlas *Atlas) getEntities(stop chan any, seq int64) chan *Entity {
+	return strm_recv_srvr[Entity]("atlas", "ents", seq, atlas.titan.GetEntities, stop);
 }
-func (atlas *Atlas) getLedger(stop chan any) []*Eligibility {
-	return recv_fm("atlas", "elig", atlas.titan.GetEligibilityLedger, stop)
+func (atlas *Atlas) getLedger(stop chan any, seq int64) chan *Eligibility {
+	return strm_recv_srvr[Eligibility]("atlas", "elig", seq, atlas.titan.GetEligibilityLedger, stop);
 }
-func (atlas *Atlas) getNDCs(stop chan any) []*NDC {
-	return recv_fm("atlas", "ndcs", atlas.titan.GetNDCs, stop)
+func (atlas *Atlas) getNDCs(stop chan any, seq int64) chan *NDC {
+	return strm_recv_srvr[NDC]("atlas", "ndcs", seq, atlas.titan.GetNDCs, stop);
 }
-func (atlas *Atlas) getPharms(stop chan any) []*Pharmacy {
-	return recv_fm("atlas", "phms", atlas.titan.GetPharmacies, stop)
+func (atlas *Atlas) getPharms(stop chan any, seq int64) chan *Pharmacy {
+	return strm_recv_srvr[Pharmacy]("atlas", "phms", seq, atlas.titan.GetPharmacies, stop);
 }
-func (atlas *Atlas) getSPIs(stop chan any) []*SPI {
-	return recv_fm("atlas", "spis", atlas.titan.GetSPIs, stop)
-}
-
-func (atlas *Atlas) sync(stop chan any) {
-	pool := atlas.pools["atlas"]
-	f2c  := map[string]string{"crat": "created", "rdat": "ready", "srat": "started", "dnat": "done"}
-
-	sync_fm_server(pool, "atlas", "atlas.claims",        "claims",          nil, atlas.titan.GetClaims,    stop)
-	sync_fm_server(pool, "atlas", "atlas.auth",          "auth",            nil, atlas.titan.GetAuths,     stop)
-	sync_to_server(pool, "atlas", "atlas.scrubs",        "scrubs",			f2c, atlas.titan.Scrubs,       stop)
-	sync_to_server(pool, "atlas", "atlas.rebates",       "rebates",		    nil, atlas.titan.Rebates,      stop)
-	sync_to_server(pool, "atlas", "atlas.claim_uses",    "claim_uses",		nil, atlas.titan.ClaimsUsed,   stop)
-	sync_to_server(pool, "atlas", "atlas.rebate_claims", "rebate_meta",	    nil, atlas.titan.RebateClaims, stop)
-	sync_to_server(pool, "atlas", "atlas.rebate_meta",   "rebate_claims",	nil, atlas.titan.RebateMetas,  stop)
+func (atlas *Atlas) getSPIs(stop chan any, seq int64) chan *SPI {
+	return strm_recv_srvr[SPI]("atlas", "spis", seq, atlas.titan.GetSPIs, stop);
 }

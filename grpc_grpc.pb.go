@@ -205,7 +205,6 @@ const (
 	Titan_Rebates_FullMethodName              = "/main.Titan/Rebates"
 	Titan_ClaimsUsed_FullMethodName           = "/main.Titan/ClaimsUsed"
 	Titan_RebateClaims_FullMethodName         = "/main.Titan/RebateClaims"
-	Titan_RebateMetas_FullMethodName          = "/main.Titan/RebateMetas"
 )
 
 // TitanClient is the client API for Titan service.
@@ -225,7 +224,6 @@ type TitanClient interface {
 	Rebates(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[TitanRebate, Res], error)
 	ClaimsUsed(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[ClaimUse, Res], error)
 	RebateClaims(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[RebateClaim, Res], error)
-	RebateMetas(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[RebateMeta, Res], error)
 }
 
 type titanClient struct {
@@ -450,19 +448,6 @@ func (c *titanClient) RebateClaims(ctx context.Context, opts ...grpc.CallOption)
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type Titan_RebateClaimsClient = grpc.ClientStreamingClient[RebateClaim, Res]
 
-func (c *titanClient) RebateMetas(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[RebateMeta, Res], error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &Titan_ServiceDesc.Streams[12], Titan_RebateMetas_FullMethodName, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &grpc.GenericClientStream[RebateMeta, Res]{ClientStream: stream}
-	return x, nil
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type Titan_RebateMetasClient = grpc.ClientStreamingClient[RebateMeta, Res]
-
 // TitanServer is the server API for Titan service.
 // All implementations must embed UnimplementedTitanServer
 // for forward compatibility.
@@ -480,7 +465,6 @@ type TitanServer interface {
 	Rebates(grpc.ClientStreamingServer[TitanRebate, Res]) error
 	ClaimsUsed(grpc.ClientStreamingServer[ClaimUse, Res]) error
 	RebateClaims(grpc.ClientStreamingServer[RebateClaim, Res]) error
-	RebateMetas(grpc.ClientStreamingServer[RebateMeta, Res]) error
 	mustEmbedUnimplementedTitanServer()
 }
 
@@ -529,9 +513,6 @@ func (UnimplementedTitanServer) ClaimsUsed(grpc.ClientStreamingServer[ClaimUse, 
 }
 func (UnimplementedTitanServer) RebateClaims(grpc.ClientStreamingServer[RebateClaim, Res]) error {
 	return status.Errorf(codes.Unimplemented, "method RebateClaims not implemented")
-}
-func (UnimplementedTitanServer) RebateMetas(grpc.ClientStreamingServer[RebateMeta, Res]) error {
-	return status.Errorf(codes.Unimplemented, "method RebateMetas not implemented")
 }
 func (UnimplementedTitanServer) mustEmbedUnimplementedTitanServer() {}
 func (UnimplementedTitanServer) testEmbeddedByValue()               {}
@@ -688,13 +669,6 @@ func _Titan_RebateClaims_Handler(srv interface{}, stream grpc.ServerStream) erro
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type Titan_RebateClaimsServer = grpc.ClientStreamingServer[RebateClaim, Res]
 
-func _Titan_RebateMetas_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(TitanServer).RebateMetas(&grpc.GenericServerStream[RebateMeta, Res]{ServerStream: stream})
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type Titan_RebateMetasServer = grpc.ClientStreamingServer[RebateMeta, Res]
-
 // Titan_ServiceDesc is the grpc.ServiceDesc for Titan service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -766,11 +740,6 @@ var Titan_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "RebateClaims",
 			Handler:       _Titan_RebateClaims_Handler,
-			ClientStreams: true,
-		},
-		{
-			StreamName:    "RebateMetas",
-			Handler:       _Titan_RebateMetas_Handler,
 			ClientStreams: true,
 		},
 	},

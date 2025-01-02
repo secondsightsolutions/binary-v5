@@ -72,28 +72,34 @@ func new_scrub(s *Scrub, stop chan any) *scrub {
 	}
 	scrb.cs = atlas.ca.clone()
 	if scrb.sr.Test != "" {
-		setCache[Rebate](		scrb, &scrb.cs.rbts, "atlas.test_rebates",      "rbts", stop)
-		setCache[Claim](		scrb, &scrb.cs.clms, "atlas.test_claims", 		"clms", stop)
-		setCache[Entity](		scrb, &scrb.cs.ents, "atlas.test_entities", 	"ents", stop)
-		setCache[Pharmacy](		scrb, &scrb.cs.phms, "atlas.test_pharmacies",	"phms", stop)
-		setCache[NDC](			scrb, &scrb.cs.ndcs, "atlas.test_ndcs", 		"ndcs", stop)
-		setCache[SPI](			scrb, &scrb.cs.spis, "atlas.test_spis", 		"spis", stop)
-		setCache[Designation](	scrb, &scrb.cs.desg, "atlas.test_desigs", 		"desg", stop)
-		setCache[LDN](			scrb, &scrb.cs.ldns, "atlas.test_ldns", 		"ldns", stop)
-		setCache[ESP1PharmNDC](	scrb, &scrb.cs.esp1, "atlas.test_esp1", 		"esp1", stop)
-		setCache[Eligibility](	scrb, &scrb.cs.ledg, "atlas.test_eligibilities","elig", stop)
+		setCache[Rebate](		scrb, &scrb.cs.rbts, "atlas.test_rebates",      stop)
+		setCache[Claim](		scrb, &scrb.cs.clms, "atlas.test_claims", 		stop)
+		setCache[Entity](		scrb, &scrb.cs.ents, "atlas.test_entities", 	stop)
+		setCache[Pharmacy](		scrb, &scrb.cs.phms, "atlas.test_pharmacies",	stop)
+		setCache[NDC](			scrb, &scrb.cs.ndcs, "atlas.test_ndcs", 		stop)
+		setCache[SPI](			scrb, &scrb.cs.spis, "atlas.test_spis", 		stop)
+		setCache[Designation](	scrb, &scrb.cs.desg, "atlas.test_desigs", 		stop)
+		setCache[LDN](			scrb, &scrb.cs.ldns, "atlas.test_ldns", 		stop)
+		setCache[ESP1PharmNDC](	scrb, &scrb.cs.esp1, "atlas.test_esp1", 		stop)
+		setCache[Eligibility](	scrb, &scrb.cs.ledg, "atlas.test_eligibilities",stop)
 	}
 	if scrb.cs.spis != atlas.ca.spis {
 		scrb.spis = newSPIs()
 		scrb.spis.load(scrb.cs.spis)
 	}
-	scrb.clms = new_cache("claims", scrb.cs.clms.rows)
+	scrb.clms = new_cache[Claim]() // TODO: load me
 	return scrb
 }
-func setCache[T any](scrb *scrub, ca **cache, tbln, name string, stop chan any) {
-	list := read_db[T](atlas.pools["atlas"], "atlas", tbln, nil, fmt.Sprintf(" test = '%s' ", scrb.sr.Test), stop)
-	if len(list) > 0 {
-		*ca = new_cache(name, list)
+func setCache[T any](scrb *scrub, ca **cache, tbln string, stop chan any) {
+	whr := fmt.Sprintf(" test = '%s' ", scrb.sr.Test)
+	c   := new_cache[T]()
+	*ca = c
+	dbm := new_dbmap[T]()
+	dbm.table(atlas.pools["atlas"], tbln)
+	if chn, err := db_select[T](atlas.pools["atlas"], "atlas", tbln, dbm, whr, "", stop); err == nil {
+		for obj := range chn {
+			c.Add(obj)
+		}
 	}
 }
 
@@ -133,7 +139,7 @@ func (sc *scrub) pull_rebates(wgrp *sync.WaitGroup, out chan<- *Rebate) {
 	defer close(out)
 	whr := fmt.Sprintf("scid = %d", sc.scid)
 	sort := sc.plcy.rebateOrder
-	if chn, err := db_select[Rebate](atlas.pools["atlas"], "atlas.rebates", nil, whr, sort, nil); err == nil {
+	if chn, err := db_select[Rebate](atlas.pools["atlas"], "atlas", "atlas.rebates", nil, whr, sort, nil); err == nil {
 		for rbt := range chn {
 			out <- rbt
 		}
@@ -202,7 +208,8 @@ func (sc *scrub) save_rebates(wgrp *sync.WaitGroup, in2 <-chan *Rebate, wrks, si
 	pool := atlas.pools["atlas"]
 	opts := pgx.TxOptions{IsoLevel: pgx.ReadCommitted}
 	whr  := map[string]string{"scid": fmt.Sprintf("%d", sc.scid)}
-	dfm  := newDbFldMap(pool, "atlas.rebates", nil, &Rebate{})
+	dbm  := new_dbmap[Rebate]()
+	dbm.table(pool, "atlas.rebates")
 	for a := 0; a < wrks; a++ { // Create the workers
 		cgrp.Add(1)
 		go func() { 			// Each worker runs separately
@@ -213,7 +220,7 @@ func (sc *scrub) save_rebates(wgrp *sync.WaitGroup, in2 <-chan *Rebate, wrks, si
 				if rbt != nil { 							  // When we get nil, the sending side is closed - we're done (almost).
 					cnt++
 					whr["rbid"] = fmt.Sprintf("%d", rbt.Rbid)
-					db_update(context.Background(), rbt, tx, nil, "atlas.rebates", dfm, whr)
+					db_update(context.Background(), rbt, tx, nil, "atlas.rebates", dbm, whr)
 					if cnt%size == 0 { 						  // If we reached our size number of updates, commit the transaction and create another.
 						tx.Commit(context.Background())
 						tx, _ = pool.BeginTx(context.Background(), opts)
@@ -239,7 +246,7 @@ func (sc *scrub) file_rebates() {
 
 		whr := fmt.Sprintf("scid = %d", sc.scid)
 		sort := "indx"
-		if chn, err := db_select[Rebate](atlas.pools["atlas"], "atlas.rebates", nil, whr, sort, nil); err == nil {
+		if chn, err := db_select[Rebate](atlas.pools["atlas"], "atlas", "atlas.rebates", nil, whr, sort, nil); err == nil {
 			for rbt := range chn {
 				str := sc.plcy.result(sc, rbt)
 				w.Write([]byte(str + "\n"))
@@ -248,6 +255,7 @@ func (sc *scrub) file_rebates() {
 		w.Flush()
 		fd.Close()
 	} else {
-		log("atlas", "file_rebates", "output file", 0, err)
+		Log("atlas", "file_rebates", "", "output file", 0, nil, err)
+		//log("atlas", "file_rebates", "output file", 0, err)
 	}
 }

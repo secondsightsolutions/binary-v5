@@ -3,6 +3,7 @@ package main
 import (
 	context "context"
 	"fmt"
+	"time"
 
 	grpc "google.golang.org/grpc"
 )
@@ -46,12 +47,12 @@ func (s *atlasServer) Rebates(strm grpc.BidiStreamingServer[Rebate, Rebate]) err
 	// Note that an option may be to stream back rebates in real time.
 
 	pool := atlas.pools["atlas"]
+	strt := time.Now()
 
 	// Create the scrub row from the metadata on the stream.
-	if scid, err := db_insert_one(strm.Context(), pool, "atlas.scrubs", scr, "scid"); err == nil {
+	if scid, err := db_insert_one[Scrub](strm.Context(), pool, "atlas.scrubs", scr, "scid"); err == nil {
 		scr.Scid = scid
 	} else {
-		fmt.Printf("yes, NewScrub() failed with %s\n", err.Error())
 		return err
 	}
 
@@ -70,11 +71,8 @@ func (s *atlasServer) Rebates(strm grpc.BidiStreamingServer[Rebate, Rebate]) err
 		
 	} else {
 		// Pull in the rebates from the shell (client) and write them into the rebates table.
-		if cnt, seq, err := db_insert(pool, "atlas", "atlas.rebates", nil, chnT, 5000, "Rbid", false); err == nil {
-			log_sync(appl, "Rebates", "atlas.Rebates", manu, "", 0, cnt, seq, err, 0)
-		} else {
-			log_sync(appl, "Rebates", "atlas.Rebates", manu, "db_insert failed", 0, cnt, seq, err, 0)
-		}
+		cnt, seq, err := db_insert(pool, "atlas", "atlas.rebates", nil, chnT, 5000, "Rbid", false)
+		Log("atlas", "Rebates", "atlas.Rebates", "rebates inserted", time.Since(strt), map[string]any{"cnt": cnt, "seq": seq}, err)
 	}
 	
 	atlas.scrubs[scrb.scid] = scrb
@@ -82,7 +80,7 @@ func (s *atlasServer) Rebates(strm grpc.BidiStreamingServer[Rebate, Rebate]) err
 	
 	// Send the rebates to the shell (client) on the other channel of the stream.
 	whr := fmt.Sprintf("scid = %d", scrb.scid)
-	if chn, err := db_select[Rebate](pool, "atlas.rebates", nil, whr, "Rbid", stop); err == nil {
+	if chn, err := db_select[Rebate](pool, "atlas", "atlas.rebates", nil, whr, "Rbid", stop); err == nil {
 		for rbt := range chn {
 			chnR <-rbt
 		}

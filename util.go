@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -357,32 +358,67 @@ func renderCols(hdrs []string, row map[string]string) string {
 // rpc error: code = Unknown desc = ERROR: 
 // rpc error: code = Unavailable desc = connection error: desc = "transport: Error while dialing: dial tcp 127.0.0.1:23460: connect: connection refused
 
-func log_sync(appl, title, tbln, manu, more string, last, rows, seqn int64, err error, durn time.Duration) {
-	str := fmt.Sprintf("last=%d rows=%d seqn=%d", last, rows, seqn)
-	log3(appl, title, tbln, manu, str, more, err, durn)
+func sleep(durn time.Duration, stop chan any) bool {
+	select {
+	case <-stop:
+		return true
+	case <-time.After(durn):
+		if durn < time.Duration(32) * time.Second {
+			durn *= 2
+		}
+		return false
+	}
 }
 
-func log3(appl, title, part1, part2, part3, more string, err error, durn time.Duration) {
-	msg := fmt.Sprintf("%-28s / %-20s / %-21s %s", part1, part2, part3, more)
-	log(appl, title, msg, durn, err)
+func lastTok(str, sep string) string {
+	toks := strings.Split(str, sep)
+	return toks[len(toks)-1]
 }
 
-func log2(appl, title, part1, part2, more string, err error, durn time.Duration) {
-	msg := fmt.Sprintf("%-28s / %-20s %s", part1, part2, more)
-	log(appl, title, msg, durn, err)
-}
-func log(app, fcn, msg string, dur time.Duration, err error, args ...any) {
+func Log(app, fcn, tgt, msg string, dur time.Duration, vals map[string]any, err error, args ...any) {
 	mesg := fmt.Sprintf(msg, args...)
 	mil  := dur.Milliseconds() % 1000
 	sec  := dur.Milliseconds() / 1000 % 60
 	min  := dur.Milliseconds() / 1000 / 60
 	curT := time.Now().Format("2006-01-02 15:04:05")
 	durn := fmt.Sprintf("(%02dm.%02ds.%03dms)", min, sec, mil)
-	str  := fmt.Sprintf("%s [%-5s] %-24s: %s %s", curT, app, fcn, durn, mesg)
+	errs := ""
 	if err != nil {
-		str = fmt.Sprintf("%s - %s", str, err.Error())
+		erm := err.Error()
+		if strings.Contains(erm, "connection refused") {
+			erm = "connection refused"
+		} else if strings.Contains(erm, "not authorized") {
+			erm = "not authorized"
+		} else if strings.Contains(erm, "rpc error: code = Unknown desc = ") {
+			toks := strings.Split(erm, "rpc error: code = Unknown desc = ")
+			erm = toks[1]
+		}
+		errs = "::" + erm
 	}
-	fmt.Println(str)
+	if len(vals) > 0 {
+		vs := []string{}
+		for k := range vals {
+			vs = append(vs, k)
+		}
+		svs := sort.StringSlice(vs)
+		svs.Sort()
+		str := ""
+		if len(svs) > 0 {
+			str = " ("
+			cnt := 0
+			for _, k := range svs {
+				cnt++
+				if cnt < len(svs) {
+					str = fmt.Sprintf("%s%s=%v ", str, k, vals[k])
+				} else {
+					str = fmt.Sprintf("%s%s=%v", str, k, vals[k])
+				}
+			}
+			str += ")"
+		}
+		mesg += str
+	}
+	fmt.Printf("%s [%-5s] %s %-15s %-20s %s %s\n", curT, app, durn, fcn, tgt, mesg, errs)
 }
 
 func getCreds(tlsInfo credentials.TLSInfo) (cn, ou string) {
