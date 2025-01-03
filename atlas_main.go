@@ -100,10 +100,10 @@ func (atlas *Atlas) load(stop chan any) {
 
 func (atlas *Atlas) sync(stop chan any) {
 	pool := atlas.pools["atlas"]
-	sync_fm_server(pool, "atlas", "atlas.claims",        "claims",			atlas.titan.GetClaims,    stop)
-	sync_fm_server(pool, "atlas", "atlas.auth",          "auth",            atlas.titan.GetAuths,     stop)
-	sync_to_server(pool, "atlas", "atlas.scrubs",        "scrubs",			atlas.titan.Scrubs,       stop)
-	sync_to_server(pool, "atlas", "atlas.rebates",       "rebates",		    atlas.titan.Rebates,      stop)
-	sync_to_server(pool, "atlas", "atlas.claim_uses",    "claim_uses",		atlas.titan.ClaimsUsed,   stop)
-	sync_to_server(pool, "atlas", "atlas.rebate_claims", "rebate_meta",	    atlas.titan.RebateClaims, stop)
+	sync_fm_server(pool, "atlas", "atlas.claims",        atlas.titan.GetClaims,    stop)
+	sync_fm_server(pool, "atlas", "atlas.auth",          atlas.titan.GetAuths,     stop)
+	sync_to_server(pool, "atlas", "atlas.scrubs",        atlas.titan.Scrubs,       stop)
+	sync_to_server(pool, "atlas", "atlas.rebates",       atlas.titan.Rebates,      stop)
+	sync_to_server(pool, "atlas", "atlas.claim_uses",    atlas.titan.ClaimsUsed,   stop)
+	sync_to_server(pool, "atlas", "atlas.rebate_claims", atlas.titan.RebateClaims, stop)
 }

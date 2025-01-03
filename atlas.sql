@@ -125,16 +125,6 @@ CREATE TABLE atlas.rebate_claims (
 );
 CREATE INDEX ON atlas.rebate_claims(seq);
 
-CREATE TABLE atlas.sync (
-    pkey          integer primary key,
-    claims        bigint not null default 0,
-    scrubs        bigint not null default 0,
-    rebates       bigint not null default 0,
-    claim_uses    bigint not null default 0,
-    rebate_meta   bigint not null default 0,
-    rebate_claims bigint not null default 0
-);
-
 CREATE TABLE atlas.claims (
     manu text not null,
     shrt text primary key,

@@ -34,33 +34,6 @@ func db_pool(appl, host, port, name, user, pass string, tls bool) *pgxpool.Pool 
 	}
 }
 
-func db_select_col(ctx context.Context, pool *pgxpool.Pool, qry string) (any, error) {
-	if tx, err := pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted}); err == nil {
-		defer tx.Commit(context.Background())
-		if rows, err := tx.Query(ctx, qry); err == nil {
-			defer rows.Close()
-			if rows.Next() {
-				if vals, err := rows.Values(); err == nil {
-					if len(vals) > 0 {
-						return vals[0], nil
-					} else {
-						return nil, fmt.Errorf("missing column")
-					}
-				} else {
-					return nil, err
-				}
-			} else {
-				return nil, nil
-			}
-		} else {
-			tx.Rollback(context.Background())
-			return nil, err
-		}
-	} else {
-		return nil, err
-	}
-}
-
 func db_select[T any](pool *pgxpool.Pool, appl, tbln string, dbm *dbmap, where, sort string, stop chan any) (chan *T, error) {
 	if dbm == nil {
 		dbm = new_dbmap[T]()
@@ -321,6 +294,33 @@ func db_count(ctx context.Context, pool *pgxpool.Pool, frmWhr string) (int64, er
 	}
 }
 
+//func db_select_col(ctx context.Context, pool *pgxpool.Pool, qry string) (any, error) {
+// 	if tx, err := pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted}); err == nil {
+// 		defer tx.Commit(context.Background())
+// 		if rows, err := tx.Query(ctx, qry); err == nil {
+// 			defer rows.Close()
+// 			if rows.Next() {
+// 				if vals, err := rows.Values(); err == nil {
+// 					if len(vals) > 0 {
+// 						return vals[0], nil
+// 					} else {
+// 						return nil, fmt.Errorf("missing column")
+// 					}
+// 				} else {
+// 					return nil, err
+// 				}
+// 			} else {
+// 				return nil, nil
+// 			}
+// 		} else {
+// 			tx.Rollback(context.Background())
+// 			return nil, err
+// 		}
+// 	} else {
+// 		return nil, err
+// 	}
+// }
+	
 // type dbFldMap struct {
 // 	list []*dbfld
 // 	flds []string			// all fields on object (exported fields)
@@ -507,12 +507,12 @@ func dyn_insert[T any](tbln string, dbm *dbmap, objs []T, ignoreConflicts bool) 
 	return sb.String()
 }
 func db_max(pool *pgxpool.Pool, tbln, coln string) (int64, error) {
-	if rows, err := pool.Query(context.Background(), fmt.Sprintf("SELECT COALESCE(MAX(%s), 0) seq FROM %s", coln, tbln)); err == nil {
+	if rows, err := pool.Query(context.Background(), fmt.Sprintf("SELECT COALESCE(MAX(%s), 0) max FROM %s", coln, tbln)); err == nil {
 		defer rows.Close()
-		var seq int64
+		var max int64
 		if rows.Next() {
-			err := rows.Scan(&seq)
-			return seq, err
+			err := rows.Scan(&max)
+			return max, err
 		} else {
 			return 0, nil
 		}

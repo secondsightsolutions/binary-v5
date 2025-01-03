@@ -353,10 +353,12 @@ func renderCols(hdrs []string, row map[string]string) string {
 	}
 	return sb.String()
 }
+
+func lastTok(str, sep string) string {
+	toks := strings.Split(str, sep)
+	return toks[len(toks)-1]
+}
 */
-// rpc error: code = Unknown desc = ERROR: null value in column "plcy" of relation "scrubs" violates not-null constraint (SQLSTATE 23502)
-// rpc error: code = Unknown desc = ERROR: 
-// rpc error: code = Unavailable desc = connection error: desc = "transport: Error while dialing: dial tcp 127.0.0.1:23460: connect: connection refused
 
 func sleep(durn time.Duration, stop chan any) bool {
 	select {
@@ -368,11 +370,6 @@ func sleep(durn time.Duration, stop chan any) bool {
 		}
 		return false
 	}
-}
-
-func lastTok(str, sep string) string {
-	toks := strings.Split(str, sep)
-	return toks[len(toks)-1]
 }
 
 func Log(app, fcn, tgt, msg string, dur time.Duration, vals map[string]any, err error, args ...any) {
