@@ -51,7 +51,7 @@ func validate_client(ctx context.Context, pool *pgxpool.Pool, schm string) error
 				AND   auth = '%s'
 				AND   kind = '%s'
 			`
-			if cnt, err := db_count(context.Background(), pool, fmt.Sprintf(qry, schm, manu, name, auth, kind)); err == nil {
+			if cnt, err := db_count(context.Background(), pool, fmt.Sprintf(qry, schm, _mnu, name, auth, kind)); err == nil {
 				if cnt == 0 {
 					return fmt.Errorf("not authorized")
 				}

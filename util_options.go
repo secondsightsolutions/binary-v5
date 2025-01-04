@@ -30,7 +30,7 @@ func options() *Opts {
     if strings.EqualFold(name, "brg") {
         flag.BoolVar(&opts.runClient, "client",  false,         "Run client")
         flag.BoolVar(&opts.runAtlas,  "atlas",   false,         "Run atlas")
-        flag.BoolVar(&opts.runTitan,  "titan",   true,          "Run titan")
+        flag.BoolVar(&opts.runTitan,  "titan",   false,          "Run titan")
         flag.BoolVar(&opts.runPing,   "ping",    false,         "Ping the server and exit")
         flag.BoolVar(&opts.runConf,   "config",  false,         "Print application configuration and exit")
         flag.StringVar(&opts.auth,    "auth",    "",            "Authorization token")
