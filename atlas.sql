@@ -13,10 +13,10 @@ CREATE TABLE atlas.scrubs (
     appl text not null,
     hdrs text not null,
     cmdl text not null,
-    crat bigint not null default 0, -- created
-    rdat bigint not null default 0, -- ready
-    srat bigint not null default 0, -- started
-    dnat bigint not null default 0, -- done
+    crat timestamp not null default now(), -- created
+    rdat timestamp, -- ready
+    srat timestamp, -- started
+    dnat timestamp, -- done
     test text not null default '',
     seq  bigserial
 );
@@ -57,64 +57,6 @@ CREATE INDEX ON atlas.claim_uses(scid);
 CREATE INDEX ON atlas.claim_uses(shrt);
 CREATE INDEX ON atlas.claim_uses(scid, shrt);
 
-CREATE TABLE atlas.rebate_meta (
-    manu text not null,
-    seq   bigserial,
-    scid  bigint not null primary key,
-    col1  text not null default '',
-    col2  text not null default '',
-    col3  text not null default '',
-    col4  text not null default '',
-    col5  text not null default '',
-    col6  text not null default '',
-    col7  text not null default '',
-    col8  text not null default '',
-    col9  text not null default '',
-    col10 text not null default '',
-    col11 text not null default '',
-    col12 text not null default '',
-    col13 text not null default '',
-    col14 text not null default '',
-    col15 text not null default '',
-    col16 text not null default '',
-    col17 text not null default '',
-    col18 text not null default '',
-    col19 text not null default '',
-    col20 text not null default '',
-    col21 text not null default '',
-    col22 text not null default '',
-    col23 text not null default '',
-    col24 text not null default '',
-    col25 text not null default '',
-    col26 text not null default '',
-    col27 text not null default '',
-    col28 text not null default '',
-    col29 text not null default '',
-    col30 text not null default '',
-    col31 text not null default '',
-    col32 text not null default '',
-    col33 text not null default '',
-    col34 text not null default '',
-    col35 text not null default '',
-    col36 text not null default '',
-    col37 text not null default '',
-    col38 text not null default '',
-    col39 text not null default '',
-    col40 text not null default '',
-    col41 text not null default '',
-    col42 text not null default '',
-    col43 text not null default '',
-    col44 text not null default '',
-    col45 text not null default '',
-    col46 text not null default '',
-    col47 text not null default '',
-    col48 text not null default '',
-    col49 text not null default '',
-    col50 text not null default ''
-);
-CREATE INDEX ON atlas.rebate_meta(seq);
-CREATE INDEX ON atlas.rebate_meta(scid);
-
 CREATE TABLE atlas.rebate_claims (
     manu text not null,
     scid bigint not null,
@@ -136,9 +78,9 @@ CREATE TABLE atlas.claims (
     hfrx text not null default '',
     hdos text not null,
     hdop text not null,
-    doc  bigint not null default 0,
-    dos  bigint not null default 0,
-    dop  bigint not null default 0,
+    doc  timestamp not null,
+    dos  timestamp not null,
+    dop  timestamp not null,
     netw text not null,
     prnm text not null,
     chnm text not null default '',
@@ -194,9 +136,9 @@ CREATE TABLE atlas.test_claims (
     hfrx text not null default '',
     hdos text not null,
     hdop text not null,
-    doc  bigint not null default 0,
-    dos  bigint not null default 0,
-    dop  bigint not null default 0,
+    doc  timestamp not null default now(),
+    dos  timestamp not null default now(),
+    dop  timestamp not null default now(),
     netw text not null,
     prnm text not null,
     chnm text not null default '',
@@ -204,7 +146,6 @@ CREATE TABLE atlas.test_claims (
     susp bool not null default false,
     cnfm bool not null default true,
     qty  numeric not null default 0,
-    manu text not null,
     ihph text array not null default '{}',
     CONSTRAINT test_claims_pk PRIMARY KEY (manu, test, shrt)
 );
@@ -214,9 +155,9 @@ CREATE TABLE atlas.test_entities (
     manu text   not null,
     test text   not null,
     i340 text   not null,
-    strt bigint not null default 0,
-    term bigint not null default 0,
-    dop  bigint not null default 0,
+    strt date not null,
+    term date,
+    dop  timestamp,
     stat text   not null default '',
     CONSTRAINT test_entities_pk PRIMARY KEY (manu, test, i340)
 );
@@ -270,11 +211,11 @@ CREATE TABLE atlas.test_desigs (
     assg boolean not null default true,
     term boolean not null default false,
     excl boolean not null default false,
-    xdat bigint not null default 0,
-    dlat bigint not null default 0,
-    xsat bigint not null default 0,
-    crat bigint not null default 0,
-    cpat bigint not null default 0,
+    xdat timestamp,
+    dlat timestamp,
+    xsat timestamp,
+    crat timestamp not null,
+    cpat timestamp,
     CONSTRAINT test_desigs_pk PRIMARY KEY (manu, test, i340, phid)
 );
 CREATE INDEX ON atlas.test_claims(test);
@@ -293,8 +234,8 @@ CREATE INDEX ON atlas.test_ldns(test);
 CREATE TABLE atlas.test_esp1 (
     test text   not null,
     ndc  text   not null,
-    strt bigint not null default 0,
-    term bigint not null default 0,
+    strt timestamp not null,
+    term timestamp,
     CONSTRAINT test_esp1_pk PRIMARY KEY (test, ndc)
 );
 CREATE INDEX ON atlas.test_esp1(test, ndc);
@@ -305,8 +246,8 @@ CREATE TABLE atlas.test_eligibilities (
     i340 text   not null,
     phid text   not null,
     netw text   not null default 'retail',
-    strt bigint not null default 0,
-    term bigint not null default 0,
+    strt timestamp not null,
+    term timestamp,
     CONSTRAINT test_eligibilities_pk PRIMARY KEY (manu, test, i340, phid)
 );
 CREATE INDEX ON atlas.test_eligibilities(test);

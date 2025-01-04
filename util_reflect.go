@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -125,8 +126,9 @@ func (rfl *rflt) getFieldValue(obj any, name string) any {
 		return fld.Bool()
 	} else if fld.Kind() == reflect.Slice {
 		return fld.Interface()
+	} else {
+		panic(fmt.Sprintf("getFieldValue: fld=(%s) field_kind=(%v)", name, fld.Kind()))
 	}
-	return nil
 }
 
 func (rfl *rflt) setFieldValue(obj any, fld string, val any) {
@@ -146,8 +148,46 @@ func (rfl *rflt) setFieldValue(obj any, fld string, val any) {
 		}
 		return 0
 	}
+	pgn_time := func(v pgtype.Time) int64 {
+		if v.Valid {
+			if v.Microseconds < 0 {
+				return 0
+			}
+			return v.Microseconds
+		}
+		return 0
+	}
+	pgn_date := func(v pgtype.Date) int64 {
+		if v.Valid {
+			if v.Time.UnixMicro() < 0 {
+				return 0
+			}
+			return v.Time.UnixMicro()
+		}
+		return 0
+	}
+	pgn_ts := func(v pgtype.Timestamp) int64 {
+		if v.Valid {
+			if v.Time.UnixMicro() < 0 {
+				return 0
+			}
+			return v.Time.UnixMicro()
+		}
+		return 0
+	}
+	pgn_tstz := func(v pgtype.Timestamptz) int64 {
+		if v.Valid {
+			if v.Time.UnixMicro() < 0 {
+				return 0
+			}
+			return v.Time.UnixMicro()
+		}
+		return 0
+	}
+	if val == nil {
+		return
+	}
 	flds := rfl.fields(obj)
-	//fmt.Printf("rflt:setFieldValue(): fld=%s val=%v valT=%T (flds=%s)\n", fld, val, val, strings.Join(flds, ","))
 	_fld := ""
 	if slices.Contains(flds, fld) {			// First check for exact case match.
 		_fld = fld
@@ -195,7 +235,20 @@ func (rfl *rflt) setFieldValue(obj any, fld string, val any) {
 			fldV.SetString(fmt.Sprintf("%v", v))
 		case pgtype.Numeric:
 			fldV.SetString(fmt.Sprintf("%f", pgn_float64(v)))
+		case pgtype.Date:
+			fldV.SetString(fmt.Sprintf("%d", pgn_date(v)))
+		case pgtype.Time:
+			fldV.SetString(time.UnixMicro(pgn_time(v)).Format("15:04:05.000000"))
+		case time.Time:
+			if v.UnixMicro() > 0 {
+				fldV.SetString(v.Format("15:04:05.000000"))
+			}
+		case pgtype.Timestamp:
+			fldV.SetString(time.UnixMicro(pgn_ts(v)).Format("2006-01-02 15:04:05.000000"))
+		case pgtype.Timestamptz:
+			fldV.SetString(time.UnixMicro(pgn_tstz(v)).Format("2006-01-02 15:04:05.000000"))
 		default:
+			panic(fmt.Sprintf("setFieldValue: fld=(%s) _fld=(%s) field_kind=(%v)(string) value_type=(%T)", fld, _fld, fldV.Kind(), val))
 		}
 		
 	} else if fldV.CanFloat() {
@@ -229,7 +282,20 @@ func (rfl *rflt) setFieldValue(obj any, fld string, val any) {
 		case pgtype.Numeric:
 			fldV.SetFloat(pgn_float64(v))
 		case bool:
+		case pgtype.Date:
+			fldV.SetFloat(float64(pgn_date(v)))
+		case pgtype.Time:
+			fldV.SetFloat(float64(pgn_time(v)))
+		case time.Time:
+			if v.UnixMicro() > 0 {
+				fldV.SetFloat(float64(v.UnixMicro()))
+			}
+		case pgtype.Timestamp:
+			fldV.SetFloat(float64(pgn_ts(v)))
+		case pgtype.Timestamptz:
+			fldV.SetFloat(float64(pgn_tstz(v)))
 		default:
+			panic(fmt.Sprintf("setFieldValue: fld=(%s) _fld=(%s) field_kind=(%v)(floatable) value_type=(%T)", fld, _fld, fldV.Kind(), val))
 		}
 
 	} else if fldV.CanUint() {
@@ -261,9 +327,20 @@ func (rfl *rflt) setFieldValue(obj any, fld string, val any) {
 		case int64:
 			fldV.SetUint(uint64(v))
 		case pgtype.Numeric:
-			fldV.SetInt(pgn_int64(v))
+			fldV.SetUint(uint64(pgn_int64(v)))
 		case bool:
+		case time.Time:
+			fldV.SetUint(uint64(v.UnixMicro()))
+		case pgtype.Date:
+			fldV.SetUint(uint64(pgn_date(v)))
+		case pgtype.Time:
+			fldV.SetUint(uint64(pgn_time(v)))
+		case pgtype.Timestamp:
+			fldV.SetUint(uint64(pgn_ts(v)))
+		case pgtype.Timestamptz:
+			fldV.SetUint(uint64(pgn_tstz(v)))
 		default:
+			panic(fmt.Sprintf("setFieldValue: fld=(%s) _fld=(%s) field_kind=(%v)(uintable) value_type=(%T)", fld, _fld, fldV.Kind(), val))
 		}
 
 	} else if fldV.CanInt() {
@@ -297,7 +374,20 @@ func (rfl *rflt) setFieldValue(obj any, fld string, val any) {
 		case pgtype.Numeric:
 			fldV.SetInt(pgn_int64(v))
 		case bool:
+		case time.Time:
+			if v.UnixMicro() > 0 {
+				fldV.SetInt(v.UnixMicro())
+			}
+		case pgtype.Date:
+			fldV.SetInt(pgn_date(v))
+		case pgtype.Time:
+			fldV.SetInt(pgn_time(v))
+		case pgtype.Timestamp:
+			fldV.SetInt(pgn_ts(v))
+		case pgtype.Timestamptz:
+			fldV.SetInt(pgn_tstz(v))
 		default:
+			panic(fmt.Sprintf("setFieldValue: fld=(%s) _fld=(%s) field_kind=(%v)(intable) value_type=(%T)", fld, _fld, fldV.Kind(), val))
 		}
 
 	} else if fldV.Kind() == reflect.Bool {
@@ -332,10 +422,22 @@ func (rfl *rflt) setFieldValue(obj any, fld string, val any) {
 			fldV.SetBool(v)
 		case pgtype.Numeric:
 			fldV.SetBool(pgn_int64(v) != 0)
+		case time.Time:
+			fldV.SetBool(v.UnixMicro() > 0)
+		case pgtype.Date:
+			fldV.SetBool(pgn_date(v) > 0)
+		case pgtype.Time:
+			fldV.SetBool(pgn_time(v) > 0)
+		case pgtype.Timestamp:
+			fldV.SetBool(pgn_ts(v) > 0)
+		case pgtype.Timestamptz:
+			fldV.SetBool(pgn_tstz(v) > 0)
 		default:
+			panic(fmt.Sprintf("setFieldValue: fld=(%s) _fld=(%s) field_kind=(%v)(boolable) value_type=(%T)", fld, _fld, fldV.Kind(), val))
 		}
 	} else if fldV.Kind() == reflect.Slice {
+		panic(fmt.Sprintf("setFieldValue: field_kind=(%v)(slice) value_type=(%T)", fldV.Kind(), val))
 	} else {
-		fmt.Printf("setFieldValue(): kind=%s type=%s\n", fldV.Kind().String(), fldV.Type().String())
+		panic(fmt.Sprintf("setFieldValue: fld=(%s) _fld=(%s) field_kind=(%v)(????) value_type=(%T)", fld, _fld, fldV.Kind(), val))
 	}
 }

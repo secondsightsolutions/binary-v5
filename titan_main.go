@@ -86,15 +86,15 @@ func titan_db_sync[T any](fmPn, fmTn, whr string, fmM *dbmap, toPn, toTn string,
 }
 
 func (titan *Titan) syncClaims(stop chan any) {
-	doc, _ := db_max(titan.pools["titan"], "titan.claims", "doc")
-	whr := fmt.Sprintf("manufacturer = 'teva' AND COALESCE(TRUNC(EXTRACT(EPOCH FROM created_at)*1000000, 0), 0) > %d", doc)
+	seq, _ := db_max(titan.pools["titan"], "titan.claims", "seq")
+	whr := fmt.Sprintf("manufacturer = 'teva' AND COALESCE(TRUNC(EXTRACT(EPOCH FROM created_at)*1000000, 0), 0) > %d", seq)
 	fmM := new_dbmap[Claim]()
 	fmM.column("chnm", "chain_name", 				"COALESCE(chain_name, '')")
 	fmM.column("cnfm", "claim_conforms_flag", 		"COALESCE(claim_conforms_flag, true)")
 	fmM.column("seq",  "created_at",  				"COALESCE(TRUNC(EXTRACT(EPOCH FROM created_at)   *1000000, 0), 0)")
-	fmM.column("doc",  "created_at",  				"COALESCE(TRUNC(EXTRACT(EPOCH FROM created_at)   *1000000, 0), 0)")
-	fmM.column("dop",  "formatted_dop",  			"COALESCE(TRUNC(EXTRACT(EPOCH FROM formatted_dop)*1000000, 0), 0)")
-	fmM.column("dos",  "formatted_dos",  			"COALESCE(TRUNC(EXTRACT(EPOCH FROM formatted_dos)*1000000, 0), 0)")
+	fmM.column("doc",  "created_at",  				"created_at")
+	fmM.column("dop",  "formatted_dop",  			"formatted_dop")
+	fmM.column("dos",  "formatted_dos",  			"formatted_dos")
 	fmM.column("hdop", "date_prescribed", 			"COALESCE(date_prescribed, '')")
 	fmM.column("hdos", "date_of_service", 			"COALESCE(date_of_service, '')")
 	fmM.column("hfrx", "formatted_rx_number", 		"COALESCE(formatted_rx_number, '')")
@@ -148,8 +148,8 @@ func (titan *Titan) syncEntities(stop chan any) {
 	fmM := new_dbmap[Entity]()
 	fmM.column("i340", "id_340b",  					"COALESCE(id_340b, '')")
 	fmM.column("state", "state", 					"COALESCE(state, '')")
-	fmM.column("strt", "participating_start_date",	"COALESCE(TRUNC(EXTRACT(EPOCH FROM participating_start_date::timestamp) *1000000, 0), 0)")
-	fmM.column("term", "term_date",  				"COALESCE(TRUNC(EXTRACT(EPOCH FROM term_date::timestamp)                *1000000, 0), 0)")
+	fmM.column("strt", "participating_start_date",	"to_date(participating_start_date, 'YYYY-MM-DD')")
+	fmM.column("term", "term_date",  				"to_date(term_date, 'YYYY-MM-DD')")
 	fmM.column("seq", "id",                         "COALESCE(id, 0)")
 	titan_db_sync[Entity]("esp", "public.covered_entities", whr, fmM, "titan", "titan.entities", stop)
 }
@@ -174,10 +174,11 @@ func (titan *Titan) syncPharmacies(stop chan any) {
 
 func (titan *Titan) syncESP1(stop chan any) {
 	fmM := new_dbmap[ESP1PharmNDC]()
-	fmM.column("spid", "service_provider_id",		"service_provider_id")
-	fmM.column("ndc",  "ndc",  						"ndc")
-	fmM.column("strt", "start", 					"COALESCE(TRUNC(EXTRACT(EPOCH FROM start::timestamp)*1000000, 0), 0)")
-	fmM.column("term", "term", 						"COALESCE(TRUNC(EXTRACT(EPOCH FROM term::timestamp) *1000000, 0), 0)")
+	fmM.column("manu", "manufacturer",              "COALESCE(manufacturer, '')")
+	fmM.column("spid", "service_provider_id",		"COALESCE(service_provider_id, '')")
+	fmM.column("ndc",  "ndc",  						"COALESCE(ndc, '')")
+	fmM.column("strt", "start", 					"start")
+	fmM.column("term", "term", 						"term")
 	titan_db_sync[ESP1PharmNDC]("citus", "public.esp1_providers", "", fmM, "titan", "titan.esp1", stop)
 }
 
@@ -185,12 +186,12 @@ func (titan *Titan) syncEligibility(stop chan any) {
 	seq, _ := db_max(titan.pools["titan"], "titan.eligibility", "seq")
 	whr := fmt.Sprintf("id > %d", seq)
 	fmM := new_dbmap[Eligibility]()
-	fmM.column("i340", "id_340b", 					"id_340b")
-	fmM.column("phid", "pharmacy_id", 				"pharmacy_id")
-	fmM.column("manu", "manufacturer", 				"manufacturer")
-	fmM.column("netw", "network", 					"network")
-	fmM.column("strt", "start_at", 					"COALESCE(TRUNC(EXTRACT(EPOCH FROM start_at)*1000000, 0), 0)")
-	fmM.column("term", "end_at", 					"COALESCE(TRUNC(EXTRACT(EPOCH FROM end_at)  *1000000, 0), 0)")
+	fmM.column("i340", "id_340b", 					"COALESCE(id_340b, '')")
+	fmM.column("phid", "pharmacy_id", 				"COALESCE(pharmacy_id, '')")
+	fmM.column("manu", "manufacturer", 				"COALESCE(manufacturer, '')")
+	fmM.column("netw", "network", 					"COALESCE(network, '')")
+	fmM.column("strt", "start_at", 					"start_at")
+	fmM.column("term", "end_at", 					"end_at")
 	fmM.column("seq", "id",                         "COALESCE(id, 0)")
 	titan_db_sync[Eligibility]("citus", "public.eligibility_ledger", whr, fmM, "titan", "titan.eligibility", stop)
 }

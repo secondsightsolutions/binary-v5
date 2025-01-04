@@ -4,7 +4,9 @@ import (
 	context "context"
 	"database/sql"
 	"fmt"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -109,6 +111,14 @@ func (dbm *dbmap) table(pool *pgxpool.Pool, tbln string) {
 			}
 		}
 		rows.Close()
+		// Now remove dbf entries (object fields) that have no corresponding database column.
+		dbfs := []*dbfld{}
+		for _, dbf := range dbm.dbfs {
+			if dbf.col != "" {
+				dbfs = append(dbfs, dbf)
+			}
+		}
+		dbm.dbfs = dbfs
 	}
 }
 
@@ -129,6 +139,45 @@ func (dbm *dbmap) getColumnValueAsString(coln, fv string) string {
 					return dbf.dfl
 				} else if dbf.nul {
 					return "NULL"
+				}
+			}
+			if strings.HasPrefix(dbf.typ, "timestamp") {
+				if fv == "" || fv == "NULL" || fv == "0" {
+					return "NULL"
+				}
+				if i64, err := strconv.ParseInt(fv, 10, 64); err == nil {
+					secs := i64 / (1000 * 1000)
+					micr := i64 % (1000 * 1000)
+					tm   := time.Unix(secs, micr * 1000)
+					return fmt.Sprintf("'%s'", tm.Format("2006-01-02 15:04:05.000000"))
+				} else {
+					panic(fmt.Sprintf("col=%s fld=%s err=%s", dbf.col, dbf.fld, err.Error()))
+				}
+			}
+			if strings.HasPrefix(dbf.typ, "time") {
+				if fv == "" || fv == "NULL" || fv == "0" {
+					return "NULL"
+				}
+				if i64, err := strconv.ParseInt(fv, 10, 64); err == nil {
+					secs := i64 / (1000 * 1000)
+					micr := i64 % (1000 * 1000)
+					tm   := time.Unix(secs, micr * 1000)
+					return fmt.Sprintf("'%s'", tm.Format("15:04:05.000000"))
+				} else {
+					panic(fmt.Sprintf("col=%s fld=%s err=%s", dbf.col, dbf.fld, err.Error()))
+				}
+			}
+			if strings.HasPrefix(dbf.typ, "date") {
+				if fv == "" || fv == "NULL" || fv == "0" {
+					return "NULL"
+				}
+				if i64, err := strconv.ParseInt(fv, 10, 64); err == nil {
+					secs := i64 / (1000 * 1000)
+					micr := i64 % (1000 * 1000)
+					tm   := time.Unix(secs, micr * 1000)
+					return fmt.Sprintf("'%s'", tm.Format("2006-01-02"))
+				} else {
+					panic(fmt.Sprintf("col=%s fld=%s err=%s", dbf.col, dbf.fld, err.Error()))
 				}
 			}
 			if strings.EqualFold(dbf.typ, "ARRAY") {

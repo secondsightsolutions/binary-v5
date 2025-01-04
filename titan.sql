@@ -13,10 +13,10 @@ CREATE TABLE titan.scrubs (
     appl text not null,
     hdrs text not null,
     cmdl text not null,
-    crat bigint not null default 0,
-    rdat bigint not null default 0,
-    srat bigint not null default 0,
-    dnat bigint not null default 0,
+    crat timestamp not null, -- created
+    rdat timestamp, -- ready
+    srat timestamp, -- started
+    dnat timestamp, -- done
     rbt_total int not null default 0,
     rbt_valid int not null default 0,
     rbt_matched int not null default 0,
@@ -66,16 +66,6 @@ CREATE INDEX ON titan.claim_uses(scid);
 CREATE INDEX ON titan.claim_uses(shrt);
 CREATE INDEX ON titan.claim_uses(scid, shrt);
 
-CREATE TABLE titan.rebate_meta (
-    manu  text not null,
-    scid  bigint not null,
-    col1  text not null default '',
-    col2  text not null default '',
-    col50 text not null default '',
-    CONSTRAINT rebate_meta_pk PRIMARY KEY (manu, scid)
-);
-CREATE INDEX ON titan.rebate_meta(scid);
-
 CREATE TABLE titan.rebate_claims (
     manu text not null,
     scid bigint not null,
@@ -96,9 +86,9 @@ CREATE TABLE titan.claims (
     hfrx text not null default '',
     hdos text not null,
     hdop text not null,
-    doc  bigint not null default 0,
-    dos  bigint not null default 0,
-    dop  bigint not null default 0,
+    doc  timestamp,
+    dos  timestamp,
+    dop  timestamp,
     netw text not null,
     prnm text not null,
     chnm text not null default '',
@@ -107,17 +97,26 @@ CREATE TABLE titan.claims (
     cnfm bool not null default true,
     qty  numeric not null default 0,
     ihph text array not null default '{}',
-    seq  bigserial,
+    seq  bigint not null,
     CONSTRAINT claims_pk PRIMARY KEY(manu, shrt)
 );
 CREATE INDEX ON titan.claims(manu);
 CREATE INDEX ON titan.claims(manu, doc);
 
+CREATE TABLE titan.auth (
+    manu text not null,
+	proc text not null,
+    auth text not null,
+    kind text not null default 'pharmacy',
+	ver  int8 not null default 0,
+    enb  bool not null default true,
+	CONSTRAINT auth_pkey PRIMARY KEY (manu, proc, auth, kind)
+);
+
 CREATE TABLE titan.entities (
     i340 text   not null,
-    strt bigint not null default 0,
-    term bigint not null default 0,
-    dop  bigint not null default 0,
+    strt date,
+    term date,
     stat text   not null default '',
     seq  bigint not null primary key
 );
@@ -168,11 +167,11 @@ CREATE TABLE titan.desigs (
     assg boolean not null default true,
     term boolean not null default false,
     excl boolean not null default false,
-    xdat bigint not null default 0,
-    dlat bigint not null default 0,
-    xsat bigint not null default 0,
-    crat bigint not null default 0,
-    cpat bigint not null default 0,
+    xdat timestamp,
+    dlat timestamp,
+    xsat timestamp,
+    crat timestamp,
+    cpat timestamp,
     seq  bigint not null,
     CONSTRAINT desigs_pk PRIMARY KEY (manu, i340, phid)
 );
@@ -193,8 +192,8 @@ CREATE TABLE titan.esp1 (
     manu text   not null,
     spid text   not null,
     ndc  text   not null,
-    strt bigint not null default 0,
-    term bigint not null default 0,
+    strt date,
+    term date,
     CONSTRAINT esp1_pk PRIMARY KEY (manu, spid, ndc)
 );
 
@@ -204,19 +203,7 @@ CREATE TABLE titan.eligibility (
     i340 text   not null,
     phid text   not null,
     netw text   not null default 'retail',
-    strt bigint not null default 0,
-    term bigint not null default 0
+    strt timestamp,
+    term timestamp
 );
 CREATE INDEX ON titan.eligibility(manu);
-
--- PROVISIONING
-
-CREATE TABLE titan.auth (
-    manu text not null,
-	proc text not null,
-    auth text not null,
-    kind text not null default 'pharmacy',
-	ver  int8 not null default 0,
-    enb  bool not null default true,
-	CONSTRAINT auth_pkey PRIMARY KEY (manu, proc, auth, kind)
-);

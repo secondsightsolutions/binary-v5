@@ -230,6 +230,7 @@ func db_update(ctx context.Context, obj any, tx pgx.Tx, pool *pgxpool.Pool, tbln
 		sb.WriteString(fmt.Sprintf("UPDATE %s SET ", tbln))
 		for j, dbf := range dbfs {
 			fv := rfl.getFieldValueAsString(obj, dbf.fld)
+			fv  = strings.ReplaceAll(fv, "'", "")
 			cv := dbm.getColumnValueAsString(dbf.col, fv)
 			sb.WriteString(dbf.col + " = " + cv)
 			if j < len(dbfs)-1 {
@@ -293,6 +294,92 @@ func db_count(ctx context.Context, pool *pgxpool.Pool, frmWhr string) (int64, er
 		return 0, err
 	}
 }
+
+func dyn_select(tbln string, where, sort string, dbm *dbmap) string {
+	var sb bytes.Buffer
+	sb.WriteString("SELECT ")
+	dbfs := dbm.mapped()
+	for i, dbf := range dbfs {
+		sb.WriteString(dbf.qry + " " + dbf.fld)
+		if i < len(dbfs)-1 {
+			sb.WriteString(", ")
+		}
+	}
+	sb.WriteString(" FROM " + tbln)
+	if where != "" {
+		sb.WriteString(" WHERE " + where)
+	}
+	if sort != "" {
+		sb.WriteString(" ORDER BY " + sort)
+	}
+	return sb.String()
+}
+func dyn_insert[T any](tbln string, dbm *dbmap, objs []T, ignoreConflicts bool) string {
+	cols := []string{}
+	dbfs := dbm.mapped_upd()
+	for _, dbf := range dbfs {
+		cols = append(cols, dbf.col)
+	}
+	// Start building the insert query.
+	var sb bytes.Buffer
+	sb.WriteString(fmt.Sprintf("INSERT INTO %s ", tbln))
+	sb.WriteString(fmt.Sprintf("( %s )", strings.Join(cols, ", ")))
+	sb.WriteString(" VALUES ")
+
+	rfl := &rflt{}	// Empty type that has the reflection convenience functions.
+	for i, obj := range objs {
+		sb.WriteString(" ( ")
+		for j, colN := range cols {
+			dbf := dbm.byCol(colN)
+			fv  := rfl.getFieldValueAsString(obj, dbf.fld)
+			fv  = strings.ReplaceAll(fv, "'", "")
+			cv  := dbm.getColumnValueAsString(colN, fv)
+			sb.WriteString(cv)
+			if j < len(cols)-1 {
+				sb.WriteString(", ")
+			}
+		}
+		sb.WriteString(" ) ")
+		if i < len(objs)-1 {
+			sb.WriteString(", ")
+		}
+	}
+	if ignoreConflicts {
+		sb.WriteString(" ON CONFLICT DO NOTHING")
+	}
+	return sb.String()
+}
+func db_max(pool *pgxpool.Pool, tbln, coln string) (int64, error) {
+	if rows, err := pool.Query(context.Background(), fmt.Sprintf("SELECT COALESCE(MAX(%s), 0) max FROM %s", coln, tbln)); err == nil {
+		defer rows.Close()
+		var max int64
+		if rows.Next() {
+			err := rows.Scan(&max)
+			return max, err
+		} else {
+			return 0, nil
+		}
+	} else {
+		return 0, err
+	}
+}
+
+func ping_db(appl, name string, pool *pgxpool.Pool) {
+	strt := time.Now()
+	if pool == nil {
+		Log(appl, "ping_db", name, "pool not defined", time.Since(strt), nil, nil)
+		//log2(appl, "ping_db", "pool not defined", name, "", nil, time.Since(strt))
+		return
+	}
+	if err := pool.Ping(context.Background()); err == nil {
+		Log(appl, "ping_db", name, "pool connected", time.Since(strt), nil, nil)
+		//log2(appl, "ping_db", "pool connected", name, "", nil, time.Since(strt))
+	} else {
+		Log(appl, "ping_db", name, "pool not connected", time.Since(strt), nil, err)
+		//log2(appl, "ping_db", "pool not connected", name, "", err, time.Since(strt))
+	}
+}
+
 
 //func db_select_col(ctx context.Context, pool *pgxpool.Pool, qry string) (any, error) {
 // 	if tx, err := pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted}); err == nil {
@@ -451,91 +538,6 @@ func db_count(ctx context.Context, pool *pgxpool.Pool, frmWhr string) (int64, er
 // 	}
 // 	return flds
 // }
-
-func dyn_select(tbln string, where, sort string, dbm *dbmap) string {
-	var sb bytes.Buffer
-	sb.WriteString("SELECT ")
-	dbfs := dbm.mapped()
-	for i, dbf := range dbfs {
-		sb.WriteString(dbf.qry + " " + dbf.fld)
-		if i < len(dbfs)-1 {
-			sb.WriteString(", ")
-		}
-	}
-	sb.WriteString(" FROM " + tbln)
-	if where != "" {
-		sb.WriteString(" WHERE " + where)
-	}
-	if sort != "" {
-		sb.WriteString(" ORDER BY " + sort)
-	}
-	return sb.String()
-}
-func dyn_insert[T any](tbln string, dbm *dbmap, objs []T, ignoreConflicts bool) string {
-	cols := []string{}
-	dbfs := dbm.mapped_upd()
-	for _, dbf := range dbfs {
-		cols = append(cols, dbf.col)
-	}
-	// Start building the insert query.
-	var sb bytes.Buffer
-	sb.WriteString(fmt.Sprintf("INSERT INTO %s ", tbln))
-	sb.WriteString(fmt.Sprintf("( %s )", strings.Join(cols, ", ")))
-	sb.WriteString(" VALUES ")
-
-	rfl := &rflt{}	// Empty type that has the reflection convenience functions.
-	for i, obj := range objs {
-		sb.WriteString(" ( ")
-		for j, colN := range cols {
-			dbf := dbm.byCol(colN)
-			fv  := rfl.getFieldValueAsString(obj, dbf.fld)
-			fv  = strings.ReplaceAll(fv, "'", "")
-			cv  := dbm.getColumnValueAsString(colN, fv)
-			sb.WriteString(cv)
-			if j < len(cols)-1 {
-				sb.WriteString(", ")
-			}
-		}
-		sb.WriteString(" ) ")
-		if i < len(objs)-1 {
-			sb.WriteString(", ")
-		}
-	}
-	if ignoreConflicts {
-		sb.WriteString(" ON CONFLICT DO NOTHING")
-	}
-	return sb.String()
-}
-func db_max(pool *pgxpool.Pool, tbln, coln string) (int64, error) {
-	if rows, err := pool.Query(context.Background(), fmt.Sprintf("SELECT COALESCE(MAX(%s), 0) max FROM %s", coln, tbln)); err == nil {
-		defer rows.Close()
-		var max int64
-		if rows.Next() {
-			err := rows.Scan(&max)
-			return max, err
-		} else {
-			return 0, nil
-		}
-	} else {
-		return 0, err
-	}
-}
-
-func ping_db(appl, name string, pool *pgxpool.Pool) {
-	strt := time.Now()
-	if pool == nil {
-		Log(appl, "ping_db", name, "pool not defined", time.Since(strt), nil, nil)
-		//log2(appl, "ping_db", "pool not defined", name, "", nil, time.Since(strt))
-		return
-	}
-	if err := pool.Ping(context.Background()); err == nil {
-		Log(appl, "ping_db", name, "pool connected", time.Since(strt), nil, nil)
-		//log2(appl, "ping_db", "pool connected", name, "", nil, time.Since(strt))
-	} else {
-		Log(appl, "ping_db", name, "pool not connected", time.Since(strt), nil, err)
-		//log2(appl, "ping_db", "pool not connected", name, "", err, time.Since(strt))
-	}
-}
 
 // func db_select_one[T any](ctx context.Context, pool *pgxpool.Pool, tbln string, cols map[string]string, where, sort string) (*T, error) {
 // 	qry := dyn_select(tbln, cols, where, sort)
