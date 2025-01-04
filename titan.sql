@@ -96,7 +96,7 @@ CREATE TABLE titan.claims (
     susp bool not null default false,
     cnfm bool not null default true,
     qty  numeric not null default 0,
-    ihph text array not null default '{}',
+    ihph text not null default '',
     seq  bigint not null,
     CONSTRAINT claims_pk PRIMARY KEY(manu, shrt)
 );
@@ -125,9 +125,9 @@ CREATE INDEX ON titan.entities(seq);
 CREATE TABLE titan.pharmacies (
     i340 text not null,
     phid text not null,
-    ncps text array not null default '{}',
-    npis text array not null default '{}',
-    deas text array not null default '{}',
+    ncps text not null default '',
+    npis text not null default '',
+    deas text not null default '',
     chnm text not null default '',
     stat text not null default '',
     seq  bigint not null primary key

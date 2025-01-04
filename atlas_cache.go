@@ -92,9 +92,10 @@ func load_cache[T any](stop chan any, done *sync.WaitGroup, c **cache, name stri
 				return
 			case obj, ok := <-fm:
 				if !ok {
-					Log("atlas", "load_cache", name, "cache loaded from stream", time.Since(strt), map[string]any{"cnt": cnt, "seq": seq}, nil)
+					Log("atlas", "load_cache", name, "cache loaded  ", time.Since(strt), map[string]any{"cnt": cnt, "manu": manu, "seq": seq}, nil)
 					return
 				}
+				cnt++
 				seq = rfl.getFieldValueAsInt64(obj, "Seq")
 				ca.Add(obj)
 			}

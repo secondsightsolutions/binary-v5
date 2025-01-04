@@ -3,7 +3,6 @@ package main
 import (
 	context "context"
 	"fmt"
-	"time"
 
 	grpc "google.golang.org/grpc"
 )
@@ -23,7 +22,6 @@ func titan_db_read[T any](tbln string, strm grpc.ServerStreamingServer[T], seq i
 	if err := validate_client(strm.Context(), titan.pools["titan"], "titan"); err != nil {
 		return err
 	}
-	strt := time.Now()
 	pool := titan.pools["titan"]
 	whr  := ""
 	manu := metaManu(strm.Context())
@@ -39,8 +37,7 @@ func titan_db_read[T any](tbln string, strm grpc.ServerStreamingServer[T], seq i
 			whr = fmt.Sprintf("%s AND manu = '%s'", whr, manu)
 		}
 	}
-	cnt, seq, err := sync_to_client(pool, "titan", manu, tbln, whr, dbm, strm)
-	Log("titan", "titan_db_read", tbln, "read completed", time.Since(strt), map[string]any{"cnt": cnt, "seq": seq}, err)
+	sync_to_client(pool, "titan", manu, tbln, whr, dbm, strm)
 	return nil
 }
 

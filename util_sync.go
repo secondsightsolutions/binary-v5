@@ -31,7 +31,7 @@ import (
 func sync_fm_server[T any](pool *pgxpool.Pool, appl, tbln string, f func(context.Context, *SyncReq, ...grpc.CallOption) (grpc.ServerStreamingClient[T], error), stop chan any) {
 	strt := time.Now()
 	name := tbln
-	dbm := new_dbmap[T]()
+	dbm  := new_dbmap[T]()
 	dbm.table(pool, tbln)
 	if seqn, err := db_max(pool, tbln, "seq"); err == nil {
 		chn := strm_recv_srvr(appl, name, seqn, f, stop)
@@ -43,7 +43,7 @@ func sync_fm_server[T any](pool *pgxpool.Pool, appl, tbln string, f func(context
 }
 func sync_to_server[T, R any](pool *pgxpool.Pool, appl, tbln string, f func(context.Context, ...grpc.CallOption) (grpc.ClientStreamingClient[T, R], error), stop chan any) {
 	strt := time.Now()
-	dbm := new_dbmap[T]()
+	dbm  := new_dbmap[T]()
 	dbm.table(pool, tbln)
 	if seqn, err := db_max(pool, tbln, "seq"); err == nil {
 		whr := fmt.Sprintf("seq > %d ", seqn)

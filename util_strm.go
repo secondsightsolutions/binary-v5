@@ -23,7 +23,7 @@ func strm_send_clnt[T any](appl, name string, strm grpc.ServerStreamingServer[T]
 
 		case obj, ok := <-fm:
 			if !ok {
-				Log(appl, "strm_send_clnt", name, "channel drained, returning", time.Since(strt), map[string]any{"cnt": cnt, "seq": max}, nil)
+				//Log(appl, "strm_send_clnt", name, "channel drained, returning", time.Since(strt), map[string]any{"cnt": cnt, "seq": max}, nil)
 				return cnt, max, nil
 			}
 			if err := strm.Send(obj); err == nil {
@@ -59,7 +59,7 @@ func strm_recv_clnt[T, R any](appl, name string, strm grpc.ClientStreamingServer
 					chn <- obj
 					cnt++
 				} else if err == io.EOF {
-					Log(appl, "strm_recv_clnt", name, "stream closed, returning", time.Since(strt), map[string]any{"cnt": cnt}, nil)
+					//Log(appl, "strm_recv_clnt", name, "stream closed, returning", time.Since(strt), map[string]any{"cnt": cnt}, nil)
 					close(chn)
 					return
 				} else {
@@ -104,7 +104,7 @@ connect:
 					if obj, ok = <-fm; !ok { // The input queue has closed. Nothing more to send. We're done.
 						strm.CloseAndRecv()
 						strm.CloseSend()
-						Log(appl, "strm_send_srvr", name, "channel drained, returning", time.Since(strt), map[string]any{"cnt": cnt, "seq": max, "erc": erc}, nil)
+						//Log(appl, "strm_send_srvr", name, "channel drained, returning", time.Since(strt), map[string]any{"cnt": cnt, "seq": max, "erc": erc}, nil)
 						fn()
 						return cnt, max, nil
 					}
@@ -166,7 +166,7 @@ func strm_recv_srvr[T any](appl, name string, seq int64, f func(context.Context,
 						seq = rfl.getFieldValueAsInt64(obj, "Seq")
 						chn <- obj
 					} else if err == io.EOF {
-						Log(appl, "strm_recv_srvr", name, "stream read completed", time.Since(strt), map[string]any{"cnt": cnt, "seq": seq}, nil)
+						//Log(appl, "strm_recv_srvr", name, "stream read completed", time.Since(strt), map[string]any{"cnt": cnt, "seq": seq}, nil)
 						fn()
 						close(chn)
 						return

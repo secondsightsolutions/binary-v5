@@ -70,27 +70,28 @@ CREATE INDEX ON atlas.rebate_claims(seq);
 CREATE TABLE atlas.claims (
     manu text not null,
     shrt text primary key,
-    i340 text not null,
-    ndc  text not null,
-    spid text not null,
+    i340 text not null default '',
+    ndc  text not null default '',
+    spid text not null default '',
     prid text not null default '',
-    hrxn text not null,
+    hrxn text not null default '',
     hfrx text not null default '',
-    hdos text not null,
-    hdop text not null,
-    doc  timestamp not null,
-    dos  timestamp not null,
-    dop  timestamp not null,
-    netw text not null,
-    prnm text not null,
+    hdos text not null default '',
+    hdop text not null default '',
+    doc  timestamp,
+    dos  timestamp,
+    dop  timestamp,
+    netw text not null default '',
+    prnm text not null default '',
     chnm text not null default '',
     elig bool not null default true,
     susp bool not null default false,
     cnfm bool not null default true,
     qty  numeric not null default 0,
-    ihph text array not null default '{}'
+    ihph text not null default '',
+    seq  bigint not null
 );
-CREATE INDEX ON atlas.claims(doc);
+CREATE INDEX ON atlas.claims(seq);
 
 CREATE TABLE atlas.auth (
     manu text not null,
@@ -146,7 +147,7 @@ CREATE TABLE atlas.test_claims (
     susp bool not null default false,
     cnfm bool not null default true,
     qty  numeric not null default 0,
-    ihph text array not null default '{}',
+    ihph text not null default '',
     CONSTRAINT test_claims_pk PRIMARY KEY (manu, test, shrt)
 );
 CREATE INDEX ON atlas.test_claims(test);
@@ -167,9 +168,9 @@ CREATE TABLE atlas.test_pharmacies (
     test text not null,
     i340 text not null,
     phid text not null,
-    ncps text array not null default '{}',
-    npis text array not null default '{}',
-    deas text array not null default '{}',
+    ncps text not null default '',
+    npis text not null default '',
+    deas text not null default '',
     chnm text not null default '',
     stat text not null default '',
     CONSTRAINT test_pharmacies_pk PRIMARY KEY (test, i340, phid)
