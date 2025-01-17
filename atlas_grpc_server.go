@@ -34,7 +34,7 @@ func atlasUnaryServerInterceptor(ctx context.Context, req any, si *grpc.UnarySer
 		Dscr: metaGet(ctx, "dscr"),
 		Hash: metaGet(ctx, "hash"),
 		Netw: metaGet(ctx, "netw"),
-		Host: metaGet(ctx, "host"),
+		Host: metaGet(ctx, "mach"),
 		Cwd:  metaGet(ctx, "cwd"),
 		User: metaGet(ctx, "user"),
 		Cmdl: metaGet(ctx, "cmdl"),

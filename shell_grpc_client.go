@@ -37,23 +37,21 @@ type shellClientStream struct {
 
 func shellUnaryClientInterceptor(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 	strt := time.Now()
-	ctx  = addMeta(ctx, nil)
 	if err := invoker(ctx, method, req, reply, cc, opts...); err != nil {
 		Log("shell", "unary_clnt_int", method, "command failed", time.Since(strt), nil, err)
 		return err
 	} else {
-		Log("shell", "unary_clnt_int", method, "command succeeded", time.Since(strt), nil, nil)
+		// Log("shell", "unary_clnt_int", method, "command succeeded", time.Since(strt), nil, nil)
 		return nil
 	}
 }
 func shellStreamClientInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
 	strt := time.Now()
-	ctx  = addMeta(ctx, nil)
 	if s, err := streamer(ctx, desc, cc, method, opts...); err != nil {
 		Log("shell", "strm_clnt_int", method, "command failed", time.Since(strt), nil, err)
 		return nil, err
 	} else {
-		Log("shell", "strm_clnt_int", method, "command succeeded", time.Since(strt), nil, nil)
+		// Log("shell", "strm_clnt_int", method, "command succeeded", time.Since(strt), nil, nil)
 		return &shellClientStream{s}, nil
 	}
 }

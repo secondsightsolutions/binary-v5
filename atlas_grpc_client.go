@@ -10,8 +10,6 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
-
-
 func (atlas *Atlas) connect() {
 	tgt := fmt.Sprintf("%s:%d", titan_grpc, titan_grpc_port)
 	cfg := &tls.Config{

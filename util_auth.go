@@ -70,10 +70,15 @@ func validate_client(ctx context.Context, pool *pgxpool.Pool, schm string) error
 }
 
 func addMeta(ctx context.Context, args map[string]string) context.Context {
-	md     := metadata.New(args)
+	md,ok  := metadata.FromOutgoingContext(ctx)
 	host,_ := os.Hostname()
 	cwd,_  := os.Getwd()
-	
+	if !ok {
+		md = metadata.New(nil)
+	}
+	for k, v := range args {
+		md.Set(k, v)
+	}
 	md.Set("manu", manu)
 	md.Set("name", name)
 	md.Set("auth", opts.auth)
