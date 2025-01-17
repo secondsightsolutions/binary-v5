@@ -3,6 +3,8 @@ package main
 import (
 	context "context"
 	"fmt"
+	"os"
+	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"google.golang.org/grpc/credentials"
@@ -67,13 +69,25 @@ func validate_client(ctx context.Context, pool *pgxpool.Pool, schm string) error
 	}
 }
 
-func metaGRPC(args map[string]string) context.Context {
-	md  := metadata.Pairs("name", name, "auth", opts.auth, "kind", opts.kind, "vers", vers, "manu", manu)
-	for k, v := range args {
-		md.Set(k, v)
-	}
-	ctx := metadata.NewOutgoingContext(context.Background(), md)
-	return ctx
+func addMeta(ctx context.Context, args map[string]string) context.Context {
+	md     := metadata.New(args)
+	host,_ := os.Hostname()
+	cwd,_  := os.Getwd()
+	
+	md.Set("manu", manu)
+	md.Set("name", name)
+	md.Set("auth", opts.auth)
+	md.Set("vers", vers)
+	md.Set("kind", opts.kind)
+	md.Set("dscr", desc)
+	md.Set("hash", hash)
+	md.Set("netw", getLocalAddr())
+	md.Set("mach", host)
+	md.Set("cwd",  cwd)
+	md.Set("user", fmt.Sprintf("%d", os.Getuid()))
+	md.Set("cmdl", strings.Join(os.Args, " "))
+	
+	return metadata.NewOutgoingContext(ctx, md)
 }
 func getMetaGRPC(ctx context.Context) (name, auth, vers, manu, kind, scid string) {
 	val := func(md metadata.MD, name string) string {

@@ -131,7 +131,7 @@ func (sc *scrub) prep_rebates(wgrp *sync.WaitGroup) {
 
 func (sc *scrub) prep_claims(wgrp *sync.WaitGroup) {
 	defer wgrp.Done()
-	sc.plcy.prepClaims(sc)
+	sc.plcy.prepClaims(sc) // TODO: this is nil!
 }
 
 func (sc *scrub) pull_rebates(wgrp *sync.WaitGroup, out chan<- *Rebate) {

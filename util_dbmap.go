@@ -82,17 +82,14 @@ func (dbm *dbmap) table(pool *pgxpool.Pool, tbln string) {
 			var coln, colt, null string
 			var dflt sql.NullString
 			rows.Scan(&coln, &colt, &null, &dflt)
-
 			// Find the existing dbfld - it must exist (indicates the field on the object).
 			for _, dbf := range dbm.dbfs {
 				// Implicit match on fld (no custom mapping) or on col (explicit mapping).
 				if strings.EqualFold(dbf.fld, coln) || strings.EqualFold(dbf.col, coln) {
+					dbf.nul = strings.EqualFold(null, "YES")
 					dbf.typ = colt
 					dbf.upd = true
 					dbf.col = coln		// In case not set, and we matched on dbf.fld
-					if dbf.qry == "" {	// If no custom query, use the column name.
-						dbf.qry = dbf.col
-					}
 					// Fill in remaining db info.
 					if dflt.Valid {
 						if dflt.String == "''::text" {
@@ -112,21 +109,32 @@ func (dbm *dbmap) table(pool *pgxpool.Pool, tbln string) {
 		}
 		rows.Close()
 		// Now remove dbf entries (object fields) that have no corresponding database column.
-		dbfs := []*dbfld{}
-		for _, dbf := range dbm.dbfs {
-			if dbf.col != "" {
-				dbfs = append(dbfs, dbf)
-			}
-		}
-		dbm.dbfs = dbfs
+		// dbfs := []*dbfld{}
+		// for _, dbf := range dbm.dbfs {
+		// 	if dbf.col != "" {
+		// 		dbfs = append(dbfs, dbf)
+		// 	}
+		// }
+		// dbm.dbfs = dbfs
 	}
 }
 
-func (dbm *dbmap) byCol(coln string) *dbfld {
+func (dbm *dbmap) find(coln string, mustExist, mustMapped bool) *dbfld {
 	for _, dbf := range dbm.dbfs {
 		if strings.EqualFold(dbf.col, coln) {
-			return dbf
+			if dbf.fld != "" {
+				return dbf
+			}
+			if mustMapped {
+				dbm.Print()
+				panic(fmt.Sprintf("tbln[%s] coln[%s] not mapped", dbm.tbln, coln))
+			}
+			return nil
 		}
+	}
+	if mustExist {
+		dbm.Print()
+		panic(fmt.Sprintf("tbln[%s] coln[%s] not found", dbm.tbln, coln))
 	}
 	return nil
 }
@@ -143,7 +151,12 @@ func (dbm *dbmap) getColumnValueAsString(coln, fv string) string {
 			}
 			if strings.HasPrefix(dbf.typ, "timestamp") {
 				if fv == "" || fv == "NULL" || fv == "0" {
-					return "NULL"
+					if dbf.dfl != "" {
+						return dbf.dfl
+					} else if dbf.nul {
+						return "NULL"
+					}
+					return ""
 				}
 				if i64, err := strconv.ParseInt(fv, 10, 64); err == nil {
 					secs := i64 / (1000 * 1000)
@@ -156,7 +169,12 @@ func (dbm *dbmap) getColumnValueAsString(coln, fv string) string {
 			}
 			if strings.HasPrefix(dbf.typ, "time") {
 				if fv == "" || fv == "NULL" || fv == "0" {
-					return "NULL"
+					if dbf.dfl != "" {
+						return dbf.dfl
+					} else if dbf.nul {
+						return "NULL"
+					}
+					return ""
 				}
 				if i64, err := strconv.ParseInt(fv, 10, 64); err == nil {
 					secs := i64 / (1000 * 1000)
@@ -169,7 +187,12 @@ func (dbm *dbmap) getColumnValueAsString(coln, fv string) string {
 			}
 			if strings.HasPrefix(dbf.typ, "date") {
 				if fv == "" || fv == "NULL" || fv == "0" {
-					return "NULL"
+					if dbf.dfl != "" {
+						return dbf.dfl
+					} else if dbf.nul {
+						return "NULL"
+					}
+					return ""
 				}
 				if i64, err := strconv.ParseInt(fv, 10, 64); err == nil {
 					secs := i64 / (1000 * 1000)
@@ -198,4 +221,10 @@ func (dbm *dbmap) getColumnValueAsString(coln, fv string) string {
 	return fmt.Sprintf("'%s'", fv)
 }
 
-
+func (dbm *dbmap) Print() {
+	fmt.Printf("tbln=%s\n", dbm.tbln)
+	fmt.Printf("%-6s %-25s %-40s %-6s %-6s %-10s %s\n", "fld", "col", "typ", "upd", "nul", "dfl", "qry")
+	for _, dbf := range dbm.dbfs {
+		fmt.Printf("%-6s %-25s %-40s %-6s %-6s %-10s %s\n", dbf.fld, dbf.col, dbf.typ, strconv.FormatBool(dbf.upd), strconv.FormatBool(dbf.nul), dbf.dfl, dbf.qry)
+	}
+}

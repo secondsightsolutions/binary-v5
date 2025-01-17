@@ -131,6 +131,21 @@ func (rfl *rflt) getFieldValue(obj any, name string) any {
 	}
 }
 
+func (rfl *rflt) field(obj any, name string) (string, bool) {
+	flds := rfl.fields(obj)
+	fld  := ""
+	if slices.Contains(flds, name) {		// First check for exact case match.
+		return name, true
+	} else {								// If no exact case match, look for case-insensitive.
+		for _, f := range flds {
+			if strings.EqualFold(f, fld) {
+				return f, false
+			}
+		}
+		return "", false
+	}
+}
+
 func (rfl *rflt) setFieldValue(obj any, fld string, val any) {
 	pgn_float64 := func(v pgtype.Numeric) float64 {
 		if flt, err := v.Float64Value(); err == nil {
@@ -187,20 +202,9 @@ func (rfl *rflt) setFieldValue(obj any, fld string, val any) {
 	if val == nil {
 		return
 	}
-	flds := rfl.fields(obj)
 	_fld := ""
-	if slices.Contains(flds, fld) {			// First check for exact case match.
-		_fld = fld
-	} else {								// If no exact case match, look for case-insensitive.
-		for _, f := range flds {
-			if strings.EqualFold(f, fld) {
-				_fld = f
-				break
-			}
-		}
-	}
-	if _fld == "" {
-		return	// Should probably return error or log.
+	if _fld,_ = rfl.field(obj, fld); _fld == "" {
+		panic(fmt.Sprintf("cannot find field (%s) in field list %v", fld, rfl.fields(obj)))
 	}
 	objV := rfl.objValue(obj)
 	fldV := objV.FieldByName(_fld)

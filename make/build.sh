@@ -37,6 +37,7 @@ name="$4"   # Identity, like brg or amgen
 type="$5"   # Manu or proc
 
 cntr="$desc" # Used when deploying (container name)
+cert=false  # Whether or not we need to (re)build certs - if envr/name have not changed since last build, no need to rebuild.
 
 if [ "$type" == "manu" ];then
   manu="$name"
@@ -61,7 +62,7 @@ echo "subjectAltName=IP:0.0.0.0,IP:127.0.0.1,IP:${addr}" > cert-ext.txt
 extcmd="-extfile cert-ext.txt"
 openssl req -newkey rsa:4096 -nodes -keyout pkey.pem -out req.pem -subj "/C=US/ST=DC/L=DC/O=$X509_O/OU=$X509_OU/CN=$X509_CN/emailAddress=$X509_EM" > /dev/null 2>&1
 openssl x509 -req -in req.pem -days 3650 -sha256 -CA ca-cert.pem -CAkey ca-pkey.pem -CAcreateserial -out cert.pem $extcmd > /dev/null 2>&1
-openssl verify -CAfile ca-cert.pem cert.pem
+#openssl verify -CAfile ca-cert.pem cert.pem
 ./make/crypt --phrase=${V5_APPL_PHRS} --encrypt=pkey.pem --output=pkey.pem.b64
 base64 -i cert.pem > cert.pem.b64
 }
@@ -110,6 +111,8 @@ echo "export V5_APPL_CACR=$V5_APPL_CACR" > build.${envr}.env
 echo "export V5_APPL_PKEY=$V5_APPL_PKEY" >> build.${envr}.env
 echo "export V5_APPL_PHRS=$V5_APPL_PHRS" >> build.${envr}.env
 echo "export V5_APPL_SALT=$V5_APPL_SALT" >> build.${envr}.env
+echo "export V5_BUILD_ENVR=${envr}" >> build.${envr}.env
+echo "export V5_BUILD_NAME=${name}" >> build.${envr}.env
 echo "export V5_ATLAS_HOST=$V5_ATLAS_HOST" >> build.${envr}.env
 echo "export V5_ATLAS_PORT=$V5_ATLAS_PORT" >> build.${envr}.env
 echo "export V5_ATLAS_NAME=$V5_ATLAS_NAME" >> build.${envr}.env
@@ -119,8 +122,6 @@ echo "export V5_ATLAS_GRPC=$V5_ATLAS_GRPC" >> build.${envr}.env
 echo "export V5_TITAN_GRPC=$V5_TITAN_GRPC" >> build.${envr}.env
 echo "export V5_ATLAS_OGTM=$V5_ATLAS_OGTM" >> build.${envr}.env
 echo "export V5_ATLAS_OGKY=$V5_ATLAS_OGKY" >> build.${envr}.env
-echo "export V5_ATLAS_CERT=$V5_ATLAS_CERT" >> build.${envr}.env
-echo "export V5_ATLAS_PKEY=$V5_ATLAS_PKEY" >> build.${envr}.env
 echo "export V5_TITAN_HOST=$V5_TITAN_HOST" >> build.${envr}.env
 echo "export V5_TITAN_PORT=$V5_TITAN_PORT" >> build.${envr}.env
 echo "export V5_TITAN_NAME=$V5_TITAN_NAME" >> build.${envr}.env
@@ -139,13 +140,17 @@ echo "export V5_ESPDB_PASS=$V5_ESPDB_PASS" >> build.${envr}.env
 echo "export V5_TITAN_GRPC=$V5_TITAN_GRPC" >> build.${envr}.env
 echo "export V5_TITAN_OGTM=$V5_TITAN_OGTM" >> build.${envr}.env
 echo "export V5_TITAN_OGKY=$V5_TITAN_OGKY" >> build.${envr}.env
-echo "export V5_TITAN_CERT=$V5_TITAN_CERT" >> build.${envr}.env
-echo "export V5_TITAN_PKEY=$V5_TITAN_PKEY" >> build.${envr}.env
 echo "export V5_ATLAS_GRPC=$V5_ATLAS_GRPC" >> build.${envr}.env
-echo "export V5_SHELL_CERT=$V5_SHELL_CERT" >> build.${envr}.env
-echo "export V5_SHELL_PKEY=$V5_SHELL_PKEY" >> build.${envr}.env
+cert=true
 else
 source build.${envr}.env
+fi
+
+# Now compare the prior/saved envr/name with what is passed on command line.
+if [ "$cert" = false ];then   # If no saved info (we read from Azure instead) then already set to true. Only need this test if we're still false.
+if [ "$envr" != "$V5_BUILD_ENVR" ] || [ "$name" != "$V5_BUILD_NAME" ];then
+  cert=true
+fi
 fi
 
 echo -n $name          > embed/name.txt
@@ -161,9 +166,13 @@ echo -n $V5_APPL_DESC  > embed/desc.txt
 
 if [ "$name" == "brg" ] || [ "$type" == "manu" ];then
 echo "Embedding atlas support"
+if [ "$cert" = true ];then
 make_cert ${V5_ATLAS_GRPC} "atlas"
 export V5_ATLAS_CERT="$(cat cert.pem.b64)"
 export V5_ATLAS_PKEY="$(cat pkey.pem.b64)"
+echo "export V5_ATLAS_CERT=$V5_ATLAS_CERT" >> build.${envr}.env
+echo "export V5_ATLAS_PKEY=$V5_ATLAS_PKEY" >> build.${envr}.env
+fi
 echo -n $V5_ATLAS_CERT > embed/atlas_cert.txt
 echo -n $V5_ATLAS_PKEY > embed/atlas_pkey.txt
 echo -n $V5_ATLAS_OGKY > embed/atlas_ogky.txt
@@ -179,9 +188,13 @@ fi
 
 if [ "$name" == "brg" ];then
 echo "Embedding titan support"
+if [ "$cert" = true ];then
 make_cert ${V5_TITAN_GRPC} "titan"
 export V5_TITAN_CERT="$(cat cert.pem.b64)"
 export V5_TITAN_PKEY="$(cat pkey.pem.b64)"
+echo "export V5_TITAN_CERT=$V5_TITAN_CERT" >> build.${envr}.env
+echo "export V5_TITAN_PKEY=$V5_TITAN_PKEY" >> build.${envr}.env
+fi
 echo -n $V5_TITAN_CERT > embed/titan_cert.txt
 echo -n $V5_TITAN_PKEY > embed/titan_pkey.txt
 echo -n $V5_TITAN_OGKY > embed/titan_ogky.txt
@@ -205,9 +218,13 @@ echo -n $V5_TITAN_PASS > embed/titan_pass.txt
 fi
 
 echo "Embedding shell support"
+if [ "$cert" = true ];then
 make_cert 127.0.0.1 "shell"
 export V5_SHELL_CERT="$(cat cert.pem.b64)"
 export V5_SHELL_PKEY="$(cat pkey.pem.b64)"
+echo "export V5_SHELL_CERT=$V5_SHELL_CERT" >> build.${envr}.env
+echo "export V5_SHELL_PKEY=$V5_SHELL_PKEY" >> build.${envr}.env
+fi
 echo -n $V5_SHELL_CERT > embed/shell_cert.txt
 echo -n $V5_SHELL_PKEY > embed/shell_pkey.txt
 echo -n $V5_ATLAS_GRPC > embed/atlas_grpc.txt

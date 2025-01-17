@@ -3,25 +3,181 @@ package main
 import (
 	context "context"
 	"fmt"
+	"time"
 
 	grpc "google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/peer"
 )
 
 type titanServer struct {
 	UnimplementedTitanServer
+	rqid int64
+}
+
+type titanStream struct {
+	grpc.ServerStream
+}
+
+type request struct {
+	Seq  int64
+	Cmid string
+	Comd string // GRPC service API call (endpoint/function name)
+	Manu string
+	Name string
+	Kind string
+	Auth string
+	Vers string
+	Dscr string 
+	Hash string
+	Netw string
+	Host string
+	User string
+	Addr string	// public address seen on incoming command
+	Cmdl string
+	Cwd  string	// current working directory
+	Rslt string
+	Crat int64
+}
+
+
+func (ts *titanStream) RecvMsg(m any) error {
+	return ts.ServerStream.RecvMsg(m)
+}
+
+func (ts *titanStream) SendMsg(m any) error {
+	return ts.ServerStream.SendMsg(m)
+}
+
+func newTitanStream(s grpc.ServerStream) grpc.ServerStream {
+	return &titanStream{s}
+}
+
+func titanUnaryInterceptor(ctx context.Context, req any, si *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+	rqst := &request{
+		Comd: si.FullMethod,
+		Cmid: metaGet(ctx, "cmid"),
+		Manu: metaGet(ctx, "manu"),
+		Name: metaGet(ctx, "name"),
+		Auth: metaGet(ctx, "auth"),
+		Vers: metaGet(ctx, "vers"),
+		Kind: metaGet(ctx, "kind"),
+		Dscr: metaGet(ctx, "dscr"),
+		Hash: metaGet(ctx, "hash"),
+		Netw: metaGet(ctx, "netw"),
+		Host: metaGet(ctx, "mach"),
+		Cwd:  metaGet(ctx, "cwd"),
+		User: metaGet(ctx, "user"),
+		Cmdl: metaGet(ctx, "cmdl"),
+		Addr: getPublicAddr(ctx),
+		Crat: 0,
+	}
+	strt := time.Now()
+	pool := titan.pools["titan"]
+	vald := validate_client(ctx, pool, "titan")
+	if vald != nil {
+		rqst.Rslt = vald.Error()
+	}
+	dbm := new_dbmap[request]()
+	dbm.table(pool, "titan.requests")
+
+	if rqid, err := db_insert_one[request](ctx, pool, "titan.requests", dbm, rqst, "rqid"); err == nil {
+		srvr := si.Server.(*titanServer)
+		srvr.rqid = rqid
+		if vald == nil {
+			if res, err := handler(ctx, req); err != nil {
+				Log("titan", "unary_int", si.FullMethod, "command failed", time.Since(strt), nil, err)
+				rqst.Rslt = err.Error()
+				if err := db_update(context.Background(), rqst, nil, pool, "titan.requests", dbm, map[string]string{"rqid": fmt.Sprintf("%d", rqid)}); err != nil {
+					Log("titan", "unary_int", si.FullMethod, "failed to update request row", time.Since(strt), map[string]any{"rqid": rqid, "name": rqst.Name, "auth": rqst.Auth, "user": rqst.User, "netw": rqst.Netw, "host": rqst.Host}, err)
+				}
+				return res, err
+			} else {
+				// Log("titan", "unary_int", si.FullMethod, "request succeeded", time.Since(strt), nil, err)
+				return res, err
+			}
+		} else {
+			Log("titan", "unary_int", si.FullMethod, "validation failed", time.Since(strt), nil, vald)
+			return nil, vald
+		}
+	} else {
+		Log("titan", "unary_int", si.FullMethod, "failed to insert request row", time.Since(strt), map[string]any{"rqid": rqid, "name": rqst.Name, "auth": rqst.Auth, "user": rqst.User, "netw": rqst.Netw, "host": rqst.Host}, err)
+		return nil, err
+	}
+}
+
+func titanStreamInterceptor(srv any, ss grpc.ServerStream, si *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	rqst := &request{
+		Comd: si.FullMethod,
+		Manu: metaGet(ss.Context(), "manu"),
+		Name: metaGet(ss.Context(), "name"),
+		Auth: metaGet(ss.Context(), "auth"),
+		Vers: metaGet(ss.Context(), "vers"),
+		Kind: metaGet(ss.Context(), "kind"),
+		Dscr: metaGet(ss.Context(), "dscr"),
+		Hash: metaGet(ss.Context(), "hash"),
+		Netw: metaGet(ss.Context(), "netw"),
+		Host: metaGet(ss.Context(), "mach"),
+		Cwd:  metaGet(ss.Context(), "cwd"),
+		User: metaGet(ss.Context(), "user"),
+		Cmdl: metaGet(ss.Context(), "cmdl"),
+		Addr: getPublicAddr(ss.Context()),
+		Crat: 0,
+	}
+	strt := time.Now()
+	pool := titan.pools["titan"]
+	vald := validate_client(ss.Context(), pool, "titan")
+	if vald != nil {
+		rqst.Rslt = vald.Error()
+	}
+	dbm := new_dbmap[request]()
+	dbm.table(pool, "titan.requests")
+
+	if rqid, err := db_insert_one[request](context.Background(), pool, "titan.requests", dbm, rqst, "rqid"); err == nil {
+		srvr := srv.(*titanServer)
+		srvr.rqid = rqid
+		if vald == nil {
+			if err := handler(srvr, newTitanStream(ss)); err != nil {
+				Log("titan", "stream_int", si.FullMethod, "request failed", time.Since(strt), nil, err)
+				rqst.Rslt = err.Error()
+				if err := db_update(context.Background(), rqst, nil, pool, "titan.requests", dbm, map[string]string{"rqid": fmt.Sprintf("%d", rqid)}); err != nil {
+					Log("titan", "stream_int", si.FullMethod, "failed to update request row", time.Since(strt), map[string]any{"rqid": rqid, "name": rqst.Name, "auth": rqst.Auth, "user": rqst.User, "netw": rqst.Netw, "host": rqst.Host}, err)
+				}
+				return err
+			} else {
+				// Log("titan", "stream_int", si.FullMethod, "request succeeded", time.Since(strt), nil, err)
+				return nil
+			}
+		} else {
+			Log("titan", "stream_int", si.FullMethod, "validation failed", time.Since(strt), nil, vald)
+			return vald
+		}
+	} else {
+		Log("titan", "stream_int", si.FullMethod, "failed to insert request row", time.Since(strt), map[string]any{"rqid": rqid, "name": rqst.Name, "auth": rqst.Auth, "user": rqst.User, "netw": rqst.Netw, "host": rqst.Host}, err)
+		return err
+	}
 }
 
 func (s *titanServer) Ping(ctx context.Context, req *Req) (*Res, error) {
-	if err := validate_client(ctx, titan.pools["titan"], "titan"); err != nil {
-		return &Res{}, err
+	ou := ""
+	cn := ""
+	netw := ""
+	if p, ok := peer.FromContext(ctx); ok && p != nil {
+		netw = p.Addr.String()
+		if tlsInfo, ok := p.AuthInfo.(credentials.TLSInfo); ok {
+			cn, ou = getCreds(tlsInfo)
+		}
 	}
+	Log("titan", "ping", cn, "", 0, map[string]any{
+		"cn": cn,
+		"ou": ou,
+		"manu": manu,
+		"netw": netw,
+	}, nil)
 	return &Res{}, nil
 }
 
 func titan_db_read[T any](tbln string, strm grpc.ServerStreamingServer[T], seq int64) error {
-	if err := validate_client(strm.Context(), titan.pools["titan"], "titan"); err != nil {
-		return err
-	}
 	pool := titan.pools["titan"]
 	whr  := ""
 	manu := metaManu(strm.Context())
@@ -30,7 +186,7 @@ func titan_db_read[T any](tbln string, strm grpc.ServerStreamingServer[T], seq i
 	if seq > 0 {
 		whr = fmt.Sprintf("seq > %d", seq)
 	}
-	if dbm.byCol("manu") != nil {
+	if dbm.find("manu", false, true) != nil {
 		if whr == "" {
 			whr = fmt.Sprintf("manu = '%s'", manu)
 		} else {
@@ -66,33 +222,23 @@ func (s *titanServer) GetAuths(req *SyncReq, strm grpc.ServerStreamingServer[Aut
 	return titan_db_read("titan.auth", strm, req.Last)
 }
 
-
-func (s *titanServer) Rebates(strm grpc.ClientStreamingServer[TitanRebate, Res]) error {
-	if err := validate_client(strm.Context(), titan.pools["titan"], "titan"); err != nil {
-		return err
-	}
-	_,_, err := sync_fm_client(titan.pools["titan"], "titan", manu, "titan.rebates", strm)
+func (s *titanServer) SyncScrubRebates(strm grpc.ClientStreamingServer[ScrubRebate, Res]) error {
+	_,_, err := sync_fm_client(titan.pools["titan"], "titan", manu, "titan.scrub_rebates", strm)
 	return err
 }
-func (s *titanServer) Scrubs(strm grpc.ClientStreamingServer[Scrub, Res]) error {
-	if err := validate_client(strm.Context(), titan.pools["titan"], "titan"); err != nil {
-		return err
-	}
+func (s *titanServer) SyncScrubs(strm grpc.ClientStreamingServer[Scrub, Res]) error {
 	_,_, err := sync_fm_client(titan.pools["titan"], "titan", manu, "titan.scrubs", strm)
 	return err
 }
-func (s *titanServer) ClaimsUsed(strm grpc.ClientStreamingServer[ClaimUse, Res]) error {
-	if err := validate_client(strm.Context(), titan.pools["titan"], "titan"); err != nil {
-		return err
-	}
-	_,_, err := sync_fm_client(titan.pools["titan"], "titan", manu, "titan.claim_uses", strm)
+func (s *titanServer) SyncScrubClaims(strm grpc.ClientStreamingServer[ScrubClaim, Res]) error {
+	_,_, err := sync_fm_client(titan.pools["titan"], "titan", manu, "titan.scrub_claims", strm)
 	return err
 }
-func (s *titanServer) RebateClaims(strm grpc.ClientStreamingServer[RebateClaim, Res]) error {
-	if err := validate_client(strm.Context(), titan.pools["titan"], "titan"); err != nil {
-		return err
-	}
-	_,_, err := sync_fm_client(titan.pools["titan"], "titan", manu, "titan.rebate_claims", strm)
+func (s *titanServer) SyncScrubRebatesClaims(strm grpc.ClientStreamingServer[RebateClaim, Res]) error {
+	_,_, err := sync_fm_client(titan.pools["titan"], "titan", manu, "titan.scrub_rebates_claims", strm)
 	return err
 }
-
+func (s *titanServer) SyncCommands(strm grpc.ClientStreamingServer[Command, Res]) error {
+	_,_, err := sync_fm_client(titan.pools["titan"], "titan", manu, "titan.commands", strm)
+	return err
+}

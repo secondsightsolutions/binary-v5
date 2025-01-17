@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -34,6 +35,33 @@ func db_pool(appl, host, port, name, user, pass string, tls bool) *pgxpool.Pool 
 	}
 }
 
+func db_select_col(ctx context.Context, pool *pgxpool.Pool, qry string) (any, error) {
+	if tx, err := pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted}); err == nil {
+		defer tx.Commit(context.Background())
+		if rows, err := tx.Query(ctx, qry); err == nil {
+			defer rows.Close()
+			if rows.Next() {
+				if vals, err := rows.Values(); err == nil {
+					if len(vals) > 0 {
+						return vals[0], nil
+					} else {
+						return nil, fmt.Errorf("missing column")
+					}
+				} else {
+					return nil, err
+				}
+			} else {
+				return nil, nil
+			}
+		} else {
+			tx.Rollback(context.Background())
+			return nil, err
+		}
+	} else {
+		return nil, err
+	}
+}
+
 func db_select[T any](pool *pgxpool.Pool, appl, tbln string, dbm *dbmap, where, sort string, stop chan any) (chan *T, error) {
 	if dbm == nil {
 		dbm = new_dbmap[T]()
@@ -45,15 +73,12 @@ func db_select[T any](pool *pgxpool.Pool, appl, tbln string, dbm *dbmap, where, 
 	qry := dyn_select(tbln, where, sort, dbm)
 	cnt := 0
 	ctx := context.Background()
-	// fmt.Printf("db_select: tbln=%s\n", tbln)
-	// fmt.Printf("db_select: type=%T\n", obj)
-	// fmt.Printf("%-6s %-25s %-40s %-6s %-6s %-10s %s\n", "fld", "col", "typ", "upd", "nul", "dfl", "qry")
-	// for _, dbf := range dbm.dbfs {
-	// 	fmt.Printf("%-6s %-25s %-40s %-6s %-6s %-10s %s\n", dbf.fld, dbf.col, dbf.typ, strconv.FormatBool(dbf.upd), strconv.FormatBool(dbf.nul), dbf.dfl, dbf.qry)
-	// }
+	// dbm.Print()
+	// fmt.Println(qry)
 	if dbm.tbln == "" {
 		panic("dbmap not initialized with database table")
 	}
+	dbfs := dbm.mapped()
 	if tx, err := pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted}); err == nil {
 		if rows, err := tx.Query(ctx, qry); err == nil {
 			go func() {
@@ -72,7 +97,7 @@ func db_select[T any](pool *pgxpool.Pool, appl, tbln string, dbm *dbmap, where, 
 							obj = new(T)
 							if vals, err := rows.Values(); err == nil {
 								for i, val := range vals {
-									rfl.setFieldValue(obj, dbm.dbfs[i].fld, val)
+									rfl.setFieldValue(obj, dbfs[i].fld, val)
 								}
 								chn <-obj
 							} else {
@@ -104,7 +129,27 @@ func db_select[T any](pool *pgxpool.Pool, appl, tbln string, dbm *dbmap, where, 
 	}
 }
 
+func db_insert_run[T any](wg *sync.WaitGroup, pool *pgxpool.Pool, appl, tbln string, dbm *dbmap, fm <-chan *T, batch int, idcol string, replace bool, cnt, seq *int64, err *error) {
+	go func() {
+		defer wg.Done()
+		_cnt, _seq, _err := db_insert[T](pool, appl, tbln, dbm, fm, batch, idcol, replace)
+		if cnt != nil {
+			*cnt = _cnt
+		}
+		if seq != nil{
+			*seq = _seq
+		}
+		if err != nil {
+			*err = _err
+		}
+	}()
+}
+
 func db_insert[T any](pool *pgxpool.Pool, appl, tbln string, dbm *dbmap, fm <-chan *T, batch int, idcol string, replace bool) (int64, int64, error) {
+	if dbm == nil {
+		dbm = new_dbmap[T]()
+		dbm.table(pool, tbln)
+	}
 	ctx := context.Background()
 	rfl := &rflt{}
 	lst := []any{}
@@ -179,22 +224,27 @@ func db_insert_batch(ctx context.Context, tx pgx.Tx, pool *pgxpool.Pool, tbln st
 		panic("dbmap not initialized with database table")
 	}
 	qry := dyn_insert(tbln, dbm, objs, ignoreConflicts)
+	// fmt.Println(qry)
 	_, err := tx.Exec(ctx, qry)
 	if err != nil {
 		tx.Rollback(ctx)
+		dbm.Print()
 		fmt.Println(qry)
 	}
 	return err
 }
-func db_insert_one[T any](ctx context.Context, pool *pgxpool.Pool, tbln string, obj any, rtrn string) (int64, error) {
-	dbm := new_dbmap[T]()
-	dbm.table(pool, tbln)
+func db_insert_one[T any](ctx context.Context, pool *pgxpool.Pool, tbln string, dbm *dbmap, obj any, rtrn string) (int64, error) {
+	if dbm == nil {
+		dbm = new_dbmap[T]()
+		dbm.table(pool, tbln)
+	}
+	// dbm.Print()
 	if tx, err := pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted}); err == nil {
 		qry := dyn_insert(tbln, dbm, []any{obj}, false)
-		fmt.Println(qry)
 		var err error
 		if rtrn != "" {
 			qry += " RETURNING " + rtrn
+			//fmt.Println(qry)
 			if row := tx.QueryRow(ctx, qry); row != nil {
 				var id int64
 				if err = row.Scan(&id); err == nil {
@@ -249,7 +299,7 @@ func db_update(ctx context.Context, obj any, tx pgx.Tx, pool *pgxpool.Pool, tbln
 		return sb.String()
 	}
 	if len(where) == 0 {
-		return fmt.Errorf("missing WHERE")
+		panic("missing WHERE clause")
 	}
 	if tx == nil {
 		var err error
@@ -300,7 +350,11 @@ func dyn_select(tbln string, where, sort string, dbm *dbmap) string {
 	sb.WriteString("SELECT ")
 	dbfs := dbm.mapped()
 	for i, dbf := range dbfs {
-		sb.WriteString(dbf.qry + " " + dbf.fld)
+		if dbf.qry != "" {
+			sb.WriteString(dbf.qry + " " + dbf.fld)
+		} else {
+			sb.WriteString(fmt.Sprintf("\"%s\"", dbf.col) + " " + dbf.fld)
+		}
 		if i < len(dbfs)-1 {
 			sb.WriteString(", ")
 		}
@@ -316,21 +370,23 @@ func dyn_select(tbln string, where, sort string, dbm *dbmap) string {
 }
 func dyn_insert[T any](tbln string, dbm *dbmap, objs []T, ignoreConflicts bool) string {
 	cols := []string{}
+	colq := []string{}
 	dbfs := dbm.mapped_upd()
 	for _, dbf := range dbfs {
+		colq = append(colq, fmt.Sprintf("\"%s\"", dbf.col))
 		cols = append(cols, dbf.col)
 	}
 	// Start building the insert query.
 	var sb bytes.Buffer
 	sb.WriteString(fmt.Sprintf("INSERT INTO %s ", tbln))
-	sb.WriteString(fmt.Sprintf("( %s )", strings.Join(cols, ", ")))
+	sb.WriteString(fmt.Sprintf("( %s )", strings.Join(colq, ", ")))
 	sb.WriteString(" VALUES ")
 
 	rfl := &rflt{}	// Empty type that has the reflection convenience functions.
 	for i, obj := range objs {
 		sb.WriteString(" ( ")
 		for j, colN := range cols {
-			dbf := dbm.byCol(colN)
+			dbf := dbm.find(colN, true, true)
 			fv  := rfl.getFieldValueAsString(obj, dbf.fld)
 			fv  = strings.ReplaceAll(fv, "'", "")
 			cv  := dbm.getColumnValueAsString(colN, fv)
@@ -564,8 +620,8 @@ func ping_db(appl, name string, pool *pgxpool.Pool) {
 // 		return nil, err
 // 	}
 // }
-// func db_last_seq(ctx context.Context, pool *pgxpool.Pool, tbln, coln string) (int64, error) {
-// 	if rows, err := pool.Query(ctx, fmt.Sprintf("SELECT COALESCE(%s, 0) seq FROM %s", coln, tbln)); err == nil {
+// func db_max_seq(pool *pgxpool.Pool, tbln, coln string) (int64, error) {
+// 	if rows, err := pool.Query(context.Background(), fmt.Sprintf("SELECT COALESCE(MAX(%s), 0) seq FROM %s", coln, tbln)); err == nil {
 // 		defer rows.Close()
 // 		var seq int64
 // 		if rows.Next() {
@@ -578,8 +634,8 @@ func ping_db(appl, name string, pool *pgxpool.Pool) {
 // 		return 0, err
 // 	}
 // }
-// func db_max_seq(pool *pgxpool.Pool, tbln, coln string) (int64, error) {
-// 	if rows, err := pool.Query(context.Background(), fmt.Sprintf("SELECT COALESCE(MAX(%s), 0) seq FROM %s", coln, tbln)); err == nil {
+// func db_last_seq(ctx context.Context, pool *pgxpool.Pool, tbln, coln string) (int64, error) {
+// 	if rows, err := pool.Query(ctx, fmt.Sprintf("SELECT COALESCE(%s, 0) seq FROM %s", coln, tbln)); err == nil {
 // 		defer rows.Close()
 // 		var seq int64
 // 		if rows.Next() {

@@ -7,100 +7,124 @@ option go_package = "github.com/secondsightsolutions/binary-v5/main";
 
 package main;
 
-message Scrub {
-    int64  seq  = 1;
-    string auth = 2;
-    //string manu = 3;
-    string plcy = 4;
-    string name = 5;
-    string vers = 6;
-    string dscr = 7;
-    string hash = 8;
-    string host = 9;
-    string appl = 10;
-    string hdrs = 11;
-    string cmdl = 12;
-    string kind = 13;
-    string test = 14;
-    int64  scid = 15;
-    int64  crat = 16;
-    int64  rdat = 17;
-    int64  srat = 18;
-    int64  dnat = 19;
-}
 message Rebate {
-    int64  seq  = 1;    // sync sequence number
-    int64  scid = 2;    // scrub id
-    int64  rbid = 3;    // rebate id - generated row number
-    int64  indx = 4;    // index - sort order
-    string rxn  = 5;
+    int64  ivid = 1;    // invoice id
+    int64  rbid = 2;    // rebate id - generated row number
+    int64  indx = 3;    // index - sort order
+    string rxn  = 4;
+    string hrxn = 5;
+    string ndc  = 6;
+    string spid = 7;    // service provider id
+    string prid = 8;    // prescriber provider id
+    string dos  = 9;    // date of service
+    string errc = 10;
+    string errm = 11;
+    string stat = 12;   // rebate status
+    string spmt = 13;   // service provider match type: exact, xwalk, stack, chain
+    string fspd = 14;
+    string fndc = 15;
+    string frxn = 16;
+    string fprd = 17;
+    string data = 18;
+}
+
+message Scrub {
+    int64  scid = 1;
+    int64  ivid = 2;
+    string cmid = 3;
+    string plcy = 4;
+    string kind = 5;
+    string appl = 6;
+    string hdrs = 7;
+    string test = 8;
+    int64  seq  = 9;
+}
+
+message Claim {
+    string clid = 1;
+    string i340 = 2;
+    string ndc  = 3;
+    string spid = 4;
+    string prid = 5;
     string hrxn = 6;
-    string ndc  = 7;
-    string spid = 8;    // service provider id
-    string prid = 9;    // prescriber provider id
-    string dos  = 10;   // date of service
-    string stat = 11;
-    string excl = 12;
-    string errc = 13;
-    string errm = 14;
-    string spmt = 15;   // service provider match type: exact, xwalk, stack, chain
-    string fspd = 16;   // formatted spid
-    string fndc = 17;   // formatted ndc
-    string frxn = 18;   // formatted rxn
-    string fprd = 19;   // formatted prid
+    string hfrx = 7;
+    string hdos = 8;
+    string hdop = 9;
+    int64  doc  = 10;
+    int64  dos  = 11;
+    int64  dop  = 12;
+    string netw = 13;
+    string prnm = 14;
+    string chnm = 15;
+    bool   elig = 16;
+    bool   susp = 17;
+    bool   cnfm = 18;
+    float  qty  = 19;
+    string ihph = 20;
+    string manu = 21;
+    int64  seq  = 22;
 }
-message ClaimUse {
-    int64  seq  = 1;
-    int64  scid = 2;
-    string shrt = 3;
-    string excl = 4;
+
+message ScrubRebate {
+    int64  scid = 1;
+    int64  ivid = 2;
+    int64  rbid = 3;
+    int64  indx = 4;
+    string stat = 5;
+    string excl = 6;
+    string spmt = 7;   // service provider match type: exact, xwalk, stack, chain
+    int64  seq  = 8;
 }
+
+message ScrubClaim {
+    int64  scid = 1;
+    string clid = 2;
+    string excl = 3;
+    int64  seq  = 4;
+}
+
+message RebateResult {
+    int64  rbid = 1;    // rebate id - generated row number
+    int64  indx = 2;    // index - sort order
+    string rxn  = 3;
+    string hrxn = 4;
+    string ndc  = 5;
+    string spid = 6;    // service provider id
+    string prid = 7;    // prescriber provider id
+    string dos  = 8;   // date of service
+    string stat = 9;
+    string excl = 10;
+    string spmt = 11;   // service provider match type: exact, xwalk, stack, chain
+    string errc = 12;
+    string errm = 13;
+    string data = 14;   // comma-separated list of rebate attribute values
+}
+
 message RebateClaim {
     int64  seq  = 1;
     int64  scid = 2;
     int64  rbid = 3;
-    string shrt = 4;
-}
-message RebateMeta {
-    int64  seq  = 1;
-    int64  scid = 2;
-    string col1 = 21;
-    string col2 = 22;
-    string col50= 70;
+    string clid = 4;
 }
 
-message Claim {
-    int64  seq  = 1;
-    string shrt = 2;
-    string i340 = 3;
-    string ndc  = 4;
-    string spid = 5;
-    string prid = 6;
-    string hrxn = 7;
-    string hfrx = 8;
-    string hdos = 9;
-    string hdop = 10;
-    int64  doc  = 11;
-    int64  dos  = 12;
-    int64  dop  = 13;
-    string netw = 14;
-    string prnm = 15;
-    string chnm = 16;
-    bool   elig = 17;
-    bool   susp = 18;
-    bool   cnfm = 19;
-    string manu = 20;
-    float  qty  = 21;
-    string ihph = 30;
-}
-
-message TitanRebate {
-    string manu = 1;
-    int64  scid = 2;
-    int64  rbid = 3;
-    string stat = 4;
-    string errc = 5;
-    string errm = 6;
+message Command {
+    int64 seq   = 1;
+    string comd = 2;    // GRPC service API call (endpoint/function name)
+    string manu = 3;
+    string name = 4;
+    string kind = 5;
+    string auth = 6;
+    string vers = 7;
+    string dscr = 8;
+    string hash = 9;
+    string netw = 10;
+    string host = 11;
+    string user = 12;
+    string addr = 13;   // public address seen on incoming command
+    string cmdl = 14;
+    string cwd  = 15;   // current working directory
+    string rslt = 16;
+    int64  crat = 17;
 }
 
 message Entity {
@@ -198,6 +222,10 @@ message Res {
 message SyncReq {
     int64  last = 1;
 }
+message ScrubReq {
+    string manu = 1;
+    int64  ivid = 2;
+}
 
 message Metrics {
     int32   rbt_total     = 1;
@@ -237,7 +265,8 @@ message TestData {
 }
 service Atlas {
     rpc Ping(Req)                           returns (Res) {}
-    rpc Rebates(stream Rebate)              returns (stream Rebate) {}
+    rpc Invoice(stream Rebate)              returns (Res) {}
+    rpc Scrub(ScrubReq)                     returns (stream RebateResult) {}
     rpc UploadTest(TestData)                returns (Res) {}
 }
 
@@ -252,8 +281,10 @@ service Titan {
     rpc GetEligibilityLedger(SyncReq)       returns (stream Eligibility) {}
     rpc GetAuths(SyncReq)                   returns (stream Auth) {}
 
-    rpc Scrubs(stream Scrub)                returns (Res) {}
-    rpc Rebates(stream TitanRebate)         returns (Res) {}
-    rpc ClaimsUsed(stream ClaimUse)         returns (Res) {}
-    rpc RebateClaims(stream RebateClaim)    returns (Res) {}
+    rpc SyncCommands(stream Command)                returns (Res) {}
+    rpc SyncScrubs(stream Scrub)                    returns (Res) {}
+    rpc SyncScrubRebates(stream ScrubRebate)        returns (Res) {}
+    rpc SyncScrubClaims(stream ScrubClaim)          returns (Res) {}
+    rpc SyncScrubRebatesClaims(stream RebateClaim)  returns (Res) {}
+    
 }

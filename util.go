@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"net"
 	"sort"
 	"strconv"
 	"strings"
@@ -10,6 +11,7 @@ import (
 
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/peer"
 )
 
 var prefDateFmts = map[string]any{}
@@ -209,22 +211,26 @@ var ScreenLevel = struct {
 	Bars int
 	All  int
 }{ 0, 1, 2, 3}
-
 /*
+// screen() displays progress on the screen based on the running identity plus parameters [mfr] and [prc] (brg always ScreenLevel.All).
+// By putting the level information (mfr, proc) into the place of the call, the code here can decide whether to display, and how much.
+// There are no conditional calls to screen(); the calling code always calls screen(). Make the decision here what to display (or not).
+// mfr - if the caller is a manufacturer, this is the ScreenLevel to use
+// prc - if the caller is a processor, this is the ScreenLevel to use
 func screen(start time.Time, bar *int, cur, max int, mfr, prc int, nl bool, text string, args ...any) {
 	// Rows that are "hidden" actually just have the N of M hidden. Still display the row, along with the continually updating times (all platforms) and memory usages (on linux).
 	_brg := strings.EqualFold("brg", name)
 	_mnu := strings.EqualFold(Type, "manu")
-	_lvl := 0
-	bars := 20
+	_lvl := 0						// Start with ScreenLevel.None
+	bars := 20						// The gauge will display N of 20 bars (max 20).
 	if _brg {
-		_lvl = ScreenLevel.All
-	} else if _mnu {
-		_lvl = mfr
-	} else {
-		_lvl = prc
+		_lvl = ScreenLevel.All		// BRG always displays all.
+	} else if _mnu {				// If we are a manufacturer...
+		_lvl = mfr					// ...the screen level is whatever was passed in in the [mfr] param.
+	} else {						// If we are a processor...
+		_lvl = prc					// ...the screen level is whatever was passed in in the [prc] param.
 	}
-	if _lvl == ScreenLevel.None {
+	if _lvl == ScreenLevel.None {	// If we're still ScreenLevel.None then nothing to show. Return.
 		return
 	}
 	
@@ -372,6 +378,15 @@ func sleep(durn time.Duration, stop chan any) bool {
 	}
 }
 
+func findAny(srch string, list []string) string {
+	for _, str := range list {
+		if strings.EqualFold(str, srch) {
+			return str
+		}
+	}
+	return ""
+}
+
 func Log(app, fcn, tgt, msg string, dur time.Duration, vals map[string]any, err error, args ...any) {
 	mesg := fmt.Sprintf(msg, args...)
 	mil  := dur.Milliseconds() % 1000
@@ -415,7 +430,7 @@ func Log(app, fcn, tgt, msg string, dur time.Duration, vals map[string]any, err 
 		}
 		mesg += str
 	}
-	fmt.Printf("%s [%-5s] %s %-15s %-20s %s %s\n", curT, app, durn, fcn, tgt, mesg, errs)
+	fmt.Printf("%s [%-5s] %s %-15s %-26s %s %s\n", curT, app, durn, fcn, tgt, mesg, errs)
 }
 
 func getCreds(tlsInfo credentials.TLSInfo) (cn, ou string) {
@@ -431,6 +446,49 @@ func getCreds(tlsInfo credentials.TLSInfo) (cn, ou string) {
 		}
 	}
 	return
+}
+
+func getPublicAddr(ctx context.Context) string {
+	if p, ok := peer.FromContext(ctx); ok && p != nil {
+		return p.Addr.String()
+	}
+	return ""
+}
+func getLocalAddr() string {
+	if addrs, err := net.InterfaceAddrs(); err == nil {
+		for _, addr := range addrs {
+			if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+				if ipnet.IP.To4() != nil {
+					return ipnet.IP.String()
+				}
+			}
+		}
+	}
+	return ""
+}
+
+func ctxValues(ctx context.Context, keys []string) map[string]string {
+	mp := map[string]string{}
+	for _, key := range keys {
+		if v := ctx.Value(key); v != nil {
+			switch val := v.(type) {
+			case string:
+				mp[key] = val
+			case int:
+				mp[key] = fmt.Sprintf("%d", val)
+			case int32:
+				mp[key] = fmt.Sprintf("%d", val)
+			case int64:
+				mp[key] = fmt.Sprintf("%d", val)
+			case float32:
+				mp[key] = fmt.Sprintf("%f", val)
+			case float64:
+				mp[key] = fmt.Sprintf("%f", val)
+			default:
+			}
+		}
+	}
+	return mp
 }
 
 func metaGet(ctx context.Context, key string) string {

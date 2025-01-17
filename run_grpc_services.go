@@ -12,7 +12,7 @@ import (
 )
 
 
-func run_grpc_server[T any](done *sync.WaitGroup, stop chan any, name string, port int, cert *tls.Certificate, regis func(grpc.ServiceRegistrar, T), srv T) {
+func run_grpc_server[T any](done *sync.WaitGroup, stop chan any, name string, port int, cert *tls.Certificate, regis func(grpc.ServiceRegistrar, T), srv T, ui grpc.UnaryServerInterceptor, si grpc.StreamServerInterceptor) {
     cfg := &tls.Config{
         Certificates: []tls.Certificate{*cert},
         ClientAuth:   tls.RequireAndVerifyClientCert,
@@ -27,7 +27,7 @@ func run_grpc_server[T any](done *sync.WaitGroup, stop chan any, name string, po
             case <-time.After(time.Duration(5) * time.Second):
                 if gsr == nil {
                     cred := credentials.NewTLS(cfg)
-                    gsr  = grpc.NewServer(grpc.Creds(cred))
+                    gsr  = grpc.NewServer(grpc.Creds(cred), grpc.UnaryInterceptor(ui), grpc.StreamInterceptor(si))
                     go func() {
                         if lis, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", port)); err == nil {
                             regis(gsr, srv)

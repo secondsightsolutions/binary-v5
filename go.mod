@@ -21,6 +21,6 @@ require (
 	github.com/jackc/pgx/v5 v5.7.1
 	golang.org/x/net v0.28.0 // indirect
 	golang.org/x/sys v0.25.0 // indirect
-	golang.org/x/text v0.18.0
+	golang.org/x/text v0.18.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240814211410-ddb44dafa142 // indirect
 )

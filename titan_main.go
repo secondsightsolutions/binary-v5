@@ -35,7 +35,7 @@ func run_titan(done *sync.WaitGroup, opts *Opts, stop chan any) {
 
 	run_datab_ping( done, stop, "titan", 60, titan.pools)
 	run_titan_sync( done, stop, "titan", 60, titan)
-	run_grpc_server(done, stop, "titan", titan_grpc_port, titan.TLSCert, RegisterTitanServer, titan.titan)
+	run_grpc_server(done, stop, "titan", titan_grpc_port, titan.TLSCert, RegisterTitanServer, titan.titan, titanUnaryInterceptor, titanStreamInterceptor)
 }
 
 func run_titan_sync(done *sync.WaitGroup, stop chan any, appl string, intv int, titan *Titan) {
@@ -105,7 +105,7 @@ func (titan *Titan) syncClaims(stop chan any) {
 	fmM.column("netw", "network", 					"COALESCE(network, '')")
 	fmM.column("prnm", "product_name", 				"COALESCE(product_name, '')")
 	fmM.column("qty",  "quantity",  				"COALESCE(quantity, 0)")
-	fmM.column("shrt", "short_id", 					"COALESCE(short_id, '')")
+	fmM.column("clid", "short_id", 					"COALESCE(short_id, '')")
 	fmM.column("spid", "service_provider_id", 		"COALESCE(service_provider_id, '')")
 	fmM.column("prid", "prescriber_id", 			"COALESCE(prescriber_id, '')")
 	fmM.column("elig", "eligible_at_submission",	"COALESCE(eligible_at_submission, true)")

@@ -23,10 +23,7 @@ func main() {
 	getEnv()
 	opts = options()
 
-	if opts.runPing {
-		ping()
-		exit(nil, 0, "")
-	} else if opts.runVers {
+	if opts.runVers {
 		version()
 		exit(nil, 0, "")
 	} else if opts.runConf {
@@ -41,7 +38,7 @@ func main() {
 		run_atlas(&done, opts, stop)
 	}
 	if opts.runClient {
-		run_shell(opts, stop)
+		run_shell(opts)
 	}
 	done.Wait()
 }

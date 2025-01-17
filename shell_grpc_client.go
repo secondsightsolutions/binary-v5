@@ -1,10 +1,10 @@
 package main
 
 import (
-	"context"
+	context "context"
 	"crypto/tls"
 	"fmt"
-	"os"
+	"io"
 	"strings"
 	"time"
 
@@ -19,7 +19,11 @@ func (clt *Shell) connect() (AtlasClient, error) {
 		RootCAs:      X509pool,
 	}
 	crd := credentials.NewTLS(cfg)
-	if conn, err := grpc.NewClient(tgt, grpc.WithTransportCredentials(crd)); err == nil {
+	if conn, err := grpc.NewClient(tgt, 
+		grpc.WithTransportCredentials(crd),
+		grpc.WithUnaryInterceptor(shellUnaryClientInterceptor),
+		grpc.WithStreamInterceptor(shellStreamClientInterceptor),
+	); err == nil {
 		clt.atlas = NewAtlasClient(conn)
 		return NewAtlasClient(conn), nil
 	} else {
@@ -27,85 +31,125 @@ func (clt *Shell) connect() (AtlasClient, error) {
 	}
 }
 
-func (sh *Shell) rebates(stop chan any, rbts chan *Rebate) (chan *Rebate, error) {
-	if sh.atlas == nil {
-		if clt, err := sh.connect(); err == nil {
-			fmt.Println("shell connected to atlas")
-			sh.atlas = clt
-		}
+type shellClientStream struct {
+	grpc.ClientStream
+}
+
+func shellUnaryClientInterceptor(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+	strt := time.Now()
+	ctx  = addMeta(ctx, nil)
+	if err := invoker(ctx, method, req, reply, cc, opts...); err != nil {
+		Log("shell", "unary_clnt_int", method, "command failed", time.Since(strt), nil, err)
+		return err
+	} else {
+		Log("shell", "unary_clnt_int", method, "command succeeded", time.Since(strt), nil, nil)
+		return nil
 	}
-	ctx := metaGRPC(map[string]string{
-		"plcy": sh.opts.policy,
-		"kind": sh.opts.kind,
-		"dscr": desc,
-		"hash": hash,
-		"host": "",
-		"hdrs": "",
-		"cmdl": strings.Join(os.Args, " "),
-		"test": "",
-	})
-	c,f := context.WithCancel(ctx)
-	dur := time.Duration(0) * time.Second
-	out := make(chan *Rebate, 1000)
-
-	defer f()
-	for {
-		if strm, err := sh.atlas.Rebates(c); err == nil {
-			if hdrs, err := strm.Header(); err == nil {
-				sh.scid = metaValueInt64(hdrs, "scid")
-				fmt.Printf("shell.Rebates() received scid=%d\n", sh.scid)
-			} else {
-				fmt.Printf("shell.Rebates() cannot access headers, err=%s\n", err.Error())
-			}
-
-			// We have the scid (scrub_id). Now start sending up the rebates.
-			go func() {
-				fmt.Printf("shell.Rebates() starting send loop\n")
-				for rbt := range rbts {
-					fmt.Printf("shell.Rebates() received input rebate=(%v)\n", rbt)
-					select {
-					case <-stop:
-						goto done
-					case <-time.After(dur):
-						if err := strm.Send(rbt); err != nil {
-							if strings.Contains(err.Error(), "Unavailable") {
-								//log("shell", "rebates", "error sending rebates (network error, retrying)", 0, err)
-								Log("shell", "rebates", "", "error sending rebates (network error, retrying)", 0, nil, nil)
-								dur = time.Duration(5) * time.Second
-							} else {
-								//log("shell", "rebates", "error sending rebates (giving up)", 0, err)
-								Log("shell", "rebates", "", "error sending rebates (giving up)", 0, nil, nil)
-								goto done
-							}
-						} else {
-							dur = time.Duration(0) * time.Second
-							fmt.Printf("shell.Rebates() successfully sent rebate=(%v)\n", rbt)
-						}
-					}
-				}
-				done:
-				fmt.Printf("shell.Rebates() finished send loop\n")
-				strm.CloseSend()
-			}()
-			
-			go func() {
-				fmt.Printf("shell.Rebates() starting recv loop\n")
-				for {
-					if rbt, err := strm.Recv(); err == nil {
-						fmt.Printf("shell.Rebates() successfully recv from server rebate=(%v)\n", rbt)
-						out <-rbt
-					} else {
-						fmt.Printf("shell.Rebates() failed to recv from server err=%s\n", err.Error())
-						break
-					}
-				}
-				fmt.Printf("shell.Rebates() finished recv loop\n")
-			}()
-			return out, nil
-		} else {
-			//fmt.Printf("shell.Rebates() cannot connect to atlas, err=%s\n", err.Error())
-			time.Sleep(time.Duration(5)*time.Second)
-		}
+}
+func shellStreamClientInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+	strt := time.Now()
+	ctx  = addMeta(ctx, nil)
+	if s, err := streamer(ctx, desc, cc, method, opts...); err != nil {
+		Log("shell", "strm_clnt_int", method, "command failed", time.Since(strt), nil, err)
+		return nil, err
+	} else {
+		Log("shell", "strm_clnt_int", method, "command succeeded", time.Since(strt), nil, nil)
+		return &shellClientStream{s}, nil
 	}
 }
 
+func (w *shellClientStream) RecvMsg(m any) error {
+	return w.ClientStream.RecvMsg(m)
+}
+
+func (w *shellClientStream) SendMsg(m any) error {
+	return w.ClientStream.SendMsg(m)
+}
+
+func (sh *Shell) ping() error {
+	if sh.atlas == nil {
+		if clt, err := sh.connect(); err == nil {
+			sh.atlas = clt
+		}
+	}
+	ctx := addMeta(context.Background(), nil)
+	c,f := context.WithCancel(ctx)
+	defer f()
+	if _, err := sh.atlas.Ping(c, &Req{}); err == nil {
+		fmt.Println("Pong!")
+		return nil
+	} else {
+		fmt.Println(err.Error())
+		return err
+	}
+}
+
+func (sh *Shell) upload(file string) (int64, error) {
+	if sh.atlas == nil {
+		if clt, err := sh.connect(); err == nil {
+			sh.atlas = clt
+		}
+	}
+	ivid := int64(-1)
+
+	if hdrs, chn, err := import_file[Rebate](file, ","); err == nil {
+		ctx := addMeta(context.Background(), map[string]string{
+			"file": file,
+			"hdrs": strings.Join(hdrs, ","),
+		})
+		c,f := context.WithCancel(ctx)
+		defer f()
+		if strm, err := sh.atlas.Invoice(c); err == nil {
+			if hdr, err := strm.Header(); err == nil {
+				ivid = metaValueInt64(hdr, "ivid")
+			} else {
+				fmt.Println("failed reading header")
+				return -1, err
+			}
+			for rbt := range chn {
+				fmt.Printf("sending object: %v\n", rbt)
+				if err := strm.Send(rbt); err != nil {
+					fmt.Printf("sending object: %v : %s\n", rbt, err.Error())
+					return ivid, err
+				}
+			}
+			strm.CloseSend()
+			strm.CloseAndRecv()
+		} else {
+			fmt.Printf("shell.upload(): atlas.Invoice() failed: %s\n", err.Error())
+		}
+	} else {
+		fmt.Printf("shell.upload(): import_file failed: %s\n", err.Error())
+	}
+	return ivid, nil
+}
+
+func (sh *Shell) scrub(ivid int64) (int64, error) {
+	ctx := addMeta(context.Background(), map[string]string{
+		"plcy": sh.opts.policy,
+		"kind": sh.opts.kind,
+		"test": "",
+	})
+	c,f := context.WithCancel(ctx)
+	defer f()
+	req := &ScrubReq{Manu: manu, Ivid: ivid}
+	scid := int64(-1)
+
+	if strm, err := sh.atlas.Scrub(c, req); err == nil {
+		if hdr, err := strm.Header(); err == nil {
+			scid = metaValueInt64(hdr, "scid")
+		} else {
+			return scid, err
+		}
+		for {
+			if rr, err := strm.Recv(); err == nil {
+				fmt.Printf("%v\n", rr)
+			} else if err == io.EOF {
+				return scid, nil
+			} else {
+				return scid, err
+			}
+		}
+	}
+	return scid, nil
+}

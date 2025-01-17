@@ -1,6 +1,7 @@
 package main
 
 import (
+	context "context"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
@@ -42,7 +43,7 @@ func run_atlas(done *sync.WaitGroup, opts *Opts, stop chan any) {
 	run_titan_ping( done, stop, "atlas", 60, atlas)
 	run_atlas_sync( done, stop, "atlas", 60, atlas)
     run_memr_watch( done, stop)
-	run_grpc_server(done, stop, "atlas", atlas_grpc_port, atlas.TLSCert, RegisterAtlasServer, atlas.atlas)
+	run_grpc_server(done, stop, "atlas", atlas_grpc_port, atlas.TLSCert, RegisterAtlasServer, atlas.atlas, atlasUnaryServerInterceptor, atlasStreamServerInterceptor)
 }
 
 func run_atlas_sync(done *sync.WaitGroup, stop chan any, appl string, intv int, atlas *Atlas) {
@@ -65,7 +66,7 @@ func run_atlas_sync(done *sync.WaitGroup, stop chan any, appl string, intv int, 
 func run_titan_ping(done *sync.WaitGroup, stop chan any, appl string, intv int, atlas *Atlas) {
 	pingService := func() {
 		strt  := time.Now()
-		_,err := atlas.titan.Ping(metaGRPC(nil), &Req{})
+		_,err := atlas.titan.Ping(addMeta(context.Background(), nil), &Req{})
 		Log("atlas", "run_titan_ping", "titan", "ping completed", time.Since(strt), nil, err)
 	}
 	durn := time.Duration(intv) * time.Second
@@ -100,10 +101,11 @@ func (atlas *Atlas) load(stop chan any) {
 
 func (atlas *Atlas) sync(stop chan any) {
 	pool := atlas.pools["atlas"]
-	sync_fm_server(pool, "atlas", "atlas.claims",        atlas.titan.GetClaims,    stop)
-	sync_fm_server(pool, "atlas", "atlas.auth",          atlas.titan.GetAuths,     stop)
-	sync_to_server(pool, "atlas", "atlas.scrubs",        atlas.titan.Scrubs,       stop)
-	sync_to_server(pool, "atlas", "atlas.rebates",       atlas.titan.Rebates,      stop)
-	sync_to_server(pool, "atlas", "atlas.claim_uses",    atlas.titan.ClaimsUsed,   stop)
-	sync_to_server(pool, "atlas", "atlas.rebate_claims", atlas.titan.RebateClaims, stop)
+	sync_fm_server(pool, "atlas", "atlas.claims",        		false,				atlas.titan.GetClaims,    			stop)
+	sync_fm_server(pool, "atlas", "atlas.auth",          		true,				atlas.titan.GetAuths,     			stop)
+	sync_to_server(pool, "atlas", "atlas.commands",             "commands",			atlas.titan.SyncCommands,           stop)
+	sync_to_server(pool, "atlas", "atlas.scrubs",        		"scrubs",			atlas.titan.SyncScrubs,       		stop)
+	sync_to_server(pool, "atlas", "atlas.scrub_rebates",       	"scrub_rebates",	atlas.titan.SyncScrubRebates,   	stop)
+	sync_to_server(pool, "atlas", "atlas.scrub_claims",    		"scrub_claims",		atlas.titan.SyncScrubClaims,   		stop)
+	sync_to_server(pool, "atlas", "atlas.scrub_rebates_claims",	"scrub_reb_clms",	atlas.titan.SyncScrubRebatesClaims, stop)
 }
