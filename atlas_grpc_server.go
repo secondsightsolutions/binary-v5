@@ -86,7 +86,7 @@ func atlasStreamServerInterceptor(srv any, ss grpc.ServerStream, si *grpc.Stream
 		Dscr: metaGet(ss.Context(), "dscr"),
 		Hash: metaGet(ss.Context(), "hash"),
 		Netw: metaGet(ss.Context(), "netw"),
-		Host: metaGet(ss.Context(), "host"),
+		Host: metaGet(ss.Context(), "mach"),
 		Cwd:  metaGet(ss.Context(), "cwd"),
 		User: metaGet(ss.Context(), "user"),
 		Cmdl: metaGet(ss.Context(), "cmdl"),

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"time"
 
 	grpc "google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -21,47 +20,12 @@ func (clt *Shell) connect() (AtlasClient, error) {
 	crd := credentials.NewTLS(cfg)
 	if conn, err := grpc.NewClient(tgt, 
 		grpc.WithTransportCredentials(crd),
-		grpc.WithUnaryInterceptor(shellUnaryClientInterceptor),
-		grpc.WithStreamInterceptor(shellStreamClientInterceptor),
 	); err == nil {
 		clt.atlas = NewAtlasClient(conn)
 		return NewAtlasClient(conn), nil
 	} else {
 		return nil, err
 	}
-}
-
-type shellClientStream struct {
-	grpc.ClientStream
-}
-
-func shellUnaryClientInterceptor(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
-	strt := time.Now()
-	if err := invoker(ctx, method, req, reply, cc, opts...); err != nil {
-		Log("shell", "unary_clnt_int", method, "command failed", time.Since(strt), nil, err)
-		return err
-	} else {
-		// Log("shell", "unary_clnt_int", method, "command succeeded", time.Since(strt), nil, nil)
-		return nil
-	}
-}
-func shellStreamClientInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
-	strt := time.Now()
-	if s, err := streamer(ctx, desc, cc, method, opts...); err != nil {
-		Log("shell", "strm_clnt_int", method, "command failed", time.Since(strt), nil, err)
-		return nil, err
-	} else {
-		// Log("shell", "strm_clnt_int", method, "command succeeded", time.Since(strt), nil, nil)
-		return &shellClientStream{s}, nil
-	}
-}
-
-func (w *shellClientStream) RecvMsg(m any) error {
-	return w.ClientStream.RecvMsg(m)
-}
-
-func (w *shellClientStream) SendMsg(m any) error {
-	return w.ClientStream.SendMsg(m)
 }
 
 func (sh *Shell) ping() error {

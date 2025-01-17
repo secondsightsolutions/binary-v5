@@ -467,30 +467,6 @@ func getLocalAddr() string {
 	return ""
 }
 
-func ctxValues(ctx context.Context, keys []string) map[string]string {
-	mp := map[string]string{}
-	for _, key := range keys {
-		if v := ctx.Value(key); v != nil {
-			switch val := v.(type) {
-			case string:
-				mp[key] = val
-			case int:
-				mp[key] = fmt.Sprintf("%d", val)
-			case int32:
-				mp[key] = fmt.Sprintf("%d", val)
-			case int64:
-				mp[key] = fmt.Sprintf("%d", val)
-			case float32:
-				mp[key] = fmt.Sprintf("%f", val)
-			case float64:
-				mp[key] = fmt.Sprintf("%f", val)
-			default:
-			}
-		}
-	}
-	return mp
-}
-
 func metaGet(ctx context.Context, key string) string {
 	vals := metadata.ValueFromIncomingContext(ctx, key)
 	if len(vals) > 0 {

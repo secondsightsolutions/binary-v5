@@ -87,7 +87,8 @@ connect:
 	if dur < (32 * time.Second) {
 		dur *= 2
 	}
-	c, fn := context.WithCancel(context.Background())
+	ctx  := addMeta(context.Background(), nil)
+	c,fn := context.WithCancel(ctx)
 	if strm, err := f(c); err == nil {
 		// Stay in this loop until either we successfully pushed all rows to server, or we are stopped.
 		for {
@@ -148,9 +149,10 @@ func strm_recv_srvr[T any](appl, name string, seq int64, f func(context.Context,
 		rfl := &rflt{}
 		cnt := 0
 	connect:
-		req := &SyncReq{Last: seq}
+		req  := &SyncReq{Last: seq}
 		strt := time.Now()
-		c, fn := context.WithCancel(context.Background())
+		ctx  := addMeta(context.Background(), nil)
+		c,fn := context.WithCancel(ctx)
 		if strm, err := f(c, req); err == nil {
 			for {
 				select {
@@ -195,62 +197,3 @@ func strm_recv_srvr[T any](appl, name string, seq int64, f func(context.Context,
 	}()
 	return chn
 }
-
-// Server side - server functions that have stream data pushed up.
-// func strm_fmto_clnt[F, T any](appl, name string, strm grpc.BidiStreamingServer[F, T], stop chan any) (<-chan *F, chan<- *T) {
-// 	fmStrm := make(chan *F, 1000)
-// 	toStrm := make(chan *T, 1000)
-// 	// Read from the client.
-// 	go func() {
-// 		// Stay in this loop until either we successfully read all rows from client, or we are stopped.
-// 		strt := time.Now()
-// 		cnt := 0
-// 		for {
-// 			select {
-// 			case <-stop: // We've been shut down from above! Must return.
-// 				Log(appl, "strm_fmto_clnt", name, "FM received stop signal, returning", time.Since(strt), map[string]any{"cnt": cnt}, nil)
-// 				close(fmStrm)
-// 				return
-
-// 			default: // Not stopped yet. Read another row.
-// 				if obj, err := strm.Recv(); err == nil {
-// 					Log(appl, "strm_fmto_clnt", name, "FM stream received object (%T)(%v)", time.Since(strt), map[string]any{"cnt": cnt}, nil, obj, obj)
-// 					fmStrm <- obj
-// 					cnt++
-// 				} else if err == io.EOF {
-// 					Log(appl, "strm_fmto_clnt", name, "FM stream closed, returning", time.Since(strt), map[string]any{"cnt": cnt}, nil)
-// 					close(fmStrm)
-// 					return
-// 				} else {
-// 					Log(appl, "strm_fmto_clnt", name, "FM error reading, returning", time.Since(strt), map[string]any{"cnt": cnt}, err)
-// 					close(fmStrm)
-// 					return
-// 				}
-// 			}
-// 		}
-// 	}()
-// 	// Send down to the client.
-// 	go func() {
-// 		strt := time.Now()
-// 		cnt := 0
-// 		for {
-// 			select {
-// 			case <-stop: // We've been shut down from above! Must return.
-// 				Log(appl, "strm_fmto_clnt", name, "TO received stop signal, returning", time.Since(strt), map[string]any{"cnt": cnt}, nil)
-// 				return
-
-// 			case obj, ok := <-toStrm:
-// 				Log(appl, "strm_fmto_clnt", name, "TO stream sent object (%T)(%v)", time.Since(strt), map[string]any{"cnt": cnt}, nil, obj, obj)
-// 				if !ok {
-// 					Log(appl, "strm_fmto_clnt", name, "TO stream closed, returning", time.Since(strt), map[string]any{"cnt": cnt}, nil)
-// 					return
-// 				}
-// 				if err := strm.Send(obj); err != nil {
-// 					Log(appl, "strm_fmto_clnt", name, "TO error sending, returning", time.Since(strt), map[string]any{"cnt": cnt}, err)
-// 					return
-// 				}
-// 			}
-// 		}
-// 	}()
-// 	return fmStrm, toStrm
-// }
