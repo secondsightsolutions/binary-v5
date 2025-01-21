@@ -205,3 +205,9 @@ func X509ou(xcrt *x509.Certificate) string {
 	}
 	return ""
 }
+func X509org(xcrt *x509.Certificate) string {
+	if xcrt != nil {
+		return strings.Join(xcrt.Subject.Organization, ",")
+	}
+	return ""
+}

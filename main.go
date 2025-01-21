@@ -144,9 +144,11 @@ func config() {
 	if _, xcrt, err := CryptInit(titan_cert, cacr, "", titan_pkey, salt, phrs); err == nil {
 		fmt.Printf("%s: %s\n", "titan_name", X509cname(xcrt))
 		fmt.Printf("%s: %s\n", "titan_full", X509ou(xcrt))
+		fmt.Printf("%s: %s\n", "titan_orgn", X509org(xcrt))
 	} else {
 		fmt.Printf("%s: %s\n", "titan_name", "")
 		fmt.Printf("%s: %s\n", "titan_full", "")
+		fmt.Printf("%s: %s\n", "titan_orgn", "")
 	}
 	fmt.Printf("%s: %s\n", "titan_grpc", titan_grpc)
 	fmt.Printf("%s: %s\n", "titan_host", titan_host)

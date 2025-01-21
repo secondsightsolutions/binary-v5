@@ -34,7 +34,7 @@ func (sh *Shell) ping() error {
 			sh.atlas = clt
 		}
 	}
-	ctx := addMeta(context.Background(), nil)
+	ctx := addMeta(context.Background(), sh.X509cert, nil)
 	c,f := context.WithCancel(ctx)
 	defer f()
 	if _, err := sh.atlas.Ping(c, &Req{}); err == nil {
@@ -55,7 +55,7 @@ func (sh *Shell) upload(file string) (int64, error) {
 	ivid := int64(-1)
 
 	if hdrs, chn, err := import_file[Rebate](file, ","); err == nil {
-		ctx := addMeta(context.Background(), map[string]string{
+		ctx := addMeta(context.Background(), sh.X509cert, map[string]string{
 			"file": file,
 			"hdrs": strings.Join(hdrs, ","),
 		})
@@ -87,7 +87,7 @@ func (sh *Shell) upload(file string) (int64, error) {
 }
 
 func (sh *Shell) scrub(ivid int64) (int64, error) {
-	ctx := addMeta(context.Background(), map[string]string{
+	ctx := addMeta(context.Background(), sh.X509cert, map[string]string{
 		"plcy": sh.opts.policy,
 		"kind": sh.opts.kind,
 		"test": "",

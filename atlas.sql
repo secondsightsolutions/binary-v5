@@ -40,6 +40,7 @@ CREATE TABLE atlas.commands (
     auth text not null,
     vers text not null,
     kind text not null default '',
+    xou  text not null,
     dscr text not null,
     hash text not null,
     netw text not null default '',
@@ -49,7 +50,7 @@ CREATE TABLE atlas.commands (
     "user" text not null default '',
     cmdl text not null,
     rslt text not null default '',
-    crat timestamp not null default now(), -- created
+    crat timestamp with time zone not null default now(), -- created
     seq  bigserial
 );
 CREATE INDEX ON atlas.commands(seq);
@@ -59,7 +60,7 @@ CREATE TABLE atlas.invoices (
     cmid bigint not null references atlas.commands(cmid),
     manu text not null,
     file text not null default '',
-    crat timestamp not null default now()
+    crat timestamp with time zone not null default now()
 );
 
 CREATE TABLE atlas.invoice_cols (
@@ -113,10 +114,10 @@ CREATE TABLE atlas.scrubs (
     appl text not null,
     hdrs text not null,
     cmdl text not null,
-    crat timestamp not null default now(), -- created
-    rdat timestamp, -- ready
-    srat timestamp, -- started
-    dnat timestamp, -- done
+    crat timestamp with time zone not null default now(), -- created
+    rdat timestamp with time zone, -- ready
+    srat timestamp with time zone, -- started
+    dnat timestamp with time zone, -- done
     test text not null default '',
     manu text not null,
     seq  bigserial
@@ -133,9 +134,9 @@ CREATE TABLE atlas.claims (
     hfrx text not null default '',
     hdos text not null default '',
     hdop text not null default '',
-    doc  timestamp,
-    dos  timestamp,
-    dop  timestamp,
+    doc  time with time zone,
+    dos  timestamp with time zone,
+    dop  timestamp with time zone,
     netw text not null default '',
     prnm text not null default '',
     chnm text not null default '',
@@ -197,7 +198,7 @@ CREATE TABLE atlas.auth (
 CREATE TABLE atlas.test_invoices (
     manu text not null,
     ivid bigserial,
-    crat timestamp not null default now(),
+    crat timestamp with time zone not null default now(),
     CONSTRAINT test_invoices_pk PRIMARY KEY (manu, ivid)
 );
 
@@ -234,9 +235,9 @@ CREATE TABLE atlas.test_claims (
     hfrx text not null default '',
     hdos text not null,
     hdop text not null,
-    doc  timestamp not null default now(),
-    dos  timestamp not null default now(),
-    dop  timestamp not null default now(),
+    doc  timestamp with time zone not null default now(),
+    dos  timestamp with time zone not null default now(),
+    dop  timestamp with time zone not null default now(),
     netw text not null,
     prnm text not null,
     chnm text not null default '',
@@ -255,7 +256,7 @@ CREATE TABLE atlas.test_entities (
     i340 text   not null,
     strt date not null,
     term date,
-    dop  timestamp,
+    dop  timestamp with time zone,
     stat text   not null default '',
     CONSTRAINT test_entities_pk PRIMARY KEY (manu, test, i340)
 );
@@ -309,11 +310,11 @@ CREATE TABLE atlas.test_desigs (
     assg boolean not null default true,
     term boolean not null default false,
     excl boolean not null default false,
-    xdat timestamp,
-    dlat timestamp,
-    xsat timestamp,
-    crat timestamp not null,
-    cpat timestamp,
+    xdat timestamp with time zone,
+    dlat timestamp with time zone,
+    xsat timestamp with time zone,
+    crat timestamp with time zone not null,
+    cpat timestamp with time zone,
     CONSTRAINT test_desigs_pk PRIMARY KEY (manu, test, i340, phid)
 );
 CREATE INDEX ON atlas.test_claims(test);
@@ -332,8 +333,8 @@ CREATE INDEX ON atlas.test_ldns(test);
 CREATE TABLE atlas.test_esp1 (
     test text   not null,
     ndc  text   not null,
-    strt timestamp not null,
-    term timestamp,
+    strt timestamp with time zone not null,
+    term timestamp with time zone,
     CONSTRAINT test_esp1_pk PRIMARY KEY (test, ndc)
 );
 CREATE INDEX ON atlas.test_esp1(test, ndc);
@@ -344,8 +345,8 @@ CREATE TABLE atlas.test_eligibilities (
     i340 text   not null,
     phid text   not null,
     netw text   not null default 'retail',
-    strt timestamp not null,
-    term timestamp,
+    strt timestamp with time zone not null,
+    term timestamp with time zone,
     CONSTRAINT test_eligibilities_pk PRIMARY KEY (manu, test, i340, phid)
 );
 CREATE INDEX ON atlas.test_eligibilities(test);

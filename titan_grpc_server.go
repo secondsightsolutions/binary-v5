@@ -28,6 +28,7 @@ type request struct {
 	Kind string
 	Auth string
 	Vers string
+	Xou  string
 	Dscr string 
 	Hash string
 	Netw string
@@ -62,6 +63,7 @@ func titanUnaryInterceptor(ctx context.Context, req any, si *grpc.UnaryServerInf
 		Auth: metaGet(ctx, "auth"),
 		Vers: metaGet(ctx, "vers"),
 		Kind: metaGet(ctx, "kind"),
+		Xou:  metaGet(ctx, "xou"),
 		Dscr: metaGet(ctx, "dscr"),
 		Hash: metaGet(ctx, "hash"),
 		Netw: metaGet(ctx, "netw"),
@@ -109,11 +111,13 @@ func titanUnaryInterceptor(ctx context.Context, req any, si *grpc.UnaryServerInf
 func titanStreamInterceptor(srv any, ss grpc.ServerStream, si *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 	rqst := &request{
 		Comd: si.FullMethod,
+		Cmid: metaGet(ss.Context(), "cmid"),
 		Manu: metaGet(ss.Context(), "manu"),
 		Name: metaGet(ss.Context(), "name"),
 		Auth: metaGet(ss.Context(), "auth"),
 		Vers: metaGet(ss.Context(), "vers"),
 		Kind: metaGet(ss.Context(), "kind"),
+		Xou:  metaGet(ss.Context(), "xou"),
 		Dscr: metaGet(ss.Context(), "dscr"),
 		Hash: metaGet(ss.Context(), "hash"),
 		Netw: metaGet(ss.Context(), "netw"),
@@ -159,20 +163,26 @@ func titanStreamInterceptor(srv any, ss grpc.ServerStream, si *grpc.StreamServer
 }
 
 func (s *titanServer) Ping(ctx context.Context, req *Req) (*Res, error) {
-	ou := ""
-	cn := ""
-	netw := ""
+	xou  := ""
+	xcn  := ""
+	xorg := ""
+	addr := ""
 	if p, ok := peer.FromContext(ctx); ok && p != nil {
-		netw = p.Addr.String()
+		addr = p.Addr.String()
 		if tlsInfo, ok := p.AuthInfo.(credentials.TLSInfo); ok {
-			cn, ou = getCreds(tlsInfo)
+			xcn, xou, xorg = getCreds(tlsInfo)
 		}
 	}
-	Log("titan", "ping", cn, "", 0, map[string]any{
-		"cn": cn,
-		"ou": ou,
-		"manu": manu,
-		"netw": netw,
+	Log("titan", "ping", xcn, "", 0, map[string]any{
+		"xcn":  xcn,
+		"xou":  xou,
+		"xorg": xorg,
+		"addr": addr,
+		"manu": metaGet(ctx, "manu"),
+		"netw": metaGet(ctx, "netw"),
+		"name": metaGet(ctx, "name"),
+		"kind": metaGet(ctx, "kind"),
+		"host": metaGet(ctx, "mach"),
 	}, nil)
 	return &Res{}, nil
 }
@@ -223,22 +233,22 @@ func (s *titanServer) GetAuths(req *SyncReq, strm grpc.ServerStreamingServer[Aut
 }
 
 func (s *titanServer) SyncScrubRebates(strm grpc.ClientStreamingServer[ScrubRebate, Res]) error {
-	_,_, err := sync_fm_client(titan.pools["titan"], "titan", manu, "titan.scrub_rebates", strm)
+	_,_, err := sync_fm_client(titan.pools["titan"], "titan", "titan.scrub_rebates", strm)
 	return err
 }
 func (s *titanServer) SyncScrubs(strm grpc.ClientStreamingServer[Scrub, Res]) error {
-	_,_, err := sync_fm_client(titan.pools["titan"], "titan", manu, "titan.scrubs", strm)
+	_,_, err := sync_fm_client(titan.pools["titan"], "titan", "titan.scrubs", strm)
 	return err
 }
 func (s *titanServer) SyncScrubClaims(strm grpc.ClientStreamingServer[ScrubClaim, Res]) error {
-	_,_, err := sync_fm_client(titan.pools["titan"], "titan", manu, "titan.scrub_claims", strm)
+	_,_, err := sync_fm_client(titan.pools["titan"], "titan", "titan.scrub_claims", strm)
 	return err
 }
 func (s *titanServer) SyncScrubRebatesClaims(strm grpc.ClientStreamingServer[RebateClaim, Res]) error {
-	_,_, err := sync_fm_client(titan.pools["titan"], "titan", manu, "titan.scrub_rebates_claims", strm)
+	_,_, err := sync_fm_client(titan.pools["titan"], "titan", "titan.scrub_rebates_claims", strm)
 	return err
 }
 func (s *titanServer) SyncCommands(strm grpc.ClientStreamingServer[Command, Res]) error {
-	_,_, err := sync_fm_client(titan.pools["titan"], "titan", manu, "titan.commands", strm)
+	_,_, err := sync_fm_client(titan.pools["titan"], "titan", "titan.commands", strm)
 	return err
 }

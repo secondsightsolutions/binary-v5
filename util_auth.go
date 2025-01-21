@@ -2,6 +2,7 @@ package main
 
 import (
 	context "context"
+	"crypto/x509"
 	"fmt"
 	"os"
 	"strings"
@@ -15,7 +16,7 @@ import (
 func validate_client(ctx context.Context, pool *pgxpool.Pool, schm string) error {
 	if p, ok := peer.FromContext(ctx); ok && p != nil {
 		if tlsInfo, ok := p.AuthInfo.(credentials.TLSInfo); ok {
-			cn, ou := getCreds(tlsInfo)
+			cn, ou, _ := getCreds(tlsInfo)
 			name, auth, vers, _mnu, kind, _ := getMetaGRPC(ctx)
 
 			if cn == "" {
@@ -69,10 +70,13 @@ func validate_client(ctx context.Context, pool *pgxpool.Pool, schm string) error
 	}
 }
 
-func addMeta(ctx context.Context, args map[string]string) context.Context {
+func addMeta(ctx context.Context, xcrt *x509.Certificate, args map[string]string) context.Context {
 	md,ok  := metadata.FromOutgoingContext(ctx)
 	host,_ := os.Hostname()
 	cwd,_  := os.Getwd()
+	xorg   := X509org(xcrt)
+	xcn    := X509cname(xcrt)
+	xou    := X509ou(xcrt)
 	if !ok {
 		md = metadata.New(nil)
 	}
@@ -81,6 +85,9 @@ func addMeta(ctx context.Context, args map[string]string) context.Context {
 	}
 	md.Set("manu", manu)
 	md.Set("name", name)
+	md.Set("xorg", xorg)
+	md.Set("xcn",  xcn)
+	md.Set("xou",  xou)
 	md.Set("auth", opts.auth)
 	md.Set("vers", vers)
 	md.Set("kind", opts.kind)

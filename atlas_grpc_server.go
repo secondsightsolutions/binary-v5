@@ -26,6 +26,7 @@ type atlasServerStream struct {
 func atlasUnaryServerInterceptor(ctx context.Context, req any, si *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 	cmd := &Command{
 		Comd: si.FullMethod,
+		Xou:  metaGet(ctx, "xou"),
 		Manu: metaGet(ctx, "manu"),
 		Name: metaGet(ctx, "name"),
 		Auth: metaGet(ctx, "auth"),
@@ -136,20 +137,26 @@ func (as *atlasServerStream) SendMsg(m any) error {
 }
 
 func (s *atlasServer) Ping(ctx context.Context, in *Req) (*Res, error) {
-	ou := ""
-	cn := ""
-	netw := ""
+	xou  := ""
+	xcn  := ""
+	xorg := ""
+	addr := ""
 	if p, ok := peer.FromContext(ctx); ok && p != nil {
-		netw = p.Addr.String()
+		addr = p.Addr.String()
 		if tlsInfo, ok := p.AuthInfo.(credentials.TLSInfo); ok {
-			cn, ou = getCreds(tlsInfo)
+			xcn, xou, xorg = getCreds(tlsInfo)
 		}
 	}
-	Log("titan", "ping", cn, "", 0, map[string]any{
-		"cn": cn,
-		"ou": ou,
-		"manu": manu,
-		"netw": netw,
+	Log("titan", "ping", xcn, "", 0, map[string]any{
+		"xcn":  xcn,
+		"xou":  xou,
+		"xorg": xorg,
+		"addr": addr,
+		"manu": metaGet(ctx, "manu"),
+		"netw": metaGet(ctx, "netw"),
+		"name": metaGet(ctx, "name"),
+		"kind": metaGet(ctx, "kind"),
+		"host": metaGet(ctx, "mach"),
 	}, nil)
 	return &Res{}, nil
 }

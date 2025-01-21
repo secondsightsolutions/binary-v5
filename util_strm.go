@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/x509"
 	"fmt"
 	"io"
 	"time"
@@ -74,7 +75,7 @@ func strm_recv_clnt[T, R any](appl, name string, strm grpc.ClientStreamingServer
 }
 
 // Client side - client streams up to server
-func strm_send_srvr[T, R any](appl, name string, f func(context.Context, ...grpc.CallOption) (grpc.ClientStreamingClient[T, R], error), fm chan *T, stop chan any) (int64, int64, error) {
+func strm_send_srvr[T, R any](appl, name string, xcrt *x509.Certificate, f func(context.Context, ...grpc.CallOption) (grpc.ClientStreamingClient[T, R], error), fm chan *T, stop chan any) (int64, int64, error) {
 	var obj *T
 	var ok bool
 	dur := time.Duration(250) * time.Millisecond
@@ -87,7 +88,7 @@ connect:
 	if dur < (32 * time.Second) {
 		dur *= 2
 	}
-	ctx  := addMeta(context.Background(), nil)
+	ctx  := addMeta(context.Background(), xcrt, nil)
 	c,fn := context.WithCancel(ctx)
 	if strm, err := f(c); err == nil {
 		// Stay in this loop until either we successfully pushed all rows to server, or we are stopped.
@@ -143,7 +144,7 @@ connect:
 }
 
 // Client side - server streams down to client
-func strm_recv_srvr[T any](appl, name string, seq int64, f func(context.Context, *SyncReq, ...grpc.CallOption) (grpc.ServerStreamingClient[T], error), stop chan any) chan *T {
+func strm_recv_srvr[T any](appl, name string, seq int64, xcrt *x509.Certificate, f func(context.Context, *SyncReq, ...grpc.CallOption) (grpc.ServerStreamingClient[T], error), stop chan any) chan *T {
 	chn := make(chan *T, 1000)
 	go func() {
 		rfl := &rflt{}
@@ -151,7 +152,7 @@ func strm_recv_srvr[T any](appl, name string, seq int64, f func(context.Context,
 	connect:
 		req  := &SyncReq{Last: seq}
 		strt := time.Now()
-		ctx  := addMeta(context.Background(), nil)
+		ctx  := addMeta(context.Background(), xcrt, nil)
 		c,fn := context.WithCancel(ctx)
 		if strm, err := f(c, req); err == nil {
 			for {

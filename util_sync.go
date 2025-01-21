@@ -2,6 +2,7 @@ package main
 
 import (
 	context "context"
+	"crypto/x509"
 	"fmt"
 	"time"
 
@@ -31,27 +32,27 @@ func db_sync_set(pool *pgxpool.Pool, appl, coln string, seq int64) error {
 	return nil
 }
 
-func sync_fm_server[T any](pool *pgxpool.Pool, appl, tbln string, replace bool, f func(context.Context, *SyncReq, ...grpc.CallOption) (grpc.ServerStreamingClient[T], error), stop chan any) {
+func sync_fm_server[T any](pool *pgxpool.Pool, appl, tbln string, replace bool, xcrt *x509.Certificate, f func(context.Context, *SyncReq, ...grpc.CallOption) (grpc.ServerStreamingClient[T], error), stop chan any) {
 	strt := time.Now()
 	name := tbln
 	dbm  := new_dbmap[T]()
 	dbm.table(pool, tbln)
 	if seqn, err := db_max(pool, tbln, "seq"); err == nil {
-		chn := strm_recv_srvr(appl, name, seqn, f, stop)
+		chn := strm_recv_srvr(appl, name, seqn, xcrt, f, stop)
 		cnt, seq, err := db_insert(pool, appl, tbln, dbm, chn, 5000, "", replace)
 		Log(appl, "sync_fm_server", tbln, "sync completed", time.Since(strt), map[string]any{"manu": manu, "cnt": cnt, "seq": seq}, err)
 	} else {
 		Log(appl, "sync_fm_server", tbln, "reading seqn failed", time.Since(strt), map[string]any{"manu": manu}, err)
 	}
 }
-func sync_to_server[T, R any](pool *pgxpool.Pool, appl, tbln, coln string, f func(context.Context, ...grpc.CallOption) (grpc.ClientStreamingClient[T, R], error), stop chan any) {
+func sync_to_server[T, R any](pool *pgxpool.Pool, appl, tbln, coln string, xcrt *x509.Certificate, f func(context.Context, ...grpc.CallOption) (grpc.ClientStreamingClient[T, R], error), stop chan any) {
 	strt := time.Now()
 	dbm  := new_dbmap[T]()
 	dbm.table(pool, tbln)
 	if seqn, err := db_sync_get(pool, appl, coln); err == nil {
 		whr := fmt.Sprintf("seq > %d ", seqn)
 		if chn, err := db_select[T](pool, appl, tbln, dbm, whr, "", stop); err == nil {
-			cnt, seq, err := strm_send_srvr(appl, tbln, f, chn, stop)
+			cnt, seq, err := strm_send_srvr(appl, tbln, xcrt, f, chn, stop)
 			if err := db_sync_set(pool, appl, coln, seq); err != nil {
 				Log(appl, "sync_to_server", tbln, "setting seqn failed", time.Since(strt), map[string]any{"manu": manu, "cnt": cnt, "seq": seq}, err)
 			}
@@ -63,25 +64,30 @@ func sync_to_server[T, R any](pool *pgxpool.Pool, appl, tbln, coln string, f fun
 		Log(appl, "sync_to_server", tbln, "reading seqn failed", time.Since(strt), map[string]any{"manu": manu}, err)
 	}
 }
-func sync_fm_client[T, R any](pool *pgxpool.Pool, appl, manu, tbln string, strm grpc.ClientStreamingServer[T, R]) (int64, int64, error) {
+func sync_fm_client[T, R any](pool *pgxpool.Pool, appl, tbln string, strm grpc.ClientStreamingServer[T, R]) (int64, int64, error) {
 	strt := time.Now()
 	stop := make(chan any, 1)
-	dbm := new_dbmap[T]()
+	name := metaGet(strm.Context(), "name")
+	xou  := metaGet(strm.Context(), "xou")
+	manu := metaGet(strm.Context(), "manu")
+	dbm  := new_dbmap[T]()
 	dbm.table(pool, tbln)
 	chn := strm_recv_clnt(appl, tbln, strm, stop)
 	cnt, seq, err := db_insert(pool, appl, tbln, dbm, chn, 5000, "", false)
-	Log(appl, "sync_fm_client", tbln, "sync completed", time.Since(strt), map[string]any{"manu": manu, "cnt": cnt, "seq": seq}, err)
+	Log(appl, "sync_fm_client", tbln, "sync completed", time.Since(strt), map[string]any{"name": name, "xou": xou, "manu": manu, "cnt": cnt, "seq": seq}, err)
 	return cnt, seq, err
 }
 func sync_to_client[T any](pool *pgxpool.Pool, appl, manu, tbln, whr string, dbm *dbmap, strm grpc.ServerStreamingServer[T]) (int64, int64, error) {
 	strt := time.Now()
 	stop := make(chan any, 1)
+	name := metaGet(strm.Context(), "name")
+	xou  := metaGet(strm.Context(), "xou")
 	if chn, err := db_select[T](pool, appl, tbln, dbm, whr, "", stop); err == nil {
 		cnt, seq, err := strm_send_clnt(appl, tbln, strm, chn, stop)
-		Log(appl, "sync_to_client", tbln, "sync completed", time.Since(strt), map[string]any{"manu": manu, "cnt": cnt, "seq": seq}, err)
+		Log(appl, "sync_to_client", tbln, "sync completed", time.Since(strt), map[string]any{"name": name, "xou": xou, "manu": manu, "cnt": cnt, "seq": seq}, err)
 		return cnt, seq, err
 	} else {
-		Log(appl, "sync_to_client", tbln, "sync completed", time.Since(strt), map[string]any{"manu": manu}, err)
+		Log(appl, "sync_to_client", tbln, "sync completed", time.Since(strt), map[string]any{"name": name, "xou": xou, "manu": manu}, err)
 		return 0, 0, err
 	}
 }

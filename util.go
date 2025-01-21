@@ -433,13 +433,15 @@ func Log(app, fcn, tgt, msg string, dur time.Duration, vals map[string]any, err 
 	fmt.Printf("%s [%-5s] %s %-15s %-26s %s %s\n", curT, app, durn, fcn, tgt, mesg, errs)
 }
 
-func getCreds(tlsInfo credentials.TLSInfo) (cn, ou string) {
+func getCreds(tlsInfo credentials.TLSInfo) (cn, ou, o string) {
 	for _, chain := range tlsInfo.State.VerifiedChains {
 		if len(chain) > 0 {
 			cn = chain[0].Subject.CommonName
 			ou = chain[0].Subject.OrganizationalUnit[0]
+			o  = chain[0].Subject.Organization[0]
 			cn = strings.ToLower(cn)
 			ou = strings.ToLower(ou)
+			o  = strings.ToLower(o)
 			if len(cn) > 0 {
 				break
 			}

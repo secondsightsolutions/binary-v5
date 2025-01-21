@@ -18,18 +18,19 @@ DROP TABLE IF EXISTS titan.spis;
 
 CREATE TABLE titan.requests (
     rqid bigserial primary key,
-    cmid bigint not null default -1,
-    manu text not null,
     comd text not null,
+    manu text not null,
     name text not null,
     auth text not null,
     vers text not null,
+    xou  text not null,
     dscr text not null,
     hash text not null,
     netw text not null default '',
     addr text not null default '',
     host text not null default '',
     rslt text not null default '',
+    cmid bigint not null default -1,
     crat timestamp with time zone not null default now()
 );
 
@@ -41,6 +42,7 @@ CREATE TABLE titan.commands (
     auth text not null,
     vers text not null,
     kind text not null default '',
+    xou  text not null,
     dscr text not null,
     hash text not null,
     netw text not null default '',
@@ -50,7 +52,7 @@ CREATE TABLE titan.commands (
     "user" text not null default '',
     cmdl text not null,
     rslt text not null default '',
-    crat timestamp not null default now(), -- created
+    crat timestamp with time zone not null default now(), -- created
     seq  bigint not null,
     CONSTRAINT commands_pk PRIMARY KEY (manu, cmid)
 );
@@ -71,10 +73,10 @@ CREATE TABLE titan.scrubs (
     appl text not null,
     hdrs text not null,
     cmdl text not null,
-    crat timestamp not null, -- created
-    rdat timestamp, -- ready
-    srat timestamp, -- started
-    dnat timestamp, -- done
+    crat timestamp with time zone not null, -- created
+    rdat timestamp with time zone, -- ready
+    srat timestamp with time zone, -- started
+    dnat timestamp with time zone, -- done
     rbt_total int not null default 0,
     rbt_valid int not null default 0,
     rbt_matched int not null default 0,
@@ -110,9 +112,9 @@ CREATE TABLE titan.claims (
     hfrx text not null default '',
     hdos text not null,
     hdop text not null,
-    doc  timestamp,
-    dos  timestamp,
-    dop  timestamp,
+    doc  timestamp with time zone,
+    dos  timestamp with time zone,
+    dop  timestamp with time zone,
     netw text not null,
     prnm text not null,
     chnm text not null default '',
@@ -231,11 +233,11 @@ CREATE TABLE titan.desigs (
     assg boolean not null default true,
     term boolean not null default false,
     excl boolean not null default false,
-    xdat timestamp,
-    dlat timestamp,
-    xsat timestamp,
-    crat timestamp,
-    cpat timestamp,
+    xdat timestamp with time zone,
+    dlat timestamp with time zone,
+    xsat timestamp with time zone,
+    crat timestamp with time zone,
+    cpat timestamp with time zone,
     seq  bigint not null,
     CONSTRAINT desigs_pk PRIMARY KEY (manu, i340, phid)
 );
@@ -267,7 +269,7 @@ CREATE TABLE titan.eligibility (
     i340 text   not null,
     phid text   not null,
     netw text   not null default 'retail',
-    strt timestamp,
-    term timestamp
+    strt timestamp with time zone,
+    term timestamp with time zone
 );
 CREATE INDEX ON titan.eligibility(manu);

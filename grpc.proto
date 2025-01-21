@@ -110,21 +110,22 @@ message RebateClaim {
 message Command {
     int64 seq   = 1;
     string comd = 2;    // GRPC service API call (endpoint/function name)
-    string manu = 3;
-    string name = 4;
-    string kind = 5;
-    string auth = 6;
-    string vers = 7;
-    string dscr = 8;
-    string hash = 9;
-    string netw = 10;
-    string host = 11;
-    string user = 12;
-    string addr = 13;   // public address seen on incoming command
-    string cmdl = 14;
-    string cwd  = 15;   // current working directory
-    string rslt = 16;
-    int64  crat = 17;
+    string xou  = 3;
+    string manu = 4;
+    string name = 5;
+    string kind = 6;
+    string auth = 7;
+    string vers = 8;
+    string dscr = 9;
+    string hash = 10;
+    string netw = 11;
+    string host = 12;
+    string user = 13;
+    string addr = 14;   // public address seen on incoming command
+    string cmdl = 15;
+    string cwd  = 16;   // current working directory
+    string rslt = 17;
+    int64  crat = 18;
 }
 
 message Entity {
