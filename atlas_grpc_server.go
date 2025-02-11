@@ -300,7 +300,7 @@ func (s *atlasServer) UploadInvoice(strm grpc.ClientStreamingServer[Rebate, Res]
 	// Invoice columns
 	ichn := make(chan *invoice_col, 100)
 	wg.Add(1)
-	db_insert_run(&wg, pool, "atlas", "atlas.invoice_cols", nil, ichn, 100, "", false, nil, nil, nil)
+	db_insert_run(&wg, pool, "atlas", "atlas.invoice_cols", nil, ichn, 100, "", false, false, nil, nil, nil)
 	toks := strings.Split(hdrs, ",")
 	for i, tok := range toks {
 		ichn <-&invoice_col{Manu: manu, Ivid: ivid, Indx: i, Name: tok}
@@ -313,8 +313,8 @@ func (s *atlasServer) UploadInvoice(strm grpc.ClientStreamingServer[Rebate, Res]
 	dchn := make(chan *invoice_row, 5000)
 	var rbt *Rebate
 	wg.Add(2)
-	db_insert_run(&wg, pool, "atlas", "atlas.invoice_rows", nil, dchn, 5000, "", false, nil, nil, nil)
-	db_insert_run(&wg, pool, "atlas", "atlas.rebates",      nil, rchn, 5000, "", false, nil, nil, nil)
+	db_insert_run(&wg, pool, "atlas", "atlas.invoice_rows", nil, dchn, 5000, "", false, true, nil, nil, nil)
+	db_insert_run(&wg, pool, "atlas", "atlas.rebates",      nil, rchn, 5000, "", false, true, nil, nil, nil)
 	rbid := int64(0)
 	for {
 		if rbt, err = strm.Recv(); err == nil {

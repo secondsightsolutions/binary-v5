@@ -62,7 +62,7 @@ func (titan *Titan) sync(stop chan any) {
 	titan.syncEligibility(stop)
 }
 
-func titan_db_sync[T any](fmPn, fmTn, whr string, fmM *dbmap, toPn, toTn string, stop chan any) {
+func titan_db_sync[T any](fmPn, fmTn, whr string, fmM *dbmap, toPn, toTn string, multitx bool, stop chan any) {
 	strt := time.Now()
 	fmP  := titan.pools[fmPn]
 	fmT  := fmTn
@@ -74,7 +74,7 @@ func titan_db_sync[T any](fmPn, fmTn, whr string, fmM *dbmap, toPn, toTn string,
 	toM.table(toP, toTn)
 	
 	if chn, err := db_select[T](fmP, "titan", fmT, fmM, whr, "", stop); err == nil {
-		cnt, seq, err := db_insert(toP, "titan", toT, toM, chn, 5000, "", false)
+		cnt, seq, err := db_insert(toP, "titan", toT, toM, chn, 5000, "", false, multitx)
 		Log("titan", "titan_db_sync", toTn, "sync completed", time.Since(strt), map[string]any{"cnt": cnt, "seq": seq}, err)
 	} else {
 		Log("titan", "titan_db_sync", toTn, "sync completed", time.Since(strt), nil, err)
@@ -83,7 +83,7 @@ func titan_db_sync[T any](fmPn, fmTn, whr string, fmM *dbmap, toPn, toTn string,
 
 func (titan *Titan) syncClaims(stop chan any) {
 	seq, _ := db_max(titan.pools["titan"], "titan.claims", "seq")
-	whr := fmt.Sprintf("manufacturer = 'astrazeneca' AND COALESCE(TRUNC(EXTRACT(EPOCH FROM created_at)*1000000, 0), 0) > %d", seq)
+	whr := fmt.Sprintf("COALESCE(TRUNC(EXTRACT(EPOCH FROM created_at)*1000000, 0), 0) > %d", seq)
 	fmM := new_dbmap[Claim]()
 	fmM.column("chnm", "chain_name", 				"COALESCE(chain_name, '')")
 	fmM.column("cnfm", "claim_conforms_flag", 		"COALESCE(claim_conforms_flag, true)")
@@ -107,7 +107,7 @@ func (titan *Titan) syncClaims(stop chan any) {
 	fmM.column("elig", "eligible_at_submission",	"COALESCE(eligible_at_submission, true)")
 	fmM.column("susp", "suspended_submission", 		"COALESCE(suspended_submission, false)")
 	fmM.column("ihph", "in_house_pharmacy_ids", 	"array_to_string(in_house_pharmacy_ids, ',')")
-	titan_db_sync[Claim]("citus", "public.submission_rows", whr, fmM, "titan", "titan.claims", stop)
+	titan_db_sync[Claim]("citus", "public.submission_rows", whr, fmM, "titan", "titan.claims", true, stop)
 }
 
 func (titan *Titan) syncSPIs(stop chan any) {
@@ -123,7 +123,7 @@ func (titan *Titan) syncSPIs(stop chan any) {
 	fmM.column("chn", "chain_name", 				"COALESCE(chain_name, '')")
 	fmM.column("nam", "name", 						"COALESCE(name, '')")
 	fmM.column("seq", "id",                         "COALESCE(id, 0)")
-	titan_db_sync[SPI]("esp", "public.ncpdp_providers", whr, fmM, "titan", "titan.spis", stop)
+	titan_db_sync[SPI]("esp", "public.ncpdp_providers", whr, fmM, "titan", "titan.spis", true, stop)
 }
 
 func (titan *Titan) syncNDCs(stop chan any) {
@@ -135,7 +135,7 @@ func (titan *Titan) syncNDCs(stop chan any) {
 	fmM.column("netw", "network", 					"COALESCE(network, '')")
 	fmM.column("manu", "manufacturer_name", 		"COALESCE(manufacturer_name, '')")
 	fmM.column("seq", "id",                         "COALESCE(id, 0)")
-	titan_db_sync[NDC]("esp", "public.ndcs", whr, fmM, "titan", "titan.ndcs", stop)
+	titan_db_sync[NDC]("esp", "public.ndcs", whr, fmM, "titan", "titan.ndcs", true, stop)
 }
 
 func (titan *Titan) syncEntities(stop chan any) {
@@ -147,7 +147,7 @@ func (titan *Titan) syncEntities(stop chan any) {
 	fmM.column("strt", "participating_start_date",	"to_date(participating_start_date, 'YYYY-MM-DD')")
 	fmM.column("term", "term_date",  				"to_date(term_date, 'YYYY-MM-DD')")
 	fmM.column("seq", "id",                         "COALESCE(id, 0)")
-	titan_db_sync[Entity]("esp", "public.covered_entities", whr, fmM, "titan", "titan.entities", stop)
+	titan_db_sync[Entity]("esp", "public.covered_entities", whr, fmM, "titan", "titan.entities", true, stop)
 }
 
 func (titan *Titan) syncPharmacies(stop chan any) {
@@ -165,7 +165,7 @@ func (titan *Titan) syncPharmacies(stop chan any) {
 	fmM.column("ncps", "ncpdp",  					"array_to_string(ncpdp, ',')")
 	fmM.column("state", "pharmacy_state", 			"COALESCE(pharmacy_state, '')")
 	fmM.column("seq", "id",                         "COALESCE(id, 0)")
-	titan_db_sync[Pharmacy]("esp", "public.contracted_pharmacies", whr, fmM, "titan", "titan.pharmacies", stop)
+	titan_db_sync[Pharmacy]("esp", "public.contracted_pharmacies", whr, fmM, "titan", "titan.pharmacies", true, stop)
 }
 
 func (titan *Titan) syncESP1(stop chan any) {
@@ -176,7 +176,7 @@ func (titan *Titan) syncESP1(stop chan any) {
 	fmM.column("ndc",  "ndc",  						"COALESCE(ndc, '')")
 	fmM.column("strt", "start", 					"start")
 	fmM.column("term", "term", 						"term")
-	titan_db_sync[ESP1PharmNDC]("citus", "public.esp1_providers", whr, fmM, "titan", "titan.esp1", stop)
+	titan_db_sync[ESP1PharmNDC]("citus", "public.esp1_providers", whr, fmM, "titan", "titan.esp1", true, stop)
 }
 
 func (titan *Titan) syncEligibility(stop chan any) {
@@ -190,5 +190,5 @@ func (titan *Titan) syncEligibility(stop chan any) {
 	fmM.column("strt", "start_at", 					"start_at")
 	fmM.column("term", "end_at", 					"end_at")
 	fmM.column("seq", "id",                         "COALESCE(id, 0)")
-	titan_db_sync[Eligibility]("citus", "public.eligibility_ledger", whr, fmM, "titan", "titan.eligibility", stop)
+	titan_db_sync[Eligibility]("citus", "public.eligibility_ledger", whr, fmM, "titan", "titan.eligibility", true, stop)
 }

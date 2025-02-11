@@ -90,7 +90,7 @@ func (p *pol_simple) prep_claims(sc *scrub) {
 }
 
 func (p *pol_simple) scrub_rebate(sc *scrub, rbt *rebate) {
-	fmt.Printf("scrubbing rebate %v\n", rbt)
+	fmt.Printf("scrubbing rebate %s\n", rbt)
 	// sclms := sc.clms.FindRXN(rbt.rbt.Rxn, rbt.rbt.Hrxn)
 	// rbt.sr.Stat = Stats.nomatch
 	// for _, sclm := range sclms {

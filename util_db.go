@@ -186,10 +186,10 @@ func db_select[T any](pool *pgxpool.Pool, appl, tbln string, dbm *dbmap, where, 
 	}
 }
 
-func db_insert_run[T any](wg *sync.WaitGroup, pool *pgxpool.Pool, appl, tbln string, dbm *dbmap, fm <-chan *T, batch int, idcol string, replace bool, cnt, seq *int64, err *error) {
+func db_insert_run[T any](wg *sync.WaitGroup, pool *pgxpool.Pool, appl, tbln string, dbm *dbmap, fm <-chan *T, batch int, idcol string, replace, multitx bool, cnt, seq *int64, err *error) {
 	go func() {
 		defer wg.Done()
-		_cnt, _seq, _err := db_insert[T](pool, appl, tbln, dbm, fm, batch, idcol, replace)
+		_cnt, _seq, _err := db_insert[T](pool, appl, tbln, dbm, fm, batch, idcol, replace, multitx)
 		if cnt != nil {
 			*cnt = _cnt
 		}
@@ -202,7 +202,8 @@ func db_insert_run[T any](wg *sync.WaitGroup, pool *pgxpool.Pool, appl, tbln str
 	}()
 }
 
-func db_insert[T any](pool *pgxpool.Pool, appl, tbln string, dbm *dbmap, fm <-chan *T, batch int, idcol string, replace bool) (int64, int64, error) {
+func db_insert[T any](pool *pgxpool.Pool, appl, tbln string, dbm *dbmap, fm <-chan *T, batch int, idcol string, replace, multitx bool) (int64, int64, error) {
+	strt := time.Now()
 	if dbm == nil {
 		dbm = new_dbmap[T]()
 		dbm.table(pool, tbln)
@@ -216,22 +217,62 @@ func db_insert[T any](pool *pgxpool.Pool, appl, tbln string, dbm *dbmap, fm <-ch
 	if dbm.tbln == "" {
 		panic("dbmap not initialized with database table")
 	}
-	if tx, err := pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted}); err == nil {
-		defer tx.Commit(context.Background())
-		if replace {
-			if !strings.HasPrefix(tbln, "titan") && !strings.HasPrefix(tbln, "atlas") {
-				panic("cannot delete rows from " + tbln)
-			}
-			// If we're replacing, then first delete all. Very important that all is done in same transaction!
-			strt := time.Now()
-			if cnt, err := db_exec(ctx, pool, fmt.Sprintf("DELETE FROM %s", tbln)); err == nil {
-				Log(appl, "db_insert", tbln, "delete rows succeeded", time.Since(strt), map[string]any{"cnt": cnt}, nil)
-			} else {
-				Log(appl, "db_insert", tbln, "delete rows failed", time.Since(strt), nil, err)
+
+	if replace {
+		if !strings.HasPrefix(tbln, "titan") && !strings.HasPrefix(tbln, "atlas") {
+			panic("cannot delete rows from " + tbln)
+		}
+		// If we're replacing, then first delete all. Very important that all is done in same transaction!
+		strt := time.Now()
+		if cnt, err := db_exec(ctx, pool, fmt.Sprintf("DELETE FROM %s", tbln)); err == nil {
+			Log(appl, "db_insert", tbln, "delete rows succeeded", time.Since(strt), map[string]any{"cnt": cnt}, nil)
+		} else {
+			Log(appl, "db_insert", tbln, "delete rows failed", time.Since(strt), nil, err)
+			return cnt, max, err
+		}
+	}
+
+	var tx  pgx.Tx
+	var err error
+
+	if multitx {
+		if tx == nil {
+			if tx, err = pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted}); err != nil {
+				Log(appl, "db_insert", tbln, "create transaction failed", 0, nil, err)
+				return cnt, max, err
 			}
 		}
-		strt := time.Now()
-		for obj := range fm {
+	}
+	
+	commit := func() {
+		if tx != nil {
+			tx.Commit(context.Background())
+		}
+	}
+	insert := func(lst []any) error {
+		if len(lst) == 0 {
+			return nil
+		}
+		if err := db_insert_batch(context.Background(), tx, pool, tbln, dbm, lst, true); err != nil {
+			Log(appl, "db_insert", tbln, "insert batch rows failed", time.Since(strt), map[string]any{"cnt": cnt, "seq": max}, err)
+			if tx != nil {
+				tx.Rollback(context.Background())
+			}
+			return err
+		} else {
+			Log(appl, "db_insert", tbln, "inserted %d (%d)", time.Since(strt), map[string]any{"cnt": cnt, "seq": max}, err, len(lst), cnt)
+		}
+		return nil
+	}
+	defer commit()
+
+	for {
+		select {
+		case <-stop:
+		case obj,ok := <-fm:
+			if !ok {
+				goto done
+			}
 			if idcol != "" {
 				rfl.setFieldValue(obj, idcol, cnt)	// Sets Rbid to a unique value within this scrub insert.
 			}
@@ -242,9 +283,7 @@ func db_insert[T any](pool *pgxpool.Pool, appl, tbln string, dbm *dbmap, fm <-ch
 			}
 			lst = append(lst, obj)
 			if len(lst) == batch {
-				if err := db_insert_batch(ctx, tx, pool, tbln, dbm, lst, true); err != nil {
-					Log(appl, "db_insert", tbln, "insert batch rows failed", time.Since(strt), map[string]any{"cnt": cnt, "seq": max}, err)
-					tx.Rollback(ctx)
+				if err := insert(lst); err != nil {
 					return cnt, max, err
 				}
 				if cur > max {	// If the max in this batch exceeds the max so far (it should), then use it (cuz we hopefully sort by Seq on input).
@@ -253,20 +292,10 @@ func db_insert[T any](pool *pgxpool.Pool, appl, tbln string, dbm *dbmap, fm <-ch
 				lst = []any{}
 			}
 		}
-		if len(lst) > 0 {
-			if err := db_insert_batch(context.Background(), tx, pool, tbln, dbm, lst, true); err != nil {
-				Log(appl, "db_insert", tbln, "insert batch rows failed (frag)", time.Since(strt), map[string]any{"cnt": cnt, "seq": max}, err)
-				tx.Rollback(context.Background())
-				return cnt, max, err
-			}
-			if cur > max {	// If the max in this batch exceeds the max so far (it should), then use it (cuz we hopefully sort by Seq on input).
-				max = cur
-			}
-		}
-	} else {
-		return cnt, max, err
 	}
-	return cnt, max, nil
+	done:
+	err = insert(lst)
+	return cnt, max, err
 }
 
 func db_insert_batch(ctx context.Context, tx pgx.Tx, pool *pgxpool.Pool, tbln string, dbm *dbmap, objs []any, ignoreConflicts bool) error {

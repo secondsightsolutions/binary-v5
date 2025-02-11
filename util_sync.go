@@ -32,14 +32,14 @@ func db_sync_set(pool *pgxpool.Pool, appl, coln string, seq int64) error {
 	return nil
 }
 
-func sync_fm_server[T any](pool *pgxpool.Pool, appl, tbln string, replace bool, xcrt *x509.Certificate, f func(context.Context, *SyncReq, ...grpc.CallOption) (grpc.ServerStreamingClient[T], error), stop chan any) {
+func sync_fm_server[T any](pool *pgxpool.Pool, appl, tbln string, replace, multitx bool, xcrt *x509.Certificate, f func(context.Context, *SyncReq, ...grpc.CallOption) (grpc.ServerStreamingClient[T], error), stop chan any) {
 	strt := time.Now()
 	name := tbln
 	dbm  := new_dbmap[T]()
 	dbm.table(pool, tbln)
 	if seqn, err := db_max(pool, tbln, "seq"); err == nil {
 		chn := strm_recv_srvr(appl, name, seqn, xcrt, f, stop)
-		cnt, seq, err := db_insert(pool, appl, tbln, dbm, chn, 5000, "", replace)
+		cnt, seq, err := db_insert(pool, appl, tbln, dbm, chn, 5000, "", replace, multitx)
 		Log(appl, "sync_fm_server", tbln, "sync completed", time.Since(strt), map[string]any{"manu": manu, "cnt": cnt, "seq": seq}, err)
 	} else {
 		Log(appl, "sync_fm_server", tbln, "reading seqn failed", time.Since(strt), map[string]any{"manu": manu}, err)
@@ -64,7 +64,7 @@ func sync_to_server[T, R any](pool *pgxpool.Pool, appl, tbln, coln string, xcrt 
 		Log(appl, "sync_to_server", tbln, "reading seqn failed", time.Since(strt), map[string]any{"manu": manu}, err)
 	}
 }
-func sync_fm_client[T, R any](pool *pgxpool.Pool, appl, tbln string, strm grpc.ClientStreamingServer[T, R]) (int64, int64, error) {
+func sync_fm_client[T, R any](pool *pgxpool.Pool, appl, tbln string, multitx bool, strm grpc.ClientStreamingServer[T, R]) (int64, int64, error) {
 	strt := time.Now()
 	stop := make(chan any, 1)
 	name := metaGet(strm.Context(), "name")
@@ -73,7 +73,7 @@ func sync_fm_client[T, R any](pool *pgxpool.Pool, appl, tbln string, strm grpc.C
 	dbm  := new_dbmap[T]()
 	dbm.table(pool, tbln)
 	chn := strm_recv_clnt(appl, tbln, strm, stop)
-	cnt, seq, err := db_insert(pool, appl, tbln, dbm, chn, 5000, "", false)
+	cnt, seq, err := db_insert(pool, appl, tbln, dbm, chn, 5000, "", false, multitx)
 	Log(appl, "sync_fm_client", tbln, "sync completed", time.Since(strt), map[string]any{"name": name, "xou": xou, "manu": manu, "cnt": cnt, "seq": seq}, err)
 	return cnt, seq, err
 }

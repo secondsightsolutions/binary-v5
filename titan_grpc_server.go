@@ -233,27 +233,27 @@ func (s *titanServer) GetAuths(req *SyncReq, strm grpc.ServerStreamingServer[Aut
 }
 
 func (s *titanServer) SyncScrubRebates(strm grpc.ClientStreamingServer[ScrubRebate, Res]) error {
-	_,_, err := sync_fm_client(titan.pools["titan"], "titan", "titan.scrub_rebates", strm)
+	_,_, err := sync_fm_client(titan.pools["titan"], "titan", "titan.scrub_rebates", true, strm)
 	return err
 }
 func (s *titanServer) SyncScrubs(strm grpc.ClientStreamingServer[Scrub, Res]) error {
-	_,_, err := sync_fm_client(titan.pools["titan"], "titan", "titan.scrubs", strm)
+	_,_, err := sync_fm_client(titan.pools["titan"], "titan", "titan.scrubs", true, strm)
 	return err
 }
 func (s *titanServer) SyncScrubClaims(strm grpc.ClientStreamingServer[ScrubClaim, Res]) error {
-	_,_, err := sync_fm_client(titan.pools["titan"], "titan", "titan.scrub_claims", strm)
+	_,_, err := sync_fm_client(titan.pools["titan"], "titan", "titan.scrub_claims", true, strm)
 	return err
 }
 func (s *titanServer) SyncScrubRebatesClaims(strm grpc.ClientStreamingServer[ScrubRebateClaim, Res]) error {
-	_,_, err := sync_fm_client(titan.pools["titan"], "titan", "titan.scrub_rebates_claims", strm)
+	_,_, err := sync_fm_client(titan.pools["titan"], "titan", "titan.scrub_rebates_claims", true, strm)
 	return err
 }
 // SyncMetrics(grpc.ClientStreamingServer[Metrics, Res]) error
 func (s *titanServer) SyncMetrics(strm grpc.ClientStreamingServer[Metrics, Res]) error {
-	_,_, err := sync_fm_client(titan.pools["titan"], "titan", "titan.metrics", strm)
+	_,_, err := sync_fm_client(titan.pools["titan"], "titan", "titan.metrics", true, strm)
 	return err
 }
 func (s *titanServer) SyncCommands(strm grpc.ClientStreamingServer[Command, Res]) error {
-	_,_, err := sync_fm_client(titan.pools["titan"], "titan", "titan.commands", strm)
+	_,_, err := sync_fm_client(titan.pools["titan"], "titan", "titan.commands", true, strm)
 	return err
 }

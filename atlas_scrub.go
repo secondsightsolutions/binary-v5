@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 )
 
 type scrub struct {
@@ -145,9 +144,9 @@ func (sc *scrub) run() {
 
 	dgrp := sync.WaitGroup{}
 	dgrp.Add(3)
-	db_insert_run(&dgrp, atlas.pools["atlas"], "atlas", "atlas.scrub_rebates",        nil, scrb_rbts, 5000, "", false, nil, nil, nil)
-	db_insert_run(&dgrp, atlas.pools["atlas"], "atlas", "atlas.scrub_rebates_claims", nil, scrb_rbcl, 5000, "", false, nil, nil, nil)
-	db_insert_run(&dgrp, atlas.pools["atlas"], "atlas", "atlas.scrub_claims",         nil, scrb_clms, 5000, "", false, nil, nil, nil)
+	db_insert_run(&dgrp, atlas.pools["atlas"], "atlas", "atlas.scrub_rebates",        nil, scrb_rbts, 5000, "", false, true, nil, nil, nil)
+	db_insert_run(&dgrp, atlas.pools["atlas"], "atlas", "atlas.scrub_rebates_claims", nil, scrb_rbcl, 5000, "", false, true, nil, nil, nil)
+	db_insert_run(&dgrp, atlas.pools["atlas"], "atlas", "atlas.scrub_claims",         nil, scrb_clms, 5000, "", false, true, nil, nil, nil)
 
 	done := make(chan *rebate, qsiz*wrks)
 	chns := make([]chan *rebate, wrks)
@@ -156,7 +155,6 @@ func (sc *scrub) run() {
 		chns[a] = make(chan *rebate, qsiz)
 		go worker(&wgrp, chns[a], done)	// The worker must always call cgrp.Done() !!!!
 	}
-	strt := time.Now()
 	for {
 		select {
 		case <-stop:
@@ -164,56 +162,35 @@ func (sc *scrub) run() {
 			// goto done
 
 		case rbt, ok := <-rbts:				// Reads from main queue and distributes to workers.
-			if rbt != nil {
-				Log("atlas", "scrub.run", "rbt <-rbts", rbt.String(), time.Since(strt), nil, nil)
-			} else {
-				Log("atlas", "scrub.run", "rbt <-rbts", "(nil)", time.Since(strt), nil, nil)
-			}
 			if !ok {
 				closeAndWait(&wgrp, chns, done)
 				rbts = nil
 				continue
 			}
 			slot := getSlot(rbt, "dos", wrks)
-			Log("atlas", "scrub.run", "chns[slot] <-rbts", rbt.String(), time.Since(strt), nil, nil)
 			chns[slot] <- rbt				// Worker gets rebate on short per-worker queue.
-			Log("atlas", "scrub.run", "chns[slot] <-rbts (done)", rbt.String(), time.Since(strt), nil, nil)
 
 		case rbt, ok := <-done:				// All workers return the rebates here once they've finished with them.
-			if rbt != nil {
-				Log("atlas", "scrub.run", "rbt <-done", rbt.String(), time.Since(strt), nil, nil)
-			} else {
-				Log("atlas", "scrub.run", "rbt <-done", "(nil)", time.Since(strt), nil, nil)
-			}
 			if !ok {						// If no more rebates returned, and this channel was closed, we're done.
 				goto done
 			}
 			sc.update_metrics(rbt)
-			Log("atlas", "scrub.run", "scrb_rbts <-rbt.sr", rbt.String(), time.Since(strt), nil, nil)
 			scrb_rbts <- rbt.sr				// Writes ScrubRebate to the database writer.
-			Log("atlas", "scrub.run", "scrb_rbts <-rbt.sr", rbt.String(), time.Since(strt), nil, nil)
 			for _, rc := range rbt.rcs {
-				Log("atlas", "scrub.run", "scrb_rbcl <-rc", rbt.String(), time.Since(strt), nil, nil)
 				scrb_rbcl <- rc				// Writes the ScrubRebateClaims to the database writer.
-				Log("atlas", "scrub.run", "scrb_rbcl <-rc (done)", rbt.String(), time.Since(strt), nil, nil)
 			}
 		}
 	}
 	done:
-	Log("atlas", "scrub.run", "done:", "", time.Since(strt), nil, nil)
 	close(scrb_rbts)	// Flushes any buffered db writes.
 	close(scrb_rbcl)	// Flushes any buffered db writes.
 
-	Log("atlas", "scrub.run", "sc.clms.all", "", time.Since(strt), nil, nil)
 	for _, sclm := range sc.clms.all {
 		scrb := &ScrubClaim{Scid: sc.scid, Clid: sclm.gclm.clm.Clid, Excl: sclm.excl}
 		scrb_clms <-scrb
 	}
-	Log("atlas", "scrub.run", "sc.clms.all (done) (closing)", "", time.Since(strt), nil, nil)
 	close(scrb_clms)	// Flushes any buffered db writes.
-	Log("atlas", "scrub.run", "dgrp.Wait()", "", time.Since(strt), nil, nil)
 	dgrp.Wait()
-	Log("atlas", "scrub.run", "dgrp.Wait() (done)", "", time.Since(strt), nil, nil)
 	sc.done <- nil		// Tells the caller (grpc server) that the scrub is done.
 }
 
