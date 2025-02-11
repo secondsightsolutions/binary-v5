@@ -11,8 +11,6 @@ import (
 type keyn = string
 
 type cache_set struct {
-	rbts *cache
-	clms *cache
 	esp1 *cache
 	ents *cache
 	ledg *cache
@@ -53,8 +51,6 @@ type sort_elem struct {
 
 func (cs *cache_set) clone() *cache_set {
     ncs := &cache_set{
-		rbts: nil,
-    	clms: cs.clms,
     	esp1: cs.esp1,
     	ents: cs.ents,
     	ledg: cs.ledg,
@@ -77,7 +73,6 @@ func new_cache[T any]() *cache {
 func load_cache[T any](stop chan any, done *sync.WaitGroup, c **cache, name string, f func(chan any, int64) chan *T) {
 	ca := new_cache[T]()
 	*c = ca
-	done.Add(1)
 	go func() {
 		defer done.Done()
 		cnt  := 0
@@ -153,29 +148,27 @@ func (v *view) find(keyv any) []*row {
 func (r *row) value(name string) any {
 	var rfl rflt
 	switch obj := r.elem.(type) {
-	case *claim:
-		return rfl.getFieldValue(obj.clm, name)
 	default:
 		return rfl.getFieldValue(obj, name)
 	}
 }
 
-func sort_lists(keyn string, desc bool, lists ...[]*row) []*row {
-	all := []*row{}
-	set := map[int]any{}
-	for _, list := range lists {                    // Look at each list passed in.
-		all = append(all, list...)                  // Add each (sub) list into the big list.
-	}
-	all = sort_list(keyn, desc, all)          		// Sort the big list.
-	unq := []*row{}                                 // Possibly a smaller list, to contain big list with dups removed.
-	for _, row := range all {
-		if _, ok := set[row.indx];!ok {             // We identify dups by their indx. Note we are not identifying dups by uniq attr!
-			unq = append(unq, row)
-			set[row.indx] = nil
-		}
-	}
-	return unq
-}
+// func sort_lists(keyn string, desc bool, lists ...[]*row) []*row {
+// 	all := []*row{}
+// 	set := map[int]any{}
+// 	for _, list := range lists {                    // Look at each list passed in.
+// 		all = append(all, list...)                  // Add each (sub) list into the big list.
+// 	}
+// 	all = sort_list(keyn, desc, all)          		// Sort the big list.
+// 	unq := []*row{}                                 // Possibly a smaller list, to contain big list with dups removed.
+// 	for _, row := range all {
+// 		if _, ok := set[row.indx];!ok {             // We identify dups by their indx. Note we are not identifying dups by uniq attr!
+// 			unq = append(unq, row)
+// 			set[row.indx] = nil
+// 		}
+// 	}
+// 	return unq
+// }
 func sort_list(keyn string, desc bool, list []*row) []*row {
 	// Since we want to be careful not to pull in too much data, we'll read in the elems just
 	// long enough to grab their current index and the value of the keyn attribute.

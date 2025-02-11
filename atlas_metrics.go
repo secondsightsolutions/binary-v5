@@ -3,12 +3,11 @@ package main
 import (
 )
 
-
-func (s *scrub) update_rbt(rbt *Rebate) {
+func (s *scrub) update_metrics(rbt *rebate) {
     s.lckM.Lock()
     defer s.lckM.Unlock()
     s.metr.RbtTotal++
-    switch rbt.Stat {
+    switch rbt.sr.Stat {
     case "matched":
         s.metr.RbtMatched++
     case "nomatch":
@@ -21,15 +20,13 @@ func (s *scrub) update_rbt(rbt *Rebate) {
         s.metr.RbtFailed++
     default:
     }
-}
-
-func (s *scrub) update_rbt_clm(rbt *Rebate, clm *Claim) {
-    s.lckM.Lock()
-    defer s.lckM.Unlock()
-    if clm != nil {
+    for _, sclm := range rbt.scs {
+        sclm.Lock()
+        sclm.gclm.Lock()
+        clm := sclm.gclm.clm
         doc := clm.Doc
         dof := clm.Hdos
-        if diff, err := dates.Compare(rbt.Dos, doc); err == nil {
+        if diff, err := dates.Compare(rbt.rbt.Dos, doc); err == nil {
             if diff == 0 {
                 s.metr.DosEquDoc++
             } else if diff < 0 {
@@ -38,7 +35,7 @@ func (s *scrub) update_rbt_clm(rbt *Rebate, clm *Claim) {
                 s.metr.DosAftDoc++
             }
         }
-        if diff, err := dates.Compare(rbt.Dos, dof); err == nil {
+        if diff, err := dates.Compare(rbt.rbt.Dos, dof); err == nil {
             if diff == 0 {
                 s.metr.DosEquDof++
             } else if diff < 0 {
@@ -47,21 +44,21 @@ func (s *scrub) update_rbt_clm(rbt *Rebate, clm *Claim) {
                 s.metr.DosAftDof++
             }
         }
-    }
-}
-
-func (s *scrub) update_spi_counts(which string) {
-    s.lckM.Lock()
-    defer s.lckM.Unlock()
-    switch which {
-    case "exact":
-        s.metr.SpiExact++
-    case "cross":
-        s.metr.SpiCross++
-    case "stack":
-        s.metr.SpiStack++
-    case "chain":
-        s.metr.SpiChain++
-    default:
+        opts := s.plcy.options()
+        if yes, how := CheckSPI(s, rbt.rbt.Spid, clm.Spid, opts.chains, opts.stacks); yes {
+            switch how {
+            case "exact":
+                s.metr.SpiExact++
+            case "cross":
+                s.metr.SpiCross++
+            case "stack":
+                s.metr.SpiStack++
+            case "chain":
+                s.metr.SpiChain++
+            default:
+            }
+        }
+        sclm.gclm.Unlock()
+        sclm.Unlock()
     }
 }

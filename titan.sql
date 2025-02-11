@@ -2,6 +2,7 @@
 DROP TABLE IF EXISTS titan.scrub_rebates_claims;
 DROP TABLE IF EXISTS titan.scrub_rebates;
 DROP TABLE IF EXISTS titan.scrub_claims;
+DROP TABLE IF EXISTS titan.metrics;
 DROP TABLE IF EXISTS titan.scrubs;
 DROP TABLE IF EXISTS titan.claims;
 DROP TABLE IF EXISTS titan.requests;
@@ -35,7 +36,7 @@ CREATE TABLE titan.requests (
 );
 
 CREATE TABLE titan.commands (
-    cmid bigserial,
+    cmid bigint not null,
     comd text not null,
     manu text not null,
     name text not null,
@@ -62,43 +63,63 @@ CREATE TABLE titan.scrubs (
     manu text not null,
     scid bigint not null,
     ivid bigint not null,
-    auth text not null,
+    cmid bigint not null,
     plcy text not null,
-    name text not null,
-    kind text not null,
-    vers text not null,
-    dscr text not null,
-    hash text not null,
-    host text not null,
-    appl text not null,
     hdrs text not null,
-    cmdl text not null,
     crat timestamp with time zone not null, -- created
     rdat timestamp with time zone, -- ready
     srat timestamp with time zone, -- started
     dnat timestamp with time zone, -- done
-    rbt_total int not null default 0,
-    rbt_valid int not null default 0,
-    rbt_matched int not null default 0,
-    rbt_nomatch int not null default 0,
-    rbt_passed  int not null default 0,
-    rbt_failed  int not null default 0,
-    clm_total   int not null default 0,
-    clm_valid   int not null default 0,
-    clm_matched int not null default 0,
-    clm_nomatch int not null default 0,
-    clm_invalid int not null default 0,
-    spi_exact   int not null default 0,
-    spi_cross   int not null default 0,
-    spi_stack   int not null default 0,
-    spi_chain   int not null default 0,
-    dos_equ_doc int not null default 0,
-    dos_bef_doc int not null default 0,
-    dos_equ_dof int not null default 0,
-    dos_bef_dof int not null default 0,
-    dos_aft_dof int not null default 0,
-    seq         bigint not null,
+    seq  bigint not null,
     CONSTRAINT scrubs_pk PRIMARY KEY (manu, scid)
+);
+
+CREATE TABLE titan.metrics (
+    scid 				bigint not null,
+    manu                text not null,
+    rbt_total           integer not null default 0,
+    rbt_matched         integer not null default 0,
+    rbt_nomatch         integer not null default 0,
+    rbt_invalid         integer not null default 0,
+    rbt_passed          integer not null default 0,
+    rbt_failed          integer not null default 0,
+    clm_total           integer not null default 0,
+    clm_valid           integer not null default 0,
+    clm_matched         integer not null default 0,
+    clm_nomatch         integer not null default 0,
+    clm_invalid         integer not null default 0,
+    spi_exact           integer not null default 0,
+    spi_cross           integer not null default 0,
+    spi_stack           integer not null default 0,
+    spi_chain           integer not null default 0,
+    dos_equ_doc         integer not null default 0,
+    dos_bef_doc         integer not null default 0,
+    dos_aft_doc         integer not null default 0,
+    dos_equ_dof         integer not null default 0,
+    dos_bef_dof         integer not null default 0,
+    dos_aft_dof         integer not null default 0,
+    dos_range_pass      integer not null default 0,
+    dos_range_fail      integer not null default 0,
+    dof_range_pass      integer not null default 0,
+    dof_range_fail      integer not null default 0,
+    doc_range_pass      integer not null default 0,
+    doc_range_fail      integer not null default 0,
+    r_no_match_rx       integer not null default 0,
+    r_no_match_spi      integer not null default 0,
+    r_no_match_ndc      integer not null default 0,
+    r_clm_used          integer not null default 0,
+    r_dos_rbt_aft_clm   integer not null default 0,
+    r_dos_clm_aft_rbt   integer not null default 0,
+    r_old_rbt_new_clm   integer not null default 0,
+    r_new_rbt_old_clm   integer not null default 0,
+    r_clm_not_cnfm      integer not null default 0,
+    r_phm_not_desg      integer not null default 0,
+    r_inv_desg_type     integer not null default 0,
+    r_wrong_network     integer not null default 0,
+    r_not_elig_at_sub   integer not null default 0,
+    seq                 bigint not null,
+    CONSTRAINT metrics_pk PRIMARY KEY (manu, scid),
+    FOREIGN KEY (manu, scid) references titan.scrubs(manu, scid)
 );
 
 CREATE TABLE titan.claims (
@@ -139,8 +160,8 @@ CREATE TABLE titan.scrub_rebates (
     spmt text not null default '',
     fprt text not null default '',
     seq  bigint not null,
-    CONSTRAINT rebates_pk PRIMARY KEY (manu, scid, rbid),
-    FOREIGN KEY (manu, scid) references titan.scrubs(manu, scid)
+    CONSTRAINT rebates_pk PRIMARY KEY (manu, scid, rbid) --,
+    -- FOREIGN KEY (manu, scid) references titan.scrubs(manu, scid)
 );
 CREATE INDEX ON titan.scrub_rebates(manu);
 CREATE INDEX ON titan.scrub_rebates(manu, scid);
@@ -151,9 +172,9 @@ CREATE TABLE titan.scrub_claims (
     clid  text not null,
     excl  text not null default '',
     seq   bigint not null,
-    CONSTRAINT claim_uses_pk PRIMARY KEY (manu, scid, clid),
-    FOREIGN KEY (manu, scid) references titan.scrubs(manu, scid),
-    FOREIGN KEY (manu, clid) references titan.claims(manu, clid)
+    CONSTRAINT claim_uses_pk PRIMARY KEY (manu, scid, clid) --,
+    -- FOREIGN KEY (manu, scid) references titan.scrubs(manu, scid),
+    -- FOREIGN KEY (manu, clid) references titan.claims(manu, clid)
 );
 CREATE INDEX ON titan.scrub_claims(scid);
 CREATE INDEX ON titan.scrub_claims(clid);
@@ -161,12 +182,13 @@ CREATE INDEX ON titan.scrub_claims(clid);
 CREATE TABLE titan.scrub_rebates_claims (
     manu text not null,
     scid bigint not null,
+    ivid bigint not null,
     rbid bigint not null,
     clid text not null,
     seq  bigint not null,
-    CONSTRAINT rebate_claims_pk PRIMARY KEY (manu, scid, rbid, clid),
-    FOREIGN KEY (manu, scid, rbid) REFERENCES titan.scrub_rebates (manu, scid, rbid),
-    FOREIGN KEY (manu, scid, clid) REFERENCES titan.scrub_claims  (manu, scid, clid)
+    CONSTRAINT rebate_claims_pk PRIMARY KEY (manu, scid, rbid, clid) --,
+    -- FOREIGN KEY (manu, scid, rbid) REFERENCES titan.scrub_rebates (manu, scid, rbid),
+    -- FOREIGN KEY (manu, scid, clid) REFERENCES titan.scrub_claims  (manu, scid, clid)
 );
 
 CREATE TABLE titan.auth (

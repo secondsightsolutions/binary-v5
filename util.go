@@ -387,6 +387,23 @@ func findAny(srch string, list []string) string {
 	return ""
 }
 
+func split(str, sep string, dflt string) []string {
+	if str == "" {
+		if dflt == "" {
+			return []string{}
+		}
+		str = dflt
+	}
+	toks := strings.Split(str, sep)
+	list := make([]string, 0, len(toks))
+	for _, tok := range toks {
+		tok  = strings.Trim(tok, " ")
+		tok  = strings.Trim(tok, "\t")
+		list = append(list, tok)
+	}
+	return list
+}
+
 func Log(app, fcn, tgt, msg string, dur time.Duration, vals map[string]any, err error, args ...any) {
 	mesg := fmt.Sprintf(msg, args...)
 	mil  := dur.Milliseconds() % 1000
@@ -475,6 +492,15 @@ func metaGet(ctx context.Context, key string) string {
 		return vals[0]
 	}
 	return ""
+}
+func metaGetI64(ctx context.Context, key string) int64 {
+	vals := metadata.ValueFromIncomingContext(ctx, key)
+	if len(vals) > 0 {
+		if i64, err := strconv.ParseInt(vals[0], 10, 64); err == nil {
+			return i64
+		}
+	}
+	return -1
 }
 func metaManu(ctx context.Context) string {
 	_,_,_,manu,_,_ := getMetaGRPC(ctx)

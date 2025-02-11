@@ -35,40 +35,79 @@ func run_shell(opts *Opts) {
 		}
 	}
 
-	var err error
 	shell = &Shell{opts: opts}
-	if shell.TLSCert, shell.X509cert, err = CryptInit(shell_cert, cacr, "", shell_pkey, salt, phrs); err != nil {
-		Log("shell", "run_shell", "", "cannot initialize crypto", 0, nil, err)
-		exit(nil, 1, fmt.Sprintf("shell cannot initialize crypto: %s", err.Error()))
-	}
+	
+	shell.X509cert, shell.TLSCert = crypt_init("shell", "run_shell", 31, shell_cert, cacr, "", shell_pkey)
+	shell.atlas = grpc_connect[AtlasClient](atlas_grpc, atlas_grpc_port, shell.TLSCert, NewAtlasClient)
 
-	if opts.runPing {
-		shell.ping()
+	switch opts.comd {
+	case "vers":
+		version()
 		exit(nil, 0, "")
-	}
-	var ivid int64 = -1
-	var scid int64 = -1
-	if opts.upload != "" {
-		if _, err = shell.upload(opts.upload); err != nil {
-			exit(nil, 2, fmt.Sprintf("upload %s failed: %s", opts.upload, err.Error()))
-		}
-		exit(nil, 0, "upload succeeded")
-	}
-	if opts.invoice != "" {
-		if ivid < 0 {
-			if ivid, err = strconv.ParseInt(opts.invoice, 10, 64); err != nil {
-				if ivid, err = shell.upload(opts.invoice); err != nil {
-					exit(nil, 3, fmt.Sprintf("upload %s failed: %s", opts.invoice, err.Error()))
-				}
-			}
-		}
-	}
-	if ivid >= 0 {
-		if scid, err = shell.scrub(ivid); err != nil {
-			exit(nil, 3, fmt.Sprintf("scrub %s failed: %s", opts.invoice, err.Error()))
+		
+	case "conf":
+		config()
+		exit(nil, 0, "")
+
+	case "ping":
+		if err := shell.ping(); err == nil {
+			exit(nil, 0, "ping succeeded")
 		} else {
-			fmt.Printf("scid: %d\n", scid)
+			exit(nil, 11, "ping failed: %s", err.Error())
 		}
+
+	case "invoice":
+		if ivid, err := shell.upload_invoice(opts.invoice); err == nil {
+			exit(nil, 0, "upload succeeded (%d)", ivid)
+		} else {
+			exit(nil, 12, "upload %s failed: %s", opts.invoice, err.Error())
+		}
+
+	case "scrub":
+		if ivid, err := strconv.ParseInt(opts.scrub, 10, 64); err == nil {
+			if scid, err := shell.run_scrub(ivid); err == nil {
+				exit(nil, 0, "%d", scid)
+			} else {
+				exit(nil, 13, "scrub %s failed: %s", opts.scrub, err.Error())
+			}
+		} else {
+			exit(nil, 14, "please provide a valid integer as the scrub_id")
+		}
+
+	case "queue":
+		if ivid, err := strconv.ParseInt(opts.scrub, 10, 64); err == nil {
+			if scid, err := shell.run_queue(ivid); err == nil {
+				exit(nil, 0, "%d", scid)
+			} else {
+				exit(nil, 15, "scrub %s failed: %s", opts.scrub, err.Error())
+			}
+		} else {
+			exit(nil, 16, "please provide a valid integer as the scrub_id")
+		}
+
+	// case "scrubs":
+	// 	if err := shell.get_scrubs(opts.scrubs); err == nil {
+	// 		exit(nil, 0, "")
+	// 	} else {
+	// 		exit(nil, 17, "")
+	// 	}
+
+	// case "invoices":
+	// 	if err := shell.get_invoices(opts.invoices); err == nil {
+	// 		exit(nil, 0, "")
+	// 	} else {
+	// 		exit(nil, 18, "")
+	// 	}
+
+	// case "report":
+	// 	if err := shell.save_report(opts.report); err == nil {
+	// 		exit(nil, 0, "")
+	// 	} else {
+	// 		exit(nil, 19, "")
+	// 	}
+
+	default:
+		exit(nil, 20, "unrecognized shell command: %s", opts.comd)
 	}
 
 	// if _, objs, err := import_file[Rebate](opts.fileIn, opts.csep, hdrm); err == nil {

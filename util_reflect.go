@@ -245,7 +245,11 @@ func (rfl *rflt) setFieldValue(obj any, fld string, val any) {
 			fldV.SetString(time.UnixMicro(pgn_time(v)).Format("15:04:05.000000"))
 		case time.Time:
 			if v.UnixMicro() > 0 {
-				fldV.SetString(v.Format("15:04:05.000000"))
+				fldV.SetString(v.Format("2006-01-02 15:04:05.000000"))
+			}
+		case *time.Time:
+			if v.UnixMicro() > 0 {
+				fldV.SetString(v.Format("2006-01-02 15:04:05.000000"))
 			}
 		case pgtype.Timestamp:
 			fldV.SetString(time.UnixMicro(pgn_ts(v)).Format("2006-01-02 15:04:05.000000"))
@@ -294,6 +298,10 @@ func (rfl *rflt) setFieldValue(obj any, fld string, val any) {
 			if v.UnixMicro() > 0 {
 				fldV.SetFloat(float64(v.UnixMicro()))
 			}
+		case *time.Time:
+			if v.UnixMicro() > 0 {
+				fldV.SetFloat(float64(v.UnixMicro()))
+			}
 		case pgtype.Timestamp:
 			fldV.SetFloat(float64(pgn_ts(v)))
 		case pgtype.Timestamptz:
@@ -334,7 +342,13 @@ func (rfl *rflt) setFieldValue(obj any, fld string, val any) {
 			fldV.SetUint(uint64(pgn_int64(v)))
 		case bool:
 		case time.Time:
-			fldV.SetUint(uint64(v.UnixMicro()))
+			if v.UnixMicro() > 0 {
+				fldV.SetUint(uint64(v.UnixMicro()))
+			}
+		case *time.Time:
+			if v.UnixMicro() > 0 {
+				fldV.SetUint(uint64(v.UnixMicro()))
+			}
 		case pgtype.Date:
 			fldV.SetUint(uint64(pgn_date(v)))
 		case pgtype.Time:
@@ -379,6 +393,10 @@ func (rfl *rflt) setFieldValue(obj any, fld string, val any) {
 			fldV.SetInt(pgn_int64(v))
 		case bool:
 		case time.Time:
+			if v.UnixMicro() > 0 {
+				fldV.SetInt(v.UnixMicro())
+			}
+		case *time.Time:
 			if v.UnixMicro() > 0 {
 				fldV.SetInt(v.UnixMicro())
 			}

@@ -4,7 +4,6 @@ import (
 	context "context"
 	"crypto/tls"
 	"crypto/x509"
-	"fmt"
 	"sync"
 	"time"
 
@@ -15,6 +14,7 @@ type Atlas struct {
 	opts     *Opts
 	titan    TitanClient
 	atlas    AtlasServer
+	claims   *gcache
 	scrubs   map[int64]*scrub
 	pools    map[string]*pgxpool.Pool
 	TLSCert  *tls.Certificate
@@ -26,17 +26,18 @@ type Atlas struct {
 var atlas *Atlas
 
 func run_atlas(done *sync.WaitGroup, opts *Opts, stop chan any) {
-	atlas = &Atlas{atlas: &atlasServer{}, scrubs: map[int64]*scrub{}, pools: map[string]*pgxpool.Pool{}, spis: newSPIs(), opts: opts}
-
-	var err error
-	if atlas.TLSCert, atlas.X509cert, err = CryptInit(atlas_cert, cacr, "", atlas_pkey, salt, phrs); err != nil {
-		Log("atlas", "run_atlas", "crypto", "cannot initialize crypto", 0, nil, err)
-		exit(nil, 1, fmt.Sprintf("atlas cannot initialize crypto: %s", err.Error()))
+	atlas = &Atlas{
+		opts:   opts,
+		atlas:  &atlasServer{},
+		claims: new_gcache(),
+		scrubs: map[int64]*scrub{}, 
+		pools:  map[string]*pgxpool.Pool{}, 
+		spis:   new_spis(), 
 	}
 
+	atlas.X509cert, atlas.TLSCert = crypt_init("atlas", "run_atlas", 32, atlas_cert, cacr, "", atlas_pkey)
 	atlas.pools["atlas"] = db_pool("atlas", atlas_host, atlas_port, atlas_name, atlas_user, atlas_pass, true)
-
-	atlas.connect()
+	atlas.titan = grpc_connect[TitanClient](titan_grpc, titan_grpc_port, atlas.TLSCert, NewTitanClient)
 	atlas.load(stop)
 
 	run_datab_ping( done, stop, "atlas", 60, atlas.pools)
@@ -86,8 +87,11 @@ func run_titan_ping(done *sync.WaitGroup, stop chan any, appl string, intv int, 
 }
 
 func (atlas *Atlas) load(stop chan any) {
+	strt := time.Now()
 	done := &sync.WaitGroup{}
-	load_cache(stop, done, &atlas.ca.clms, "clms", atlas.getClaims)
+	Log("atlas", "load", "all caches", "starting", time.Since(strt), nil, nil)
+	done.Add(7)
+	load_gclms(stop, done)
 	load_cache(stop, done, &atlas.ca.esp1, "esp1", atlas.getESP1)
 	load_cache(stop, done, &atlas.ca.ents, "ents", atlas.getEntities)
 	load_cache(stop, done, &atlas.ca.ledg, "elig", atlas.getLedger)
@@ -97,6 +101,7 @@ func (atlas *Atlas) load(stop chan any) {
 	done.Wait()
 	atlas.spis.load(atlas.ca.spis)
 	atlas.ca.done = true
+	Log("atlas", "load", "all caches", "completed", time.Since(strt), nil, nil)
 }
 
 func (atlas *Atlas) sync(stop chan any) {
@@ -108,4 +113,5 @@ func (atlas *Atlas) sync(stop chan any) {
 	sync_to_server(pool, "atlas", "atlas.scrub_rebates",       	"scrub_rebates",	atlas.X509cert, atlas.titan.SyncScrubRebates,   	stop)
 	sync_to_server(pool, "atlas", "atlas.scrub_claims",    		"scrub_claims",		atlas.X509cert, atlas.titan.SyncScrubClaims,   		stop)
 	sync_to_server(pool, "atlas", "atlas.scrub_rebates_claims",	"scrub_reb_clms",	atlas.X509cert, atlas.titan.SyncScrubRebatesClaims, stop)
+	sync_to_server(pool, "atlas", "atlas.metrics", 				"metrics",			atlas.X509cert, atlas.titan.SyncMetrics,			stop)
 }

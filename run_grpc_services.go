@@ -11,6 +11,19 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
+func grpc_connect[T any](host string, port int, cert *tls.Certificate, f func(grpc.ClientConnInterface) T) T {
+    tgt := fmt.Sprintf("%s:%d", host, port)
+	cfg := &tls.Config{
+		Certificates: []tls.Certificate{*cert},
+		RootCAs:      X509pool,
+	}
+    var clnt T
+	crd := credentials.NewTLS(cfg)
+	if conn, err := grpc.NewClient(tgt, grpc.WithTransportCredentials(crd)); err == nil {
+        clnt = f(conn)
+	}
+    return clnt
+}
 
 func run_grpc_server[T any](done *sync.WaitGroup, stop chan any, name string, port int, cert *tls.Certificate, regis func(grpc.ServiceRegistrar, T), srv T, ui grpc.UnaryServerInterceptor, si grpc.StreamServerInterceptor) {
     cfg := &tls.Config{

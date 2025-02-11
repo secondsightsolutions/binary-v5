@@ -50,7 +50,7 @@ type SPIs struct {
 
 }
 
-func newSPIs() *SPIs {
+func new_spis() *SPIs {
     spis := &SPIs{ 
         idMap:  make(map[string]*SPI), 
         deaMap: make(map[string][]*SPI), 

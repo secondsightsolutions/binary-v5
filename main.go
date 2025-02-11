@@ -12,24 +12,17 @@ var (
 	atlas_grpc_port int = 23460
 	titan_grpc_port int = 23461
 	opts *Opts
+	stop chan any
 )
 
 func main() {
 	var done sync.WaitGroup
 
-	stop := make(chan any)
+	stop = make(chan any)
 	catchSignals(stop)
 
 	getEnv()
 	opts = options()
-
-	if opts.runVers {
-		version()
-		exit(nil, 0, "")
-	} else if opts.runConf {
-		config()
-		exit(nil, 0, "")
-	}
 
 	if opts.runTitan {
 		run_titan(&done, opts, stop)
@@ -37,7 +30,7 @@ func main() {
 	if opts.runAtlas {
 		run_atlas(&done, opts, stop)
 	}
-	if opts.runClient {
+	if opts.runShell {
 		run_shell(opts)
 	}
 	done.Wait()
@@ -149,6 +142,24 @@ func config() {
 		fmt.Printf("%s: %s\n", "titan_name", "")
 		fmt.Printf("%s: %s\n", "titan_full", "")
 		fmt.Printf("%s: %s\n", "titan_orgn", "")
+	}
+	if _, xcrt, err := CryptInit(atlas_cert, cacr, "", atlas_pkey, salt, phrs); err == nil {
+		fmt.Printf("%s: %s\n", "atlas_name", X509cname(xcrt))
+		fmt.Printf("%s: %s\n", "atlas_full", X509ou(xcrt))
+		fmt.Printf("%s: %s\n", "atlas_orgn", X509org(xcrt))
+	} else {
+		fmt.Printf("%s: %s\n", "atlas_name", "")
+		fmt.Printf("%s: %s\n", "atlas_full", "")
+		fmt.Printf("%s: %s\n", "atlas_orgn", "")
+	}
+	if _, xcrt, err := CryptInit(shell_cert, cacr, "", shell_pkey, salt, phrs); err == nil {
+		fmt.Printf("%s: %s\n", "shell_name", X509cname(xcrt))
+		fmt.Printf("%s: %s\n", "shell_full", X509ou(xcrt))
+		fmt.Printf("%s: %s\n", "shell_orgn", X509org(xcrt))
+	} else {
+		fmt.Printf("%s: %s\n", "shell_name", "")
+		fmt.Printf("%s: %s\n", "shell_full", "")
+		fmt.Printf("%s: %s\n", "shell_orgn", "")
 	}
 	fmt.Printf("%s: %s\n", "titan_grpc", titan_grpc)
 	fmt.Printf("%s: %s\n", "titan_host", titan_host)

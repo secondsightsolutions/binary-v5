@@ -85,7 +85,8 @@ func (dbm *dbmap) table(pool *pgxpool.Pool, tbln string) {
 			// Find the existing dbfld - it must exist (indicates the field on the object).
 			for _, dbf := range dbm.dbfs {
 				// Implicit match on fld (no custom mapping) or on col (explicit mapping).
-				if strings.EqualFold(dbf.fld, coln) || strings.EqualFold(dbf.col, coln) {
+				no_ := strings.ReplaceAll(coln, "_", "")	// If db column name has _, strip out. GRPC field gen strips them.
+				if strings.EqualFold(dbf.fld, coln) || strings.EqualFold(dbf.col, coln) || strings.EqualFold(dbf.fld, no_) || strings.EqualFold(dbf.col, no_) {
 					dbf.nul = strings.EqualFold(null, "YES")
 					dbf.typ = colt
 					dbf.upd = true
@@ -164,7 +165,7 @@ func (dbm *dbmap) getColumnValueAsString(coln, fv string) string {
 					tm   := time.Unix(secs, micr * 1000)
 					return fmt.Sprintf("'%s'", tm.Format("2006-01-02 15:04:05.000000"))
 				} else {
-					panic(fmt.Sprintf("col=%s fld=%s err=%s", dbf.col, dbf.fld, err.Error()))
+					panic(fmt.Sprintf("col=%s fld=%s fv=%s err=%s", dbf.col, dbf.fld, fv, err.Error()))
 				}
 			}
 			if strings.HasPrefix(dbf.typ, "time") {
@@ -182,7 +183,7 @@ func (dbm *dbmap) getColumnValueAsString(coln, fv string) string {
 					tm   := time.Unix(secs, micr * 1000)
 					return fmt.Sprintf("'%s'", tm.Format("15:04:05.000000"))
 				} else {
-					panic(fmt.Sprintf("col=%s fld=%s err=%s", dbf.col, dbf.fld, err.Error()))
+					panic(fmt.Sprintf("col=%s fld=%s fv=%s err=%s", dbf.col, dbf.fld, fv, err.Error()))
 				}
 			}
 			if strings.HasPrefix(dbf.typ, "date") {
@@ -200,7 +201,7 @@ func (dbm *dbmap) getColumnValueAsString(coln, fv string) string {
 					tm   := time.Unix(secs, micr * 1000)
 					return fmt.Sprintf("'%s'", tm.Format("2006-01-02"))
 				} else {
-					panic(fmt.Sprintf("col=%s fld=%s err=%s", dbf.col, dbf.fld, err.Error()))
+					panic(fmt.Sprintf("col=%s fld=%s fv=%s err=%s", dbf.col, dbf.fld, fv, err.Error()))
 				}
 			}
 			if strings.EqualFold(dbf.typ, "ARRAY") {

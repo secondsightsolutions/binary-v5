@@ -22,6 +22,15 @@ var (
     X509pool *x509.CertPool
 )
 
+func crypt_init(appl, fn string, code int, certStrPemB64, caCertStrPemB64, keyStrPemB64, keyStrPemEncrB64 string) (*x509.Certificate, *tls.Certificate) {
+	if tcrt, xcrt, err := CryptInit(certStrPemB64, caCertStrPemB64, keyStrPemB64, keyStrPemEncrB64, salt, phrs); err == nil {
+		return xcrt, tcrt
+	} else {
+		Log(appl, fn, "", "cannot initialize crypto", 0, nil, err)
+		exit(nil, code, fmt.Sprintf("%s cannot initialize crypto: %s", appl, err.Error()))
+		return nil, nil
+	}
+}
 func CryptInit(certStrPemB64, caCertStrPemB64, keyStrPemB64, keyStrPemEncrB64, saltEncrB64, passphrase string) (*tls.Certificate, *x509.Certificate, error) {
 	if len(certStrPemB64) == 0 {
 		return nil, nil, fmt.Errorf("no certificate")

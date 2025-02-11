@@ -23,12 +23,8 @@ var titan *Titan
 func run_titan(done *sync.WaitGroup, opts *Opts, stop chan any) {
 	titan = &Titan{titan: &titanServer{}, pools: map[string]*pgxpool.Pool{}, opts: opts}
 
-	var err error
-    if titan.TLSCert, titan.X509cert, err = CryptInit(titan_cert, cacr, "", titan_pkey, salt, phrs); err != nil {
-		Log("titan", "run_titan", "", "cannot initialize crypto", 0, nil, err)
-		exit(nil, 1, fmt.Sprintf("titan cannot initialize crypto: %s", err.Error()))
-	}
-
+	titan.X509cert, titan.TLSCert = crypt_init("titan", "run_titan", 33, titan_cert, cacr, "", titan_pkey)
+	
 	titan.pools["citus"] = db_pool("titan", citus_host, citus_port, citus_name, citus_user, citus_pass, true)
 	titan.pools["titan"] = db_pool("titan", titan_host, titan_port, titan_name, titan_user, titan_pass, true)
 	titan.pools["esp"]   = db_pool("titan", espdb_host, espdb_port, espdb_name, espdb_user, espdb_pass, true)
@@ -87,7 +83,7 @@ func titan_db_sync[T any](fmPn, fmTn, whr string, fmM *dbmap, toPn, toTn string,
 
 func (titan *Titan) syncClaims(stop chan any) {
 	seq, _ := db_max(titan.pools["titan"], "titan.claims", "seq")
-	whr := fmt.Sprintf("manufacturer = 'teva' AND COALESCE(TRUNC(EXTRACT(EPOCH FROM created_at)*1000000, 0), 0) > %d", seq)
+	whr := fmt.Sprintf("manufacturer = 'astrazeneca' AND COALESCE(TRUNC(EXTRACT(EPOCH FROM created_at)*1000000, 0), 0) > %d", seq)
 	fmM := new_dbmap[Claim]()
 	fmM.column("chnm", "chain_name", 				"COALESCE(chain_name, '')")
 	fmM.column("cnfm", "claim_conforms_flag", 		"COALESCE(claim_conforms_flag, true)")
@@ -173,13 +169,14 @@ func (titan *Titan) syncPharmacies(stop chan any) {
 }
 
 func (titan *Titan) syncESP1(stop chan any) {
+	whr := ""
 	fmM := new_dbmap[ESP1PharmNDC]()
 	fmM.column("manu", "manufacturer",              "COALESCE(manufacturer, '')")
 	fmM.column("spid", "service_provider_id",		"COALESCE(service_provider_id, '')")
 	fmM.column("ndc",  "ndc",  						"COALESCE(ndc, '')")
 	fmM.column("strt", "start", 					"start")
 	fmM.column("term", "term", 						"term")
-	titan_db_sync[ESP1PharmNDC]("citus", "public.esp1_providers", "", fmM, "titan", "titan.esp1", stop)
+	titan_db_sync[ESP1PharmNDC]("citus", "public.esp1_providers", whr, fmM, "titan", "titan.esp1", stop)
 }
 
 func (titan *Titan) syncEligibility(stop chan any) {

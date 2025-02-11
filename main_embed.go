@@ -12,6 +12,9 @@ var (
 	//go:embed embed/type.txt
 	Type string // manu or proc
 
+	//go:embed embed/appl.txt
+	appl string
+	
 	//go:embed embed/manu.txt
 	manu string
 

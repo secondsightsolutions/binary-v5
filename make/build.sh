@@ -1,24 +1,13 @@
 #!/bin/bash
 
-#make.sh {build} {devel|staging|prod} {descr} {name}
-#make.sh build  envr    desc   name   type 
-#        1      2       3      4      5 
-#make.sh build  staging 'desc' teva   manu  
-#make.sh build  prod    'desc' teva   manu
-#make.sh build  prod    'desc' modeln proc
-#make.sh build  staging 'desc' amgen  manu 
-#make.sh build  staging 'cntr' brg    proc
-#make.sh build  staging 'cntr' brg    manu
+#build.sh {build} {dev|devint|staging|prod} {shell|atlas|titan|all} {manu|proc} {name} {descr}
+#build.sh build  envr    appl   type   name  descr 
+#         1      2       3      4      5     6
+#build.sh build  staging shell  manu   brg   "brg build" 
 
-#make.sh {deploy} {shell|atlas|service} {staging|prod} {descr} {name} {readme}"
-#make.sh deploy appl   envr    desc      name    readme"
-#        1      2      3       4         5       6
-#make.sh deploy shell prod    'version' amgen   readme.md"
-#make.sh deploy atlas staging 'desc'    myImg"
-
-if [ "$#" -ne 5 ]; then
+if [ "$#" -ne 6 ]; then
     echo "Illegal number of parameters ($#)"
-    echo "build.sh {build|deploy} {local|devel|staging|prod} {descr} {name} {manu|proc}"
+    echo "build.sh {build} {dev|devint|staging|prod} {shell|atlas|titan|all} {manu|proc} {name} {descr}"
     exit
 fi
 
@@ -32,9 +21,10 @@ nspc="v5"
 
 comd="$1"   # Build or deploy
 envr="$2"   # Dev, devint, staging, prod, etc.
-desc="$3"   # Description - embedded in all apps, and in shell/deploy (binary) (for servers it's the container id/version/name)
-name="$4"   # Identity, like brg or amgen
-type="$5"   # Manu or proc
+appl="$3"   # shell, atlas, titan, or all
+type="$4"   # Manu or proc
+name="$5"   # Identity, like brg or amgen
+desc="$6"   # Description - embedded in all apps, and in shell/deploy (binary) (for servers it's the container id/version/name)
 
 cntr="$desc" # Used when deploying (container name)
 cert=false  # Whether or not we need to (re)build certs - if envr/name have not changed since last build, no need to rebuild.
@@ -105,14 +95,14 @@ export V5_ESPDB_PASS="$(az keyvault secret show --vault-name v5-atlas-vault --na
 export V5_TITAN_GRPC="$(az appconfig kv show -n v5-atlas-config --key titan_grpc    --label ${envr} | jq .value | tr -d '"')"
 export V5_TITAN_OGTM="$(az appconfig kv show -n v5-atlas-config --key titan_ogtm    --label ${envr} | jq .value | tr -d '"')"
 export V5_TITAN_OGKY="$(az appconfig kv show -n v5-atlas-config --key titan_ogky    --label ${envr} | jq .value | tr -d '"')"
-export V5_ATLAS_GRPC="$(az appconfig kv show -n v5-atlas-config --key atlas_grpc --label ${envr} | jq .value | tr -d '"')"
+export V5_ATLAS_GRPC="$(az appconfig kv show -n v5-atlas-config --key atlas_grpc    --label ${envr} | jq .value | tr -d '"')"
 
-echo "export V5_APPL_CACR=$V5_APPL_CACR" > build.${envr}.env
-echo "export V5_APPL_PKEY=$V5_APPL_PKEY" >> build.${envr}.env
-echo "export V5_APPL_PHRS=$V5_APPL_PHRS" >> build.${envr}.env
-echo "export V5_APPL_SALT=$V5_APPL_SALT" >> build.${envr}.env
-echo "export V5_BUILD_ENVR=${envr}" >> build.${envr}.env
-echo "export V5_BUILD_NAME=${name}" >> build.${envr}.env
+echo "export V5_APPL_CACR=$V5_APPL_CACR"   >  build.${envr}.env
+echo "export V5_APPL_PKEY=$V5_APPL_PKEY"   >> build.${envr}.env
+echo "export V5_APPL_PHRS=$V5_APPL_PHRS"   >> build.${envr}.env
+echo "export V5_APPL_SALT=$V5_APPL_SALT"   >> build.${envr}.env
+echo "export V5_BUILD_ENVR=${envr}"        >> build.${envr}.env
+echo "export V5_BUILD_NAME=${name}"        >> build.${envr}.env
 echo "export V5_ATLAS_HOST=$V5_ATLAS_HOST" >> build.${envr}.env
 echo "export V5_ATLAS_PORT=$V5_ATLAS_PORT" >> build.${envr}.env
 echo "export V5_ATLAS_NAME=$V5_ATLAS_NAME" >> build.${envr}.env
@@ -156,6 +146,7 @@ fi
 echo -n $name          > embed/name.txt
 echo -n $type          > embed/type.txt
 echo -n $manu          > embed/manu.txt
+echo -n $appl          > embed/appl.txt
 echo -n $V5_APPL_ENVR  > embed/envr.txt
 echo -n $V5_APPL_CACR  > embed/cacr.txt
 echo -n $V5_APPL_SALT  > embed/salt.txt
@@ -164,7 +155,7 @@ echo -n $V5_APPL_VERS  > embed/vers.txt
 echo -n $V5_APPL_HASH  > embed/hash.txt
 echo -n $V5_APPL_DESC  > embed/desc.txt
 
-if [ "$name" == "brg" ] || [ "$type" == "manu" ];then
+if [ "$appl" == "atlas" ] || [ "$appl" == "all" ];then
 echo "Embedding atlas support"
 if [ "$cert" = true ];then
 make_cert ${V5_ATLAS_GRPC} "atlas"
@@ -186,7 +177,7 @@ echo -n $V5_ATLAS_USER > embed/atlas_user.txt
 echo -n $V5_ATLAS_PASS > embed/atlas_pass.txt
 fi
 
-if [ "$name" == "brg" ];then
+if [ "$appl" == "titan" ] || [ "$appl" == "all" ];then
 echo "Embedding titan support"
 if [ "$cert" = true ];then
 make_cert ${V5_TITAN_GRPC} "titan"
@@ -217,6 +208,7 @@ echo -n $V5_TITAN_USER > embed/titan_user.txt
 echo -n $V5_TITAN_PASS > embed/titan_pass.txt
 fi
 
+if [ "$appl" == "shell" ] || [ "$appl" == "all" ];then
 echo "Embedding shell support"
 if [ "$cert" = true ];then
 make_cert 127.0.0.1 "shell"
@@ -228,6 +220,7 @@ fi
 echo -n $V5_SHELL_CERT > embed/shell_cert.txt
 echo -n $V5_SHELL_PKEY > embed/shell_pkey.txt
 echo -n $V5_ATLAS_GRPC > embed/atlas_grpc.txt
+fi
 
 rm -rf run
 mkdir run
@@ -242,6 +235,7 @@ echo -n "" > embed/pkey.txt
 echo -n "" > embed/salt.txt
 echo -n "" > embed/phrs.txt
 echo -n "" > embed/type.txt
+echo -n "" > embed/appl.txt
 echo -n "" > embed/vers.txt
 echo -n "" > embed/hash.txt
 echo -n "" > embed/manu.txt

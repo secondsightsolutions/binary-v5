@@ -62,6 +62,63 @@ func db_select_col(ctx context.Context, pool *pgxpool.Pool, qry string) (any, er
 	}
 }
 
+func db_select_cust[T any](pool *pgxpool.Pool, appl string, dbm *dbmap, qry string, stop chan any) (chan *T, error) {
+	if dbm == nil {
+		panic("db_select_cust needs dbmap")
+	}
+	chn  := make(chan *T, 1000)
+	obj  := new(T)
+	rfl  := &rflt{}
+	dbfs := dbm.mapped()
+	ctx  := context.Background()
+	if tx, err := pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted}); err == nil {
+		if rows, err := tx.Query(ctx, qry); err == nil {
+			go func() {
+				defer tx.Commit(ctx)
+				defer rows.Close()
+				for {
+					select {
+					case <-stop:
+						Log(appl, "db_select_cust", "", "got stop signal, returning", 0, nil, nil)
+						tx.Rollback(ctx)
+						close(chn)
+						return
+					default:
+						if rows.Next() {
+							obj = new(T)
+							if vals, err := rows.Values(); err == nil {
+								for i, val := range vals {
+									rfl.setFieldValue(obj, dbfs[i].fld, val)
+								}
+								chn <-obj
+							} else {
+								Log(appl, "db_select_cust", "", "getting row values failed", 0, nil, err)
+								fmt.Println(qry)
+								tx.Rollback(ctx)
+								close(chn)
+								return
+							}
+						} else {
+							if err := rows.Err(); err != nil {
+								Log(appl, "db_select_cust", "", "getting next row failed", 0, nil, err)
+								fmt.Println(qry)
+							}
+							close(chn)
+							return
+						}
+					}
+				}
+			}()
+			return chn, nil
+		} else {
+			Log(appl, "db_select_cust", "", "query failed, NOT closing channel", 0, nil, err)
+			tx.Rollback(ctx)
+			return nil, err
+		}
+	} else {
+		return nil, err
+	}
+}
 func db_select[T any](pool *pgxpool.Pool, appl, tbln string, dbm *dbmap, where, sort string, stop chan any) (chan *T, error) {
 	if dbm == nil {
 		dbm = new_dbmap[T]()
@@ -224,7 +281,7 @@ func db_insert_batch(ctx context.Context, tx pgx.Tx, pool *pgxpool.Pool, tbln st
 		panic("dbmap not initialized with database table")
 	}
 	qry := dyn_insert(tbln, dbm, objs, ignoreConflicts)
-	// fmt.Println(qry)
+	//fmt.Println(qry)
 	_, err := tx.Exec(ctx, qry)
 	if err != nil {
 		tx.Rollback(ctx)
@@ -260,6 +317,7 @@ func db_insert_one[T any](ctx context.Context, pool *pgxpool.Pool, tbln string, 
 				}
 			}
 		}
+		fmt.Println(qry)
 		tx.Rollback(ctx)
 		return 0, err
 	} else {
@@ -282,7 +340,7 @@ func db_update(ctx context.Context, obj any, tx pgx.Tx, pool *pgxpool.Pool, tbln
 			fv := rfl.getFieldValueAsString(obj, dbf.fld)
 			fv  = strings.ReplaceAll(fv, "'", "")
 			cv := dbm.getColumnValueAsString(dbf.col, fv)
-			sb.WriteString(dbf.col + " = " + cv)
+			sb.WriteString("\"" + dbf.col + "\"" + " = " + cv)
 			if j < len(dbfs)-1 {
 				sb.WriteString(", ")
 			}
@@ -290,7 +348,7 @@ func db_update(ctx context.Context, obj any, tx pgx.Tx, pool *pgxpool.Pool, tbln
 		sb.WriteString(" WHERE ")
 		cnt := 0
 		for colN, val := range where {
-			sb.WriteString(colN + " = " + val)
+			sb.WriteString("\"" + colN + "\"" + " = " + "'" + val + "'")
 			cnt++
 			if cnt < len(where) {
 				sb.WriteString(", ")
@@ -312,6 +370,7 @@ func db_update(ctx context.Context, obj any, tx pgx.Tx, pool *pgxpool.Pool, tbln
 		panic("dbmap not initialized with database table")
 	}
 	upd := mk(obj)
+	//fmt.Println(upd)
 	if tag, err := tx.Exec(ctx, upd); err == nil {
 		// Only allow one row to be updated!
 		if tag.RowsAffected() > 1 {
@@ -320,6 +379,7 @@ func db_update(ctx context.Context, obj any, tx pgx.Tx, pool *pgxpool.Pool, tbln
 		}
 	} else {
 		tx.Rollback(ctx)
+		fmt.Println(upd)
 		return err
 	}
 	return nil
