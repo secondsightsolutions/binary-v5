@@ -36,13 +36,11 @@ message Rebate {
     string rxn  = 4;
     string hrxn = 5;
     string spid = 6;    // service provider id
-    string hspd = 7;
-    string prid = 8;    // prescriber provider id
-    string hprd = 9;
-    int64  dos  = 10;    // date of service
-    string hdos = 11;
-    string data = 12;
-    string manu = 13;
+    string prid = 7;    // prescriber provider id
+    int64  dos  = 8;    // date of service
+    string hdos = 9;
+    string data = 10;
+    string manu = 11;
 }
 
 message Scrub {
@@ -87,22 +85,30 @@ message ScrubRebate {
     int64  scid = 2;
     int64  ivid = 3;
     int64  rbid = 4;
-    int64  indx = 5;
-    string stat = 6;
-    string excl = 7;
-    string spmt = 8;   // service provider match type: exact, xwalk, stack, chain
-    string errc = 9;
-    string errm = 10;
-    int64  seq  = 11;
+    string stat = 5;
+    string spmt = 6;   // service provider match type: exact, xwalk, stack, chain
+    string errc = 7;
+    string errm = 8;
+    int64  seq  = 9;
 }
 
-message ScrubRebateClaim {
+message ScrubMatch {
     string manu = 1;
     int64  scid = 2;
     int64  ivid = 3;
     int64  rbid = 4;
     string clid = 5;
     int64  seq  = 6;
+}
+
+message ScrubAttempt {
+    string manu = 1;
+    int64  scid = 2;
+    int64  ivid = 3;
+    int64  rbid = 4;
+    string clid = 5;
+    string excl = 6;
+    int64  seq  = 7;
 }
 
 message ScrubClaim {
@@ -330,6 +336,6 @@ service Titan {
     rpc SyncMetrics(stream Metrics)                     returns (Res) {}
     rpc SyncScrubRebates(stream ScrubRebate)            returns (Res) {}
     rpc SyncScrubClaims(stream ScrubClaim)              returns (Res) {}
-    rpc SyncScrubRebatesClaims(stream ScrubRebateClaim) returns (Res) {}
-    
+    rpc SyncScrubMatches(stream ScrubMatch)             returns (Res) {}
+    rpc SyncScrubAttempts(stream ScrubAttempt)          returns (Res) {}
 }

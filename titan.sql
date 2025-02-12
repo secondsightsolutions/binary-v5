@@ -1,5 +1,6 @@
 
 DROP TABLE IF EXISTS titan.scrub_rebates_claims;
+DROP TABLE IF EXISTS titan.scrub_matches;
 DROP TABLE IF EXISTS titan.scrub_rebates;
 DROP TABLE IF EXISTS titan.scrub_claims;
 DROP TABLE IF EXISTS titan.metrics;
@@ -149,6 +150,7 @@ CREATE TABLE titan.claims (
 );
 CREATE INDEX ON titan.claims(manu);
 CREATE INDEX ON titan.claims(manu, doc);
+CREATE INDEX ON titan.claims(manu, seq);
 
 CREATE TABLE titan.scrub_rebates (
     manu text not null,
@@ -160,7 +162,7 @@ CREATE TABLE titan.scrub_rebates (
     spmt text not null default '',
     fprt text not null default '',
     seq  bigint not null,
-    CONSTRAINT rebates_pk PRIMARY KEY (manu, scid, rbid) --,
+    CONSTRAINT scrub_rebates_pk PRIMARY KEY (manu, scid, rbid) --,
     -- FOREIGN KEY (manu, scid) references titan.scrubs(manu, scid)
 );
 CREATE INDEX ON titan.scrub_rebates(manu);
@@ -172,23 +174,29 @@ CREATE TABLE titan.scrub_claims (
     clid  text not null,
     excl  text not null default '',
     seq   bigint not null,
-    CONSTRAINT claim_uses_pk PRIMARY KEY (manu, scid, clid) --,
-    -- FOREIGN KEY (manu, scid) references titan.scrubs(manu, scid),
-    -- FOREIGN KEY (manu, clid) references titan.claims(manu, clid)
+    CONSTRAINT scrub_claims_pk PRIMARY KEY (manu, scid, clid)
 );
 CREATE INDEX ON titan.scrub_claims(scid);
 CREATE INDEX ON titan.scrub_claims(clid);
 
-CREATE TABLE titan.scrub_rebates_claims (
+CREATE TABLE titan.scrub_matches (
     manu text not null,
     scid bigint not null,
     ivid bigint not null,
     rbid bigint not null,
     clid text not null,
     seq  bigint not null,
-    CONSTRAINT rebate_claims_pk PRIMARY KEY (manu, scid, rbid, clid) --,
-    -- FOREIGN KEY (manu, scid, rbid) REFERENCES titan.scrub_rebates (manu, scid, rbid),
-    -- FOREIGN KEY (manu, scid, clid) REFERENCES titan.scrub_claims  (manu, scid, clid)
+    CONSTRAINT scrub_matches_pk PRIMARY KEY (manu, scid, rbid, clid)
+);
+CREATE TABLE titan.scrub_attempts (
+    manu  text not null,
+    scid bigint not null,
+    ivid bigint not null,
+    rbid bigint not null,
+    clid text   not null,
+    excl text   not null,
+    seq  bigserial,
+    CONSTRAINT scrub_attempts_pk PRIMARY KEY (manu, scid, rbid, clid)
 );
 
 CREATE TABLE titan.auth (

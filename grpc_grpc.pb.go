@@ -507,21 +507,22 @@ var Atlas_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	Titan_Ping_FullMethodName                   = "/main.Titan/Ping"
-	Titan_GetClaims_FullMethodName              = "/main.Titan/GetClaims"
-	Titan_GetSPIs_FullMethodName                = "/main.Titan/GetSPIs"
-	Titan_GetNDCs_FullMethodName                = "/main.Titan/GetNDCs"
-	Titan_GetEntities_FullMethodName            = "/main.Titan/GetEntities"
-	Titan_GetPharmacies_FullMethodName          = "/main.Titan/GetPharmacies"
-	Titan_GetESP1Pharms_FullMethodName          = "/main.Titan/GetESP1Pharms"
-	Titan_GetEligibilityLedger_FullMethodName   = "/main.Titan/GetEligibilityLedger"
-	Titan_GetAuths_FullMethodName               = "/main.Titan/GetAuths"
-	Titan_SyncCommands_FullMethodName           = "/main.Titan/SyncCommands"
-	Titan_SyncScrubs_FullMethodName             = "/main.Titan/SyncScrubs"
-	Titan_SyncMetrics_FullMethodName            = "/main.Titan/SyncMetrics"
-	Titan_SyncScrubRebates_FullMethodName       = "/main.Titan/SyncScrubRebates"
-	Titan_SyncScrubClaims_FullMethodName        = "/main.Titan/SyncScrubClaims"
-	Titan_SyncScrubRebatesClaims_FullMethodName = "/main.Titan/SyncScrubRebatesClaims"
+	Titan_Ping_FullMethodName                 = "/main.Titan/Ping"
+	Titan_GetClaims_FullMethodName            = "/main.Titan/GetClaims"
+	Titan_GetSPIs_FullMethodName              = "/main.Titan/GetSPIs"
+	Titan_GetNDCs_FullMethodName              = "/main.Titan/GetNDCs"
+	Titan_GetEntities_FullMethodName          = "/main.Titan/GetEntities"
+	Titan_GetPharmacies_FullMethodName        = "/main.Titan/GetPharmacies"
+	Titan_GetESP1Pharms_FullMethodName        = "/main.Titan/GetESP1Pharms"
+	Titan_GetEligibilityLedger_FullMethodName = "/main.Titan/GetEligibilityLedger"
+	Titan_GetAuths_FullMethodName             = "/main.Titan/GetAuths"
+	Titan_SyncCommands_FullMethodName         = "/main.Titan/SyncCommands"
+	Titan_SyncScrubs_FullMethodName           = "/main.Titan/SyncScrubs"
+	Titan_SyncMetrics_FullMethodName          = "/main.Titan/SyncMetrics"
+	Titan_SyncScrubRebates_FullMethodName     = "/main.Titan/SyncScrubRebates"
+	Titan_SyncScrubClaims_FullMethodName      = "/main.Titan/SyncScrubClaims"
+	Titan_SyncScrubMatches_FullMethodName     = "/main.Titan/SyncScrubMatches"
+	Titan_SyncScrubAttempts_FullMethodName    = "/main.Titan/SyncScrubAttempts"
 )
 
 // TitanClient is the client API for Titan service.
@@ -542,7 +543,8 @@ type TitanClient interface {
 	SyncMetrics(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[Metrics, Res], error)
 	SyncScrubRebates(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[ScrubRebate, Res], error)
 	SyncScrubClaims(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[ScrubClaim, Res], error)
-	SyncScrubRebatesClaims(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[ScrubRebateClaim, Res], error)
+	SyncScrubMatches(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[ScrubMatch, Res], error)
+	SyncScrubAttempts(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[ScrubAttempt, Res], error)
 }
 
 type titanClient struct {
@@ -780,18 +782,31 @@ func (c *titanClient) SyncScrubClaims(ctx context.Context, opts ...grpc.CallOpti
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type Titan_SyncScrubClaimsClient = grpc.ClientStreamingClient[ScrubClaim, Res]
 
-func (c *titanClient) SyncScrubRebatesClaims(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[ScrubRebateClaim, Res], error) {
+func (c *titanClient) SyncScrubMatches(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[ScrubMatch, Res], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &Titan_ServiceDesc.Streams[13], Titan_SyncScrubRebatesClaims_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &Titan_ServiceDesc.Streams[13], Titan_SyncScrubMatches_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &grpc.GenericClientStream[ScrubRebateClaim, Res]{ClientStream: stream}
+	x := &grpc.GenericClientStream[ScrubMatch, Res]{ClientStream: stream}
 	return x, nil
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type Titan_SyncScrubRebatesClaimsClient = grpc.ClientStreamingClient[ScrubRebateClaim, Res]
+type Titan_SyncScrubMatchesClient = grpc.ClientStreamingClient[ScrubMatch, Res]
+
+func (c *titanClient) SyncScrubAttempts(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[ScrubAttempt, Res], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &Titan_ServiceDesc.Streams[14], Titan_SyncScrubAttempts_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[ScrubAttempt, Res]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type Titan_SyncScrubAttemptsClient = grpc.ClientStreamingClient[ScrubAttempt, Res]
 
 // TitanServer is the server API for Titan service.
 // All implementations must embed UnimplementedTitanServer
@@ -811,7 +826,8 @@ type TitanServer interface {
 	SyncMetrics(grpc.ClientStreamingServer[Metrics, Res]) error
 	SyncScrubRebates(grpc.ClientStreamingServer[ScrubRebate, Res]) error
 	SyncScrubClaims(grpc.ClientStreamingServer[ScrubClaim, Res]) error
-	SyncScrubRebatesClaims(grpc.ClientStreamingServer[ScrubRebateClaim, Res]) error
+	SyncScrubMatches(grpc.ClientStreamingServer[ScrubMatch, Res]) error
+	SyncScrubAttempts(grpc.ClientStreamingServer[ScrubAttempt, Res]) error
 	mustEmbedUnimplementedTitanServer()
 }
 
@@ -864,8 +880,11 @@ func (UnimplementedTitanServer) SyncScrubRebates(grpc.ClientStreamingServer[Scru
 func (UnimplementedTitanServer) SyncScrubClaims(grpc.ClientStreamingServer[ScrubClaim, Res]) error {
 	return status.Errorf(codes.Unimplemented, "method SyncScrubClaims not implemented")
 }
-func (UnimplementedTitanServer) SyncScrubRebatesClaims(grpc.ClientStreamingServer[ScrubRebateClaim, Res]) error {
-	return status.Errorf(codes.Unimplemented, "method SyncScrubRebatesClaims not implemented")
+func (UnimplementedTitanServer) SyncScrubMatches(grpc.ClientStreamingServer[ScrubMatch, Res]) error {
+	return status.Errorf(codes.Unimplemented, "method SyncScrubMatches not implemented")
+}
+func (UnimplementedTitanServer) SyncScrubAttempts(grpc.ClientStreamingServer[ScrubAttempt, Res]) error {
+	return status.Errorf(codes.Unimplemented, "method SyncScrubAttempts not implemented")
 }
 func (UnimplementedTitanServer) mustEmbedUnimplementedTitanServer() {}
 func (UnimplementedTitanServer) testEmbeddedByValue()               {}
@@ -1029,12 +1048,19 @@ func _Titan_SyncScrubClaims_Handler(srv interface{}, stream grpc.ServerStream) e
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type Titan_SyncScrubClaimsServer = grpc.ClientStreamingServer[ScrubClaim, Res]
 
-func _Titan_SyncScrubRebatesClaims_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(TitanServer).SyncScrubRebatesClaims(&grpc.GenericServerStream[ScrubRebateClaim, Res]{ServerStream: stream})
+func _Titan_SyncScrubMatches_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(TitanServer).SyncScrubMatches(&grpc.GenericServerStream[ScrubMatch, Res]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type Titan_SyncScrubRebatesClaimsServer = grpc.ClientStreamingServer[ScrubRebateClaim, Res]
+type Titan_SyncScrubMatchesServer = grpc.ClientStreamingServer[ScrubMatch, Res]
+
+func _Titan_SyncScrubAttempts_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(TitanServer).SyncScrubAttempts(&grpc.GenericServerStream[ScrubAttempt, Res]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type Titan_SyncScrubAttemptsServer = grpc.ClientStreamingServer[ScrubAttempt, Res]
 
 // Titan_ServiceDesc is the grpc.ServiceDesc for Titan service.
 // It's only intended for direct use with grpc.RegisterService,
@@ -1115,8 +1141,13 @@ var Titan_ServiceDesc = grpc.ServiceDesc{
 			ClientStreams: true,
 		},
 		{
-			StreamName:    "SyncScrubRebatesClaims",
-			Handler:       _Titan_SyncScrubRebatesClaims_Handler,
+			StreamName:    "SyncScrubMatches",
+			Handler:       _Titan_SyncScrubMatches_Handler,
+			ClientStreams: true,
+		},
+		{
+			StreamName:    "SyncScrubAttempts",
+			Handler:       _Titan_SyncScrubAttempts_Handler,
 			ClientStreams: true,
 		},
 	},

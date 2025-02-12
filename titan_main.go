@@ -83,7 +83,7 @@ func titan_db_sync[T any](fmPn, fmTn, whr string, fmM *dbmap, toPn, toTn string,
 
 func (titan *Titan) syncClaims(stop chan any) {
 	seq, _ := db_max(titan.pools["titan"], "titan.claims", "seq")
-	whr := fmt.Sprintf("COALESCE(TRUNC(EXTRACT(EPOCH FROM created_at)*1000000, 0), 0) > %d", seq)
+	whr := fmt.Sprintf("manufacturer = 'astrazeneca' AND COALESCE(TRUNC(EXTRACT(EPOCH FROM created_at)*1000000, 0), 0) > %d", seq)
 	fmM := new_dbmap[Claim]()
 	fmM.column("chnm", "chain_name", 				"COALESCE(chain_name, '')")
 	fmM.column("cnfm", "claim_conforms_flag", 		"COALESCE(claim_conforms_flag, true)")

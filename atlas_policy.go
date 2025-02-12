@@ -24,7 +24,7 @@ var policies = map[string]map[string]IPolicy {
 		"default": &pol_amgen_default{},
 	},
 	"astrazeneca": {
-		"default": &pol_simple{},
+		"default": new_pol_astrazeneca_default(),
 	},
 	"bayer": {
 		"default": nil,

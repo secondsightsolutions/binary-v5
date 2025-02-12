@@ -32,7 +32,7 @@ func db_sync_set(pool *pgxpool.Pool, appl, coln string, seq int64) error {
 	return nil
 }
 
-func sync_fm_server[T any](pool *pgxpool.Pool, appl, tbln string, replace, multitx bool, xcrt *x509.Certificate, f func(context.Context, *SyncReq, ...grpc.CallOption) (grpc.ServerStreamingClient[T], error), stop chan any) {
+func sync_fm_server[T any](pool *pgxpool.Pool, appl, tbln string, replace, multitx bool, xcrt *x509.Certificate, f func(context.Context, *SyncReq, ...grpc.CallOption) (grpc.ServerStreamingClient[T], error)) {
 	strt := time.Now()
 	name := tbln
 	dbm  := new_dbmap[T]()
@@ -45,7 +45,7 @@ func sync_fm_server[T any](pool *pgxpool.Pool, appl, tbln string, replace, multi
 		Log(appl, "sync_fm_server", tbln, "reading seqn failed", time.Since(strt), map[string]any{"manu": manu}, err)
 	}
 }
-func sync_to_server[T, R any](pool *pgxpool.Pool, appl, tbln, coln string, xcrt *x509.Certificate, f func(context.Context, ...grpc.CallOption) (grpc.ClientStreamingClient[T, R], error), stop chan any) {
+func sync_to_server[T, R any](pool *pgxpool.Pool, appl, tbln, coln string, xcrt *x509.Certificate, f func(context.Context, ...grpc.CallOption) (grpc.ClientStreamingClient[T, R], error)) {
 	strt := time.Now()
 	dbm  := new_dbmap[T]()
 	dbm.table(pool, tbln)

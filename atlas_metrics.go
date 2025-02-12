@@ -7,7 +7,7 @@ func (s *scrub) update_metrics(rbt *rebate) {
     s.lckM.Lock()
     defer s.lckM.Unlock()
     s.metr.RbtTotal++
-    switch rbt.sr.Stat {
+    switch rbt.stat {
     case "matched":
         s.metr.RbtMatched++
     case "nomatch":
@@ -20,9 +20,7 @@ func (s *scrub) update_metrics(rbt *rebate) {
         s.metr.RbtFailed++
     default:
     }
-    for _, sclm := range rbt.scs {
-        sclm.Lock()
-        sclm.gclm.Lock()
+    for _, sclm := range rbt.clms {
         clm := sclm.gclm.clm
         doc := clm.Doc
         dof := clm.Hdos
@@ -58,7 +56,5 @@ func (s *scrub) update_metrics(rbt *rebate) {
             default:
             }
         }
-        sclm.gclm.Unlock()
-        sclm.Unlock()
     }
 }

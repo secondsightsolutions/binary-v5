@@ -244,8 +244,12 @@ func (s *titanServer) SyncScrubClaims(strm grpc.ClientStreamingServer[ScrubClaim
 	_,_, err := sync_fm_client(titan.pools["titan"], "titan", "titan.scrub_claims", true, strm)
 	return err
 }
-func (s *titanServer) SyncScrubRebatesClaims(strm grpc.ClientStreamingServer[ScrubRebateClaim, Res]) error {
-	_,_, err := sync_fm_client(titan.pools["titan"], "titan", "titan.scrub_rebates_claims", true, strm)
+func (s *titanServer) SyncScrubMatches(strm grpc.ClientStreamingServer[ScrubMatch, Res]) error {
+	_,_, err := sync_fm_client(titan.pools["titan"], "titan", "titan.scrub_matches", true, strm)
+	return err
+}
+func (s *titanServer) SyncScrubAttempts(strm grpc.ClientStreamingServer[ScrubAttempt, Res]) error {
+	_,_, err := sync_fm_client(titan.pools["titan"], "titan", "titan.scrub_attempts", true, strm)
 	return err
 }
 // SyncMetrics(grpc.ClientStreamingServer[Metrics, Res]) error

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"sort"
 	"sync"
 	"time"
@@ -8,18 +9,20 @@ import (
 
 type gclaim struct {
 	sync.Mutex
-	clm *Claim
+	clm  *Claim
 }
 type gcache struct {
 	sync.Mutex
 	all []*gclaim
 	rxn map[string][]*gclaim
+	seq int64
 }
 
 type sclaim struct {
 	sync.Mutex
 	gclm *gclaim
 	excl string
+	rbts []*rebate
 }
 type scache struct {
 	sync.Mutex
@@ -28,21 +31,22 @@ type scache struct {
 }
 
 func new_gcache() *gcache {
-	return &gcache{all: []*gclaim{}, rxn: map[string][]*gclaim{}}
+	return &gcache{all: []*gclaim{}, rxn: map[string][]*gclaim{}, seq: -1}
 }
 
-func load_gclms(stop chan any, done *sync.WaitGroup) {
+func load_gclms(done *sync.WaitGroup, gc *gcache) {
 	defer done.Done()
 	strt := time.Now()
 	cnt  := 0
-	if chn, err := db_select[Claim](atlas.pools["atlas"], "atlas", "atlas.claims", nil, "", "", stop); err == nil {
+	whr  := fmt.Sprintf("seq > %d", gc.seq)
+	if chn, err := db_select[Claim](atlas.pools["atlas"], "atlas", "atlas.claims", nil, whr, "", stop); err == nil {
 		for clm := range chn {
 			atlas.claims.add(clm)
 			cnt++
 		}
 	}
 	atlas.claims.sort()
-	Log("atlas", "load_gclms", name, "claims loaded", time.Since(strt), map[string]any{"cnt": cnt, "manu": manu}, nil)
+	Log("atlas", "load_gclms", name, "claims loaded/added", time.Since(strt), map[string]any{"cnt": cnt, "manu": manu}, nil)
 }
 
 func (gc *gcache) add(clm *Claim) {
@@ -55,6 +59,9 @@ func (gc *gcache) add(clm *Claim) {
 	gc.rxn[clm.Hfrx] = append(gc.rxn[clm.Hfrx], gclm)
 	if clm.Hfrx != clm.Hrxn {
 		gc.rxn[clm.Hrxn] = append(gc.rxn[clm.Hrxn], gclm)
+	}
+	if gclm.clm.Seq > gc.seq {
+		gc.seq = gclm.clm.Seq
 	}
 }
 
@@ -76,7 +83,7 @@ func (gc *gcache) new_scache() *scache {
 	gc.Lock()
 	defer gc.Unlock()
 	for _, gclm := range gc.all {
-		sclm := &sclaim{gclm: gclm}
+		sclm := &sclaim{gclm: gclm, rbts: []*rebate{}}
 		sc.all = append(sc.all, sclm)
 		sc.rxn[gclm.clm.Hfrx] = append(sc.rxn[gclm.clm.Hfrx], sclm)
 		if gclm.clm.Hfrx != gclm.clm.Hrxn {

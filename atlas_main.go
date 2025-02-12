@@ -38,7 +38,7 @@ func run_atlas(done *sync.WaitGroup, opts *Opts, stop chan any) {
 	atlas.X509cert, atlas.TLSCert = crypt_init("atlas", "run_atlas", 32, atlas_cert, cacr, "", atlas_pkey)
 	atlas.pools["atlas"] = db_pool("atlas", atlas_host, atlas_port, atlas_name, atlas_user, atlas_pass, true)
 	atlas.titan = grpc_connect[TitanClient](titan_grpc, titan_grpc_port, atlas.TLSCert, NewTitanClient)
-	atlas.load(stop)
+	atlas.load()
 
 	run_datab_ping( done, stop, "atlas", 60, atlas.pools)
 	run_titan_ping( done, stop, "atlas", 60, atlas)
@@ -55,7 +55,7 @@ func run_atlas_sync(done *sync.WaitGroup, stop chan any, appl string, intv int, 
 		for {
 			select {
 			case <-time.After(durn):
-				atlas.sync(stop)
+				atlas.sync()
 				durn = time.Duration(intv) * time.Second
 			case <-stop:
 				Log(appl, "run_atlas_sync", "", "received stop signal, returning", 0, nil, nil)
@@ -86,32 +86,40 @@ func run_titan_ping(done *sync.WaitGroup, stop chan any, appl string, intv int, 
 	}()
 }
 
-func (atlas *Atlas) load(stop chan any) {
+func (atlas *Atlas) load() {
 	strt := time.Now()
-	done := &sync.WaitGroup{}
 	Log("atlas", "load", "all caches", "starting", time.Since(strt), nil, nil)
-	done.Add(7)
-	load_gclms(stop, done)
-	load_cache(stop, done, &atlas.ca.esp1, "esp1", atlas.getESP1)
-	load_cache(stop, done, &atlas.ca.ents, "ents", atlas.getEntities)
-	load_cache(stop, done, &atlas.ca.ledg, "elig", atlas.getLedger)
-	load_cache(stop, done, &atlas.ca.ndcs, "ndcs", atlas.getNDCs)
-	load_cache(stop, done, &atlas.ca.phms, "phms", atlas.getPharms)
-	load_cache(stop, done, &atlas.ca.spis, "spis", atlas.getSPIs)
-	done.Wait()
+	atlas.sync()
 	atlas.spis.load(atlas.ca.spis)
-	atlas.ca.done = true
 	Log("atlas", "load", "all caches", "completed", time.Since(strt), nil, nil)
 }
 
-func (atlas *Atlas) sync(stop chan any) {
+func (atlas *Atlas) sync() {
+	strt := time.Now()
+	Log("atlas", "sync", "sync to/fm titan", "starting", time.Since(strt), nil, nil)
 	pool := atlas.pools["atlas"]
-	sync_fm_server(pool, "atlas", "atlas.claims",        		false,	true,		atlas.X509cert, atlas.titan.GetClaims,    			stop)
-	sync_fm_server(pool, "atlas", "atlas.auth",          		true,	false,		atlas.X509cert, atlas.titan.GetAuths,     			stop)
-	sync_to_server(pool, "atlas", "atlas.commands",             "commands",			atlas.X509cert, atlas.titan.SyncCommands,           stop)
-	sync_to_server(pool, "atlas", "atlas.scrubs",        		"scrubs",			atlas.X509cert, atlas.titan.SyncScrubs,       		stop)
-	sync_to_server(pool, "atlas", "atlas.scrub_rebates",       	"scrub_rebates",	atlas.X509cert, atlas.titan.SyncScrubRebates,   	stop)
-	sync_to_server(pool, "atlas", "atlas.scrub_claims",    		"scrub_claims",		atlas.X509cert, atlas.titan.SyncScrubClaims,   		stop)
-	sync_to_server(pool, "atlas", "atlas.scrub_rebates_claims",	"scrub_reb_clms",	atlas.X509cert, atlas.titan.SyncScrubRebatesClaims, stop)
-	sync_to_server(pool, "atlas", "atlas.metrics", 				"metrics",			atlas.X509cert, atlas.titan.SyncMetrics,			stop)
+	sync_fm_server(pool, "atlas", "atlas.claims",        	false,	true,		atlas.X509cert, atlas.titan.GetClaims)
+	sync_fm_server(pool, "atlas", "atlas.auth",          	true,	false,		atlas.X509cert, atlas.titan.GetAuths)
+	sync_to_server(pool, "atlas", "atlas.commands",         "commands",			atlas.X509cert, atlas.titan.SyncCommands)
+	sync_to_server(pool, "atlas", "atlas.scrubs",        	"scrubs",			atlas.X509cert, atlas.titan.SyncScrubs)
+	sync_to_server(pool, "atlas", "atlas.scrub_rebates",	"scrub_rebates",	atlas.X509cert, atlas.titan.SyncScrubRebates)
+	sync_to_server(pool, "atlas", "atlas.scrub_claims",    	"scrub_claims",		atlas.X509cert, atlas.titan.SyncScrubClaims)
+	sync_to_server(pool, "atlas", "atlas.scrub_matches",	"scrub_matches",	atlas.X509cert, atlas.titan.SyncScrubMatches)
+	sync_to_server(pool, "atlas", "atlas.scrub_attempts",	"scrub_attempts",	atlas.X509cert, atlas.titan.SyncScrubAttempts)
+	sync_to_server(pool, "atlas", "atlas.metrics", 			"metrics",			atlas.X509cert, atlas.titan.SyncMetrics)
+	Log("atlas", "sync", "sync to/fm titan", "completed", time.Since(strt), nil, nil)
+
+	strt = time.Now()
+	Log("atlas", "sync", "load/update caches", "starting", time.Since(strt), nil, nil)
+	wgrp := &sync.WaitGroup{}
+	wgrp.Add(7)
+	load_gclms(wgrp, atlas.claims)
+	load_cache(wgrp, &atlas.ca.esp1, "esp1", atlas.getESP1)
+	load_cache(wgrp, &atlas.ca.ents, "ents", atlas.getEntities)
+	load_cache(wgrp, &atlas.ca.ledg, "elig", atlas.getLedger)
+	load_cache(wgrp, &atlas.ca.ndcs, "ndcs", atlas.getNDCs)
+	load_cache(wgrp, &atlas.ca.phms, "phms", atlas.getPharms)
+	load_cache(wgrp, &atlas.ca.spis, "spis", atlas.getSPIs)
+	wgrp.Wait()
+	Log("atlas", "sync", "load/update caches", "completed", time.Since(strt), nil, nil)
 }

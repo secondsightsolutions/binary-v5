@@ -17,7 +17,6 @@ type scrub struct {
 	scid int64
 	ivid int64
 	plcy IPolicy
-	atts *Attempts
 	metr *Metrics
 	lckM sync.Mutex
 	done chan any		// Tells the caller that the scrub is finished.
@@ -33,7 +32,6 @@ func new_scrub(s *Scrub, stop chan any) *scrub {
 		ivid: s.Ivid,
 		rbts: nil,
 		plcy: GetPolicy(s.Manu, s.Plcy),
-		atts: &Attempts{list: []*attempt{}},
 		metr: &Metrics{},
 		lckM: sync.Mutex{},
 		done: make(chan any, 1),
@@ -138,15 +136,17 @@ func (sc *scrub) run() {
 	rbts := make(chan *rebate, 5000)	// Rebate puller will feed us all the rebates by sending to this channel. (see next)
 	go sc.pull_rebates(rbts)			// This thread will close the rbts channel once all rebates have been written to it.
 
-	scrb_rbts := make(chan *ScrubRebate,      500)
-	scrb_rbcl := make(chan *ScrubRebateClaim, 500)
-	scrb_clms := make(chan *ScrubClaim,       500)
+	scrb_rbts := make(chan *ScrubRebate,    500)
+	scrb_mtcs := make(chan *ScrubMatch,		500)
+	scrb_atts := make(chan *ScrubAttempt, 	500)
+	scrb_clms := make(chan *ScrubClaim,     500)
 
 	dgrp := sync.WaitGroup{}
-	dgrp.Add(3)
-	db_insert_run(&dgrp, atlas.pools["atlas"], "atlas", "atlas.scrub_rebates",        nil, scrb_rbts, 5000, "", false, true, nil, nil, nil)
-	db_insert_run(&dgrp, atlas.pools["atlas"], "atlas", "atlas.scrub_rebates_claims", nil, scrb_rbcl, 5000, "", false, true, nil, nil, nil)
-	db_insert_run(&dgrp, atlas.pools["atlas"], "atlas", "atlas.scrub_claims",         nil, scrb_clms, 5000, "", false, true, nil, nil, nil)
+	dgrp.Add(4)
+	db_insert_run(&dgrp, atlas.pools["atlas"], "atlas", "atlas.scrub_rebates",	nil, scrb_rbts, 500000, "", false, true, nil, nil, nil)
+	db_insert_run(&dgrp, atlas.pools["atlas"], "atlas", "atlas.scrub_matches", 	nil, scrb_mtcs, 500000, "", false, true, nil, nil, nil)
+	db_insert_run(&dgrp, atlas.pools["atlas"], "atlas", "atlas.scrub_attempts",	nil, scrb_atts, 500000, "", false, true, nil, nil, nil)
+	db_insert_run(&dgrp, atlas.pools["atlas"], "atlas", "atlas.scrub_claims",	nil, scrb_clms, 500000, "", false, true, nil, nil, nil)
 
 	done := make(chan *rebate, qsiz*wrks)
 	chns := make([]chan *rebate, wrks)
@@ -175,15 +175,29 @@ func (sc *scrub) run() {
 				goto done
 			}
 			sc.update_metrics(rbt)
-			scrb_rbts <- rbt.sr				// Writes ScrubRebate to the database writer.
-			for _, rc := range rbt.rcs {
-				scrb_rbcl <- rc				// Writes the ScrubRebateClaims to the database writer.
+
+			// Rebates on a scrub are written to:
+			// - scrub_rebates	: one for each rebate - has stat, excl, spmt, errc, errm, ...
+			// - scrub_matches	: one for claim that matched on the rebate (usually just one)
+			// - scrub_attempts	: one for each time we attempt to match a claim to a rebate (excluding match successes).
+
+			sr  := rbt.new_scrub_rebate(sc)
+			sms := rbt.new_scrub_matches(sc)
+			sas := rbt.new_scrub_attempts(sc)
+
+			scrb_rbts <- sr				// Writes ScrubRebate to the database writer.
+			for _, sm := range sms {
+				scrb_mtcs <- sm			// Writes the ScrubMatchs to the database writer.
+			}
+			for _, sa := range sas {
+				scrb_atts <- sa			// Writes the ScrubAttempts to the database writer.
 			}
 		}
 	}
 	done:
 	close(scrb_rbts)	// Flushes any buffered db writes.
-	close(scrb_rbcl)	// Flushes any buffered db writes.
+	close(scrb_mtcs)	// Flushes any buffered db writes.
+	close(scrb_atts)	// Flushes any buffered db writes.
 
 	for _, sclm := range sc.clms.all {
 		scrb := &ScrubClaim{Scid: sc.scid, Clid: sclm.gclm.clm.Clid, Excl: sclm.excl}
@@ -228,6 +242,9 @@ func (sc *scrub) pull_rebates(out chan<- *rebate) {
 	} else {				// Rebates not pre-loaded into memory, so stream them in from the database.
 		whr  := fmt.Sprintf("ivid = %d", sc.ivid)
 		sort := strings.Join(sc.plcy.rebate_order(), ",")
+		if sort == "" {
+			sort = "rbid"
+		}
 		if chn, err := db_select[Rebate](atlas.pools["atlas"], "atlas", "atlas.rebates", nil, whr, sort, nil); err == nil {
 			for rbt := range chn {
 				out <- new_rebate(rbt)	// Sends rebate to next stage (work_rebates)

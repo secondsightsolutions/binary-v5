@@ -316,11 +316,27 @@ func (s *atlasServer) UploadInvoice(strm grpc.ClientStreamingServer[Rebate, Res]
 	db_insert_run(&wg, pool, "atlas", "atlas.invoice_rows", nil, dchn, 5000, "", false, true, nil, nil, nil)
 	db_insert_run(&wg, pool, "atlas", "atlas.rebates",      nil, rchn, 5000, "", false, true, nil, nil, nil)
 	rbid := int64(0)
+	setStrHashed := func(fm, to *string) {
+		if *fm != "" && *to == "" {
+			if Is64bitHash(*fm) {
+				*to = *fm
+			} else {
+				*to,_ = Hash(*fm)
+			}
+		}
+	}
+	setUnixHashed := func(fm int64, to *string) {
+		if fm > 0 && *to == "" {
+			*to,_ = Hash(ParseI64ToTime(fm).Format("2006-01-02"))
+		}
+	}
 	for {
 		if rbt, err = strm.Recv(); err == nil {
 			rbt.Manu = manu
 			rbt.Ivid = ivid
 			rbt.Rbid = rbid
+			setStrHashed(&rbt.Rxn, &rbt.Hrxn)	// Let's possibly fix up a couple things on the rebate.
+			setUnixHashed(rbt.Dos, &rbt.Hdos)
 			rchn <-rbt
 			dchn <-&invoice_row{Manu: manu, Ivid: ivid, Rbid: rbid, Data: rbt.Data}
 			rbid++

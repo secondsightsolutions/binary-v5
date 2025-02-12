@@ -181,30 +181,6 @@ func StrDecToInt64(val string) int64 {
 	return 0
 }
 
-func CheckBefore(t1, t2 *time.Time) bool {
-	return t1.Before(*t2)
-}
-func CheckOnAfter(t1, t2 *time.Time) bool {
-	return t1.Equal(*t2) || t1.After(*t2)
-}
-func CheckRange(t1, t2 *time.Time, bef, aft int) string {
-	days := t2.Sub(*t1) / (time.Hour * 24)
-	if days < 0 {
-		days *= -1
-		if days > time.Duration(bef) {
-			return "below_range"
-		}
-	} else {
-		if days > time.Duration(aft) {
-			return "above_range"
-		}
-	}
-	return ""
-}
-func CheckSPI(sc *scrub, spiA, spiB string, chains, stacks bool) (bool, string) {
-	return atlas.spis.match(spiA, spiB, chains, stacks)
-}
-
 var ScreenLevel = struct {
 	None int
 	Text int

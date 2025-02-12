@@ -19,11 +19,11 @@ type cache_set struct {
 	spis *cache
 	desg *cache
 	ldns *cache
-	done bool
 }
 type cache struct {
 	views map[keyn]*view	// Each view is an indexed representation of the set of elements.
 	rows  []*row            // All elements in this table.
+	seqn  int64				// Largest seq number in cache. Starting point for requesting new rows from source.
 }
 type view struct {
 	rows map[any][]*row
@@ -59,7 +59,6 @@ func (cs *cache_set) clone() *cache_set {
     	spis: cs.spis,
 		desg: cs.desg,
 		ldns: cs.ldns,
-    	done: cs.done,
     }
     return ncs
 }
@@ -67,16 +66,22 @@ func new_cache[T any]() *cache {
 	ca := &cache{
 		views: map[string]*view{},
 		rows:  []*row{},
+		seqn:  -1,
 	}
 	return ca
 }
-func load_cache[T any](stop chan any, done *sync.WaitGroup, c **cache, name string, f func(chan any, int64) chan *T) {
-	ca := new_cache[T]()
-	*c = ca
+func load_cache[T any](done *sync.WaitGroup, c **cache, name string, f func(chan any, int64) chan *T) {
+	var ca *cache
+	if *c == nil {
+		ca = new_cache[T]()
+		*c = ca
+	} else {
+		ca = *c
+	}
 	go func() {
 		defer done.Done()
 		cnt  := 0
-		seq  := int64(0)
+		seq  := ca.seqn
 		strt := time.Now()
 		rfl  := &rflt{}
 		fm   := f(stop, seq)
@@ -87,12 +92,15 @@ func load_cache[T any](stop chan any, done *sync.WaitGroup, c **cache, name stri
 				return
 			case obj, ok := <-fm:
 				if !ok {
-					Log("atlas", "load_cache", name, "cache loaded  ", time.Since(strt), map[string]any{"cnt": cnt, "manu": manu, "seq": seq}, nil)
+					Log("atlas", "load_cache", name, "cache loaded", time.Since(strt), map[string]any{"cnt": cnt, "manu": manu, "seq": seq}, nil)
 					return
 				}
 				cnt++
 				seq = rfl.getFieldValueAsInt64(obj, "Seq")
 				ca.Add(obj)
+				if seq > ca.seqn {
+					ca.seqn = seq
+				}
 			}
 		}
 	}()
