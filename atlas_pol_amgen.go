@@ -7,6 +7,12 @@ import (
 type pol_amgen_default struct {
 	IPolicy
 }
+func (p *pol_amgen_default) options() *policy_opts {
+	return &policy_opts{stacks: false, chains: false, load_rebates: true}
+}
+func (p *pol_amgen_default) rebate_order() []string {
+	return nil
+}
 func (p *pol_amgen_default) prep_rebates(*scrub) {
 
 }
@@ -21,7 +27,7 @@ func (p *pol_amgen_default) prep_claims(sc *scrub) {
 			gclm.Unlock()
 			continue
 		}
-		if res := CheckOnAfter(clm.Doc, dt509s); res != "" {
+		if res := CheckOnAfter(clm.Doc, dt509s, true); res != "" {
 			if !clm.Cnfm {
 				sclm.excl = "clm_not_cnfm"
 			} else if !clm.Elig && !clm.Susp {
@@ -41,22 +47,22 @@ func (p *pol_amgen_default) scrub_rebate(sc *scrub, rbt *rebate) {
 	for _, sclm := range sclms {
 		clm := sclm.gclm.clm
 		
-		if res := CheckBefore(clm.Doc, rbt.rbt.Dos); res != "" {
+		if res := CheckBefore(clm.Doc, rbt.rbt.Dos, true); res != "" {
 			rbt.attempt(sclm, res)
 			continue
 		}
-		if CheckBefore(rbt.rbt.Dos, tm411s) == "" {
-			if res := CheckOnAfter(clm.Doc, tm509s); res != "" {
+		if CheckBefore(rbt.rbt.Dos, tm411s, true) == "" {
+			if res := CheckOnAfter(clm.Doc, tm509s, true); res != "" {
 				rbt.attempt(sclm, res)
 				continue
 			}
 		} else {
-			if res := CheckBefore(clm.Doc, tm509s); res != "" {
+			if res := CheckBefore(clm.Doc, tm509s, true); res != "" {
 				rbt.attempt(sclm, res)
 				continue
 			}
 		}
-		if CheckOnAfter(rbt.rbt.Dos, tm411s) == "" {
+		if CheckOnAfter(rbt.rbt.Dos, tm411s, true) == "" {
 			if res := CheckDayRange(rbt.rbt.Dos, clm.Doc, 30, 45); res != "" {
 				rbt.attempt(sclm, res)
 				continue

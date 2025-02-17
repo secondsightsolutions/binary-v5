@@ -70,7 +70,7 @@ func new_cache[T any]() *cache {
 	}
 	return ca
 }
-func load_cache[T any](done *sync.WaitGroup, c **cache, name string, f func(chan any, int64) chan *T) {
+func load_cache[T any](done *sync.WaitGroup, c **cache, name string, dur *time.Duration, f func(chan any, int64) chan *T) {
 	var ca *cache
 	if *c == nil {
 		ca = new_cache[T]()
@@ -93,6 +93,7 @@ func load_cache[T any](done *sync.WaitGroup, c **cache, name string, f func(chan
 			case obj, ok := <-fm:
 				if !ok {
 					Log("atlas", "load_cache", name, "cache loaded", time.Since(strt), map[string]any{"cnt": cnt, "manu": manu, "seq": seq}, nil)
+					*dur = time.Since(strt)
 					return
 				}
 				cnt++

@@ -19,3 +19,9 @@ func (atlas *Atlas) getPharms(stop chan any, seq int64) chan *Pharmacy {
 func (atlas *Atlas) getSPIs(stop chan any, seq int64) chan *SPI {
 	return strm_recv_srvr[SPI]("atlas", "spis", seq, atlas.X509cert, atlas.titan.GetSPIs, stop);
 }
+func (atlas *Atlas) getDesignations(stop chan any, seq int64) chan *Designation {
+	return strm_recv_srvr[Designation]("atlas", "designations", seq, atlas.X509cert, atlas.titan.GetDesignations, stop);
+}
+func (atlas *Atlas) getLDNs(stop chan any, seq int64) chan *LDN {
+	return strm_recv_srvr[LDN]("atlas", "ldns", seq, atlas.X509cert, atlas.titan.GetLDNs, stop);
+}

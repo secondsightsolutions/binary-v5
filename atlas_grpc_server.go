@@ -1,10 +1,10 @@
 package main
 
 import (
+	"bytes"
 	context "context"
 	"fmt"
 	"io"
-	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -174,22 +174,6 @@ type invoice_col struct {
 	Indx int
 	Name string
 }
-type invoice_row struct {
-	Manu string
-	Ivid int64
-	Rbid int64
-	Data string
-}
-type scrub_row struct {
-	Rbid int64
-	Indx int64
-	Stat string
-	Excl string
-	Spmt string
-	Errc string
-	Errm string
-	Data string
-}
 
 func atlas_db_read[T any](ctx context.Context, fcnn, tbln string, ivid, scid int64, sort string) (*T, error) {
 	strt := time.Now()
@@ -300,7 +284,7 @@ func (s *atlasServer) UploadInvoice(strm grpc.ClientStreamingServer[Rebate, Res]
 	// Invoice columns
 	ichn := make(chan *invoice_col, 100)
 	wg.Add(1)
-	db_insert_run(&wg, pool, "atlas", "atlas.invoice_cols", nil, ichn, 100, "", false, false, nil, nil, nil)
+	db_insert_run(&wg, pool, "atlas", "atlas.invoice_cols", nil, ichn, 100, "", false, false, nil, nil, nil, nil, stop)
 	toks := strings.Split(hdrs, ",")
 	for i, tok := range toks {
 		ichn <-&invoice_col{Manu: manu, Ivid: ivid, Indx: i, Name: tok}
@@ -309,12 +293,10 @@ func (s *atlasServer) UploadInvoice(strm grpc.ClientStreamingServer[Rebate, Res]
 	wg.Wait()
 	
 	// Invoice rebate rows (and row data rows)
-	rchn := make(chan *Rebate,      5000)
-	dchn := make(chan *invoice_row, 5000)
+	rchn := make(chan *Rebate, 5000)
 	var rbt *Rebate
-	wg.Add(2)
-	db_insert_run(&wg, pool, "atlas", "atlas.invoice_rows", nil, dchn, 5000, "", false, true, nil, nil, nil)
-	db_insert_run(&wg, pool, "atlas", "atlas.rebates",      nil, rchn, 5000, "", false, true, nil, nil, nil)
+	wg.Add(1)
+	db_insert_run(&wg, pool, "atlas", "atlas.rebates", nil, rchn, 5000, "", false, true, nil, nil, nil, nil, stop)
 	rbid := int64(0)
 	setStrHashed := func(fm, to *string) {
 		if *fm != "" && *to == "" {
@@ -338,7 +320,6 @@ func (s *atlasServer) UploadInvoice(strm grpc.ClientStreamingServer[Rebate, Res]
 			setStrHashed(&rbt.Rxn, &rbt.Hrxn)	// Let's possibly fix up a couple things on the rebate.
 			setUnixHashed(rbt.Dos, &rbt.Hdos)
 			rchn <-rbt
-			dchn <-&invoice_row{Manu: manu, Ivid: ivid, Rbid: rbid, Data: rbt.Data}
 			rbid++
 		} else if err == io.EOF {
 			Log("atlas", "Invoice", "", "invoice created", time.Since(strt), map[string]any{"manu": manu, "file": file, "cmid": fmt.Sprintf("%d", s.cmid), "ivid": ivid, "cnt": rbid+1}, nil)
@@ -349,7 +330,6 @@ func (s *atlasServer) UploadInvoice(strm grpc.ClientStreamingServer[Rebate, Res]
 		}
 	}
 	close(rchn)
-	close(dchn)
 	wg.Wait()
 	if err == io.EOF {
 		err = nil
@@ -363,11 +343,10 @@ func (s *atlasServer) RunScrub(req *InvoiceIdent, strm grpc.ServerStreamingServe
 		Cmid: fmt.Sprintf("%d", s.cmid),
 		Manu: metaGet(strm.Context(), "manu"),
 		Plcy: metaGet(strm.Context(), "plcy"),
-		Hdrs: metaGet(strm.Context(), "hdrs"),
+		Prof: metaGet(strm.Context(), "prof"),
 		Test: metaGet(strm.Context(), "test"),
 	}
 	pool := atlas.pools["atlas"]
-	strt := time.Now()
 
 	if scid, err := db_insert_one[Scrub](strm.Context(), pool, "atlas.scrubs", nil, scr, "scid"); err == nil {
 		scr.Scid = scid
@@ -376,32 +355,22 @@ func (s *atlasServer) RunScrub(req *InvoiceIdent, strm grpc.ServerStreamingServe
 	}
 	grpc.SendHeader(strm.Context(), metadata.Pairs("scid", fmt.Sprintf("%d", scr.Scid)))
 
-	stop := make(chan any)
-	scrb := new_scrub(scr, stop)
-	defer close(stop)
+	scrb := new_scrub(scr)
 	
 	atlas.scrubs[scrb.scid] = scrb
-	scrb.run()
+	go scrb.run()
 
 	// Send the scrub updates to the shell (client).
-	for {
-		select {
-		case <-time.After(time.Duration(1)*time.Second):
-			scrb.lckM.Lock()
-			strm.Send(scrb.metr)
-			scrb.lckM.Unlock()
-		case <-scrb.done:
-			Log("atlas", "Scrub", "", "completed", time.Since(strt), map[string]any{
-				"cmid": scr.Cmid,
-				"scid": scr.Scid,
-				"ivid": scr.Ivid,
-				"plcy": scr.Plcy,
-				"manu": metaGet(strm.Context(), "manu"),
-				"name": metaGet(strm.Context(), "name"),
-			}, nil)
+	for range time.After(time.Duration(1)*time.Second) {
+		scrb.lckM.Lock()
+		strm.Send(scrb.metr)
+		scrb.lckM.Unlock()
+
+		if scrb.done {
 			return nil
 		}
 	}
+	return nil
 }
 
 func (s *atlasServer) RunQueue(ctx context.Context, req *InvoiceIdent) (*ScrubRes, error) {
@@ -410,128 +379,226 @@ func (s *atlasServer) RunQueue(ctx context.Context, req *InvoiceIdent) (*ScrubRe
 		Cmid: fmt.Sprintf("%d", s.cmid),
 		Manu: metaGet(ctx, "manu"),
 		Plcy: metaGet(ctx, "plcy"),
-		Hdrs: metaGet(ctx, "hdrs"),
 		Test: metaGet(ctx, "test"),
 	}
-	res := &ScrubRes{Scid: -1}
+	res  := &ScrubRes{Scid: -1}
 	pool := atlas.pools["atlas"]
-	strt := time.Now()
 
 	if scid, err := db_insert_one[Scrub](ctx, pool, "atlas.scrubs", nil, scr, "scid"); err == nil {
 		scr.Scid = scid
+		res.Scid = scid
 	} else {
 		return res, err
 	}
 
-	scrb := new_scrub(scr, nil)
+	scrb := new_scrub(scr)
 	
 	atlas.scrubs[scrb.scid] = scrb
 	go scrb.run()
 
-	Log("atlas", "ScrubBG", "", "started", time.Since(strt), map[string]any{
-		"cmid": scr.Cmid,
-		"scid": scr.Scid,
-		"ivid": scr.Ivid,
-		"plcy": scr.Plcy,
-		"manu": metaGet(ctx, "manu"),
-		"name": metaGet(ctx, "name"),
-	}, nil)
 	return res, nil
 }
 
 func (s *atlasServer) GetScrub(ctx context.Context, req *ScrubIdent) (*Scrub, error) {
+	if scrb, ok := atlas.scrubs[req.Scid];ok {
+		return scrb.scrb, nil
+	}
 	return atlas_db_read[Scrub](ctx, "GetScrub", "atlas.scrubs", -1, req.Scid, "")
 }
 
 func (s *atlasServer) GetScrubMetrics(ctx context.Context, req *ScrubIdent) (*Metrics, error) {
+	if scrb, ok := atlas.scrubs[req.Scid];ok {
+		return scrb.metr, nil
+	}
 	return atlas_db_read[Metrics](ctx, "GetScrubMetrics", "atlas.metrics", -1, req.Scid, "")
 }
 
 func (s *atlasServer) GetScrubRebates(req *ScrubIdent, strm grpc.ServerStreamingServer[ScrubRebate]) error {
+	if scrb, ok := atlas.scrubs[req.Scid];ok {
+		for _, rbt := range scrb.rbts {
+			strm.Send(rbt.new_scrub_rebate(scrb))
+		}
+		return nil
+	}
 	return atlas_db_read_strm("GetScrubRebates", "atlas.scrub_rebates", strm, -1, req.Scid, "Rbid")
 }
 
 func (s *atlasServer) GetScrubFile(req *ScrubIdent, strm grpc.ServerStreamingServer[ScrubRow]) error {
-	strt := time.Now()
 	hdrs := metaGet(strm.Context(), "hdrs")		// Comma-separated list of headers indicating columns to return.
 	scid := metaGetI64(strm.Context(), "scid")
+	manu := metaGet(strm.Context(), "manu")
 	ivid := int64(-1)
 	stop := make(chan any)
 	pool := atlas.pools["atlas"]
-	cols := []string{}
+	cols := []*invoice_col{}
+	mem  := true
 	defer close(stop)
 
-	// Get invoice id
-	if scr, err := atlas_db_read[Scrub](context.Background(), "GetScrubFile", "atlas.scrubs", -1, scid, ""); err == nil {
-		ivid = scr.Ivid
+	var scrb *scrub
+	var Scrb *Scrub
+	var err  error
+
+	// The hdrs metadata contains the list/order of columns to be returned. This list may be from the set of headers on the
+	// invoice along with additional data like 340b_id, 340b_status, etc. (could be fields from claims, LU tables, etc - written by policy).
+	// Here is where the data come from:
+	// invoice_cols: indx, name (0/spid 1/ndc 2/rxn)			headers from invoice
+	// scrubs: cust (340bID,340stat,foo,bar)					custom policy-generated headers (attribute names)
+	// scrub_rebates: (aaa,bb,cccc,d)							custom policy-generated columns (attribute values)
+
+	// These maps map the header name to its index position in the CS list of values.
+	imap := map[string]int{}			// header map from invoice  (header row on invoice).
+	smap := map[string]int{}			// header map from standard (standard values we add, like stat, errc, errm, etc).
+	cmap := map[string]int{}			// header map from custom   (custom values added by policy, like 340bID, 340b_stat, etc).
+	hmap := map[string]map[string]int{}	// maps header name to which map that header's data comes from: "stat"=>smap, "street"=>imap, ...
+	hsrc := map[string]string{}			// maps header name to which map (name) that header's data comes from: "stat"=>"smap", "stree"=>"imap", ...
+
+	// First, build the basic smap (not yet looking at requested hdrs).
+	smap["stat"] = 0
+	smap["excl"] = 1
+	smap["errc"] = 2
+	smap["errm"] = 3
+
+	// Get the Scrub so that we can get the invoice id and custom headers. Need that to get the column definitions and all original rebate data.
+	if scrb = atlas.scrubs[scid]; scrb == nil {
+		mem = false
+		if Scrb, err = atlas_db_read[Scrub](context.Background(), "GetScrubFile", "atlas.scrubs", -1, scid, ""); err != nil {
+			return err
+		}
+	} else {
+		Scrb = scrb.scrb
+	}
+	ivid = Scrb.Ivid
+
+	// Put the custom headers into cmap (foo=>0, bar=>1, ...)
+	if len(Scrb.Cust) > 0 {
+		cust := strings.Split(Scrb.Cust, ",")
+		for i, hdr := range cust {
+			cmap[strings.ToLower(hdr)] = i
+		}
 	}
 
 	// Get invoice columns
 	if chn, err := db_select[invoice_col](pool, "atlas", "atlas.invoice_cols", nil, fmt.Sprintf("ivid = %d", ivid), "indx", stop); err == nil {
 		for ic := range chn {
-			cols = append(cols, ic.Name)
+			cols = append(cols, ic)
+		}
+		// Put the invoice headers into imap
+		for i, col := range cols {
+			imap[strings.ToLower(col.Name)] = i
 		}
 	}
 
-	// Get the scrub rebates (joined to invoice rows)
-	qry := `
-		select sr.rbid, sr.indx, sr.stat, sr.excl, sr.spmt, ir."data" 
-		from atlas.scrub_rebates sr
-		join atlas.invoice_rows  ir on (sr.ivid = ir.ivid and sr.rbid = ir.rbid)
-		where sr.scid = %d
-		order by ir.rbid;
-	`
-	qry = fmt.Sprintf(qry, scid)
+	// Finally, go through the requested header list. For each header, map it to its map source.
+	insMissing := func(hdrs, val string) string {
+		if !strings.Contains(hdrs, val) {
+			return val + "," + hdrs
+		}
+		return hdrs
+	}
+	addMissing := func(hdrs, val string) string {
+		if !strings.Contains(hdrs, val) {
+			return hdrs + "," + val
+		}
+		return hdrs
+	}
+	hdrs = strings.ToLower(hdrs)			// header list from metadata (requested columns in output)
+	if len(hdrs) == 0 {
+		hdrs = "rbid,stat,excl,errc,errm"	// If nothing requested, this is the basic minimal list.
+	}
+	hdrs = insMissing(hdrs, "stat")
+	hdrs = addMissing(hdrs, "excl")
+	hdrs = addMissing(hdrs, "errc")
+	hdrs = addMissing(hdrs, "errm")
+	miss := []string{}
+	Hdrs := strings.Split(hdrs, ",")
+	for _, hdr := range Hdrs {
+		if _,ok := smap[hdr]; ok {			// "stat", "excl", "errc", "errm"		- standard headers
+			hmap[hdr] = smap
+			hsrc[hdr] = "smap"
+		} else if _,ok := cmap[hdr]; ok {	// atlas.scrubs.cust ("foo,bar")		- custom n/v pairs added by policy execution
+			hmap[hdr] = cmap
+			hsrc[hdr] = "cmap"
+		} else if _,ok := imap[hdr]; ok {	// atlas.invoice_cols (indx/name, ...)	- headers in the invoice file
+			hmap[hdr] = imap
+			hsrc[hdr] = "imap"
+		} else {
+			miss = append(miss, hdr)
+		}
+	}
+	if len(miss) > 0 {
+		Log("atlas", "GetScrubFile", "", "missing hdr(s): %v", 0, nil, nil, miss)
+	}
 
-	dbm := new_dbmap[scrub_row]()
-	dbm.column("rbid", "rbid", "")
-	dbm.column("stat", "stat", "")
-	dbm.column("excl", "excl", "")
-	dbm.column("spmt", "spmt", "")
-	dbm.column("data", "data", "")
-
-	// Make sure we have the four basic/added columns in the list.
-	Hdrs := split(hdrs, ",", strings.Join(cols, ","))	// If specific hdr list provided, use it. Else, all hdrs.
-	if !slices.Contains(Hdrs, "stat") {
-		newh := []string{"stat"}
-		newh = append(newh, Hdrs...)
-		Hdrs = newh
-	}
-	if !slices.Contains(Hdrs, "excl") {
-		Hdrs = append(Hdrs, "excl")
-	}
-	if !slices.Contains(Hdrs, "errc") {
-		Hdrs = append(Hdrs, "errc")
-	}
-	if !slices.Contains(Hdrs, "errm") {
-		Hdrs = append(Hdrs, "errm")
-	}
+	// Now we have a map that maps a header name to a secondary map (foo=>imap, stat=>smap, street=>imap, ...)
+	// Each secondary map maps a column name to the index position within that secondary source's data (CSV).
+	// smap: stat=>0, errc=>3, ...
+	// imap: street=>0, city=>1, ...
+	// So to get the data we use the header name on the hmap to get the secondary map, then use it again on the secondary map to get the index position.
 	
-	if chn, err := db_select_cust[scrub_row](pool, "atlas", dbm, qry, stop); err == nil {
-		for sr := range chn {
-			srow := &ScrubRow{}
-			line := []string{}
-			cols := split(sr.Data, ",", "")
-			coli := 0
-			for _, hdr := range Hdrs {
-				if hdr == "stat" {
-					line = append(line, sr.Stat)
-				} else if hdr == "excl" {
-					line = append(line, sr.Excl)
-				} else if hdr == "errc" {
-					line = append(line, sr.Errc)
-				} else if hdr == "errm" {
-					line = append(line, sr.Errm)
-				} else {
-					line = append(line, cols[coli])
-					coli++
+	srCh := make(chan *ScrubRebate, 5000)
+	if mem {
+		go func() {									// Reads rebates in memory
+			for _, rbt := range scrb.rbts {
+				srCh <- rbt.new_scrub_rebate(scrb)
+			}
+		}()
+	} else {
+		go func() {									// Reads rebates from scrub_rebates table
+			qry := fmt.Sprintf(`
+			select 
+				sr.rbid, sr.stat, sr.spmt, sr.errc, sr.errm, sr.cust,
+				rb.data
+				
+			from 
+				atlas.scrub_rebates sr
+				join atlas.rebates sr on (sr.ivid = rb.ivid and sr.rbid = rb.rbid)
+			where sr.manu = '%s' and sr.ivid = %d and sr.scid = %d
+			order by sr.rbid;
+			`, manu, ivid, scid)
+			if chn, err := db_select[ScrubRebate](pool, "atlas", "atlas.scrub_rebates", nil, qry, "rbid", stop); err == nil {
+				for sr := range chn {
+					srCh <- sr
 				}
 			}
-			srow.Row = strings.Join(line, ",")
-			if err := strm.Send(srow); err != nil {
-				Log("atlas", "GetScrubFile", "", "stream send failed", time.Since(strt), nil, err)
-				return err
+		}()
+	}
+
+	// Regardless of whether the scrub/rebates are still in memory or on disk, we're getting a stream of scrub rebates.
+	for sr := range srCh {
+		rd := strings.Split(sr.Data, ",")	// Rebate data (columns) from the rebate (atlas.rebates.data - rows from the invoice)
+		cd := strings.Split(sr.Cust, ",")	// Custom data (columns) from the rebate (atlas.rebates.cust - custom data added by the policy)
+		sb := bytes.Buffer{}
+		for i, hdr := range Hdrs {			// Whatever was requested in metadata: stat,rxn,spid,city,state,zip,errc,errm,340bid
+			val := ""
+			if _map := hmap[hdr];_map != nil {	// Which of the three secondary maps holds this header? (smap, imap, or cmap)
+				if i, ok := _map[hdr]; ok {		// Whichever... this is the secondary map. (i) is the lookup index into the list of data items
+					switch hsrc[hdr] {			// Is this header in "smap", "imap", or "cmap"?
+						case "smap":			// smap not a data string - a standard attribute (stat, excl, etc)
+							switch hdr {		// A little redundant, but simple. Go look at the header again, and get the data from the field.
+							case "stat":
+								val = sr.Stat
+							case "errc":
+								val = sr.Errc
+							case "errm":
+								val = sr.Errm
+							default:
+								// header not found
+							}
+						case "cmap":				// in the scrub_rebates.cust string ("a,b,c")	- added by policy
+							val = cd[i]
+						case "imap":				// in the rebates.cust string ("a,b,c")			- in the uploaded invoice
+							val = rd[i]
+						default:
+						}
+				}
 			}
+			sb.WriteString(val)
+			if i < len(Hdrs)-1 {
+				sb.WriteString(",")
+			}
+		}
+		if err := strm.Send(&ScrubRow{Row: sb.String()}); err != nil {
+			return err
 		}
 	}
 	return nil

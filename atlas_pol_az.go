@@ -17,7 +17,7 @@ func new_pol_astrazeneca_default() *pol_astrazeneca_default {
 	return pol
 }
 func (p *pol_astrazeneca_default) options() *policy_opts {
-	return &policy_opts{stacks: false, chains: false, load_rebates: true}
+	return &policy_opts{stacks: false, chains: false, load_rebates: false}
 }
 func (p *pol_astrazeneca_default) rebate_order() []string {
 	return nil
@@ -40,6 +40,7 @@ func (p *pol_astrazeneca_default) prep_claims(sc *scrub) {
 	}
 }
 func (p *pol_astrazeneca_default) scrub_rebate(sc *scrub, rbt *rebate) {
+	rbt.stat = Stats.nomatch
 	sclms := sc.clms.FindRXN(rbt.rbt.Rxn, rbt.rbt.Hrxn)
 	for _, sclm := range sclms {
 		if res := CheckDayRange(rbt.rbt.Dos, sclm.gclm.clm.Doc, 30, -1); res != "" {
@@ -52,18 +53,18 @@ func (p *pol_astrazeneca_default) scrub_rebate(sc *scrub, rbt *rebate) {
 		}
 		if sclm.gclm.clm.Ihph != "" {
 			rbt.match(sclm)
-			return
+			break
 		}
-		if res := CheckBefore(rbt.rbt.Dos, p.dt801); res == "" {
-			if res := CheckBefore(sclm.gclm.clm.Doc, p.dt916); res == "" {
+		if res := CheckBefore(rbt.rbt.Dos, p.dt801, true); res == "" {
+			if res := CheckBefore(sclm.gclm.clm.Doc, p.dt916, true); res == "" {
 				rbt.match(sclm)
-				return
+				break
 			} else {
 				rbt.attempt(sclm, res)
 				continue
 			}
 		} else {
-			if res := CheckBefore(sclm.gclm.clm.Doc, p.dt801); res != "" {
+			if res := CheckBefore(sclm.gclm.clm.Doc, p.dt801, true); res != "" {
 				rbt.attempt(sclm, res)
 				continue
 			} else {
@@ -72,9 +73,12 @@ func (p *pol_astrazeneca_default) scrub_rebate(sc *scrub, rbt *rebate) {
 					continue
 				} else {
 					rbt.match(sclm)
-					return
+					break
 				}
 			}
 		}
+	}
+	if len(rbt.clms) > 0 {
+		rbt.stat = Stats.matched
 	}
 }

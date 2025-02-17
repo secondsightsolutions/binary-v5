@@ -1,6 +1,9 @@
 package main
 
-import "fmt"
+import (
+	"bytes"
+	"fmt"
+)
 
 type rebate struct {
 	rbt  *Rebate
@@ -8,6 +11,7 @@ type rebate struct {
 	spmt string		// service provider match type (exact, xwalk, stack, chain)
 	errc string
 	errm string
+	cust map[string]string
 	clms []*sclaim
 	atts []*attempt
 }
@@ -17,7 +21,7 @@ type attempt struct {
 }
 
 func new_rebate(rbt *Rebate) *rebate {
-	return &rebate{rbt: rbt, clms: []*sclaim{}, atts: []*attempt{}}
+	return &rebate{rbt: rbt, cust: map[string]string{}, clms: []*sclaim{}, atts: []*attempt{}}
 }
 
 func (r *rebate) attempt(sclm *sclaim, excl string) {
@@ -27,6 +31,15 @@ func (r *rebate) match(sclm *sclaim) {
 	r.clms = append(r.clms, sclm)
 }
 func (r *rebate) new_scrub_rebate(sc *scrub) *ScrubRebate {
+	var sb bytes.Buffer
+	i := 0
+	for _, val := range r.cust {
+		sb.WriteString(val)
+		i++
+		if i < len(r.cust)-1 {
+			sb.WriteString(",")
+		}
+	}
 	return &ScrubRebate{
 		Manu: sc.scrb.Manu,
 		Scid: sc.scid,
@@ -36,6 +49,8 @@ func (r *rebate) new_scrub_rebate(sc *scrub) *ScrubRebate {
 		Spmt: r.spmt,
 		Errc: r.errc,
 		Errm: r.errm,
+		Cust: sb.String(),
+		Data: r.rbt.Data,
 	}
 }
 func (r *rebate) new_scrub_matches(sc *scrub) []*ScrubMatch {

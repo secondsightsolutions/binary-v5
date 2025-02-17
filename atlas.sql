@@ -1,5 +1,4 @@
 
-DROP TABLE IF EXISTS atlas.scrub_rebates_claims;
 DROP TABLE IF EXISTS atlas.scrub_matches;
 DROP TABLE IF EXISTS atlas.scrub_attempts;
 DROP TABLE IF EXISTS atlas.scrub_rebates;
@@ -9,7 +8,6 @@ DROP TABLE IF EXISTS atlas.scrubs;
 DROP TABLE IF EXISTS atlas.rebates;
 DROP TABLE IF EXISTS atlas.claims;
 DROP TABLE IF EXISTS atlas.invoice_cols;
-DROP TABLE IF EXISTS atlas.invoice_rows;
 DROP TABLE IF EXISTS atlas.invoices;
 DROP TABLE IF EXISTS atlas.auth;
 DROP TABLE IF EXISTS atlas.sync;
@@ -79,15 +77,15 @@ CREATE TABLE atlas.invoice_cols (
 CREATE INDEX ON atlas.invoice_cols(manu, ivid);
 CREATE UNIQUE INDEX ON atlas.invoice_cols(manu, ivid, name);
 
-CREATE TABLE atlas.invoice_rows (
-    manu text not null,
-    ivid bigint not null,
-    rbid int8 not null,
-    data text not null,
-    CONSTRAINT invoice_rows_pk PRIMARY KEY (manu, ivid, rbid),
-    FOREIGN KEY (manu, ivid) REFERENCES atlas.invoices(manu, ivid)
-);
-CREATE INDEX ON atlas.invoice_rows(manu, ivid);
+--CREATE TABLE atlas.invoice_rows (
+ --   manu text not null,
+ --   ivid bigint not null,
+ --   rbid int8 not null,
+ --   data text not null,
+ --   CONSTRAINT invoice_rows_pk PRIMARY KEY (manu, ivid, rbid),
+ --   FOREIGN KEY (manu, ivid) REFERENCES atlas.invoices(manu, ivid)
+--);
+--CREATE INDEX ON atlas.invoice_rows(manu, ivid);
 
 CREATE TABLE atlas.rebates (
     manu text not null,
@@ -100,6 +98,7 @@ CREATE TABLE atlas.rebates (
     prid text not null default '',
     dos  timestamp with time zone,
     hdos text not null default '',
+    data text not null default '',
     CONSTRAINT rebates_pk PRIMARY KEY (manu, ivid, rbid),
     FOREIGN KEY (manu, ivid) REFERENCES atlas.invoices(manu, ivid)
 );
@@ -112,7 +111,8 @@ CREATE TABLE atlas.scrubs (
     ivid bigint not null,
     cmid bigint not null,
     plcy text not null,
-    hdrs text not null,
+    prof text not null default '',
+    cust text not null default '',
     crat timestamp with time zone not null default now(), -- created
     rdat timestamp with time zone, -- ready
     srat timestamp with time zone, -- started
@@ -127,9 +127,11 @@ CREATE INDEX ON atlas.scrubs(seq);
 CREATE TABLE atlas.metrics (
     manu                text not null,
     scid                bigint not null,
+    ivid                bigint not null,
     rbt_total           integer not null default 0,
     rbt_matched         integer not null default 0,
     rbt_nomatch         integer not null default 0,
+    rbt_valid           integer not null default 0,
     rbt_invalid         integer not null default 0,
     rbt_passed          integer not null default 0,
     rbt_failed          integer not null default 0,
@@ -167,6 +169,15 @@ CREATE TABLE atlas.metrics (
     r_inv_desg_type     integer not null default 0,
     r_wrong_network     integer not null default 0,
     r_not_elig_at_sub   integer not null default 0,
+    load_rebates        integer not null default 0,
+    prep_claims         integer not null default 0,
+    pull_rebates        integer not null default 0,
+    work_rebates        integer not null default 0,
+    save_rebates        integer not null default 0,
+    save_scrub_rebates  integer not null default 0,
+    save_scrub_matches  integer not null default 0,
+    save_scrub_attempts integer not null default 0,
+    save_scrub_claims   integer not null default 0,
     seq                 bigserial,
     CONSTRAINT metrics_pk PRIMARY KEY (manu, scid),
     FOREIGN KEY (manu, scid) REFERENCES atlas.scrubs(manu, scid)
@@ -189,6 +200,7 @@ CREATE TABLE atlas.claims (
     netw text not null default '',
     prnm text not null default '',
     chnm text not null default '',
+    dupl bool not null default false,
     elig bool not null default true,
     susp bool not null default false,
     cnfm bool not null default true,
@@ -207,13 +219,17 @@ CREATE TABLE atlas.scrub_rebates (
     rbid bigint not null,
     stat text not null default '',
     spmt text not null default '',
+    fprt text not null default '',
+    excl text not null default '',
     errc text not null default '',
     errm text not null default '',
+    cust text not null default '',
     seq  bigserial,
     CONSTRAINT scrub_rebates_pk PRIMARY KEY (manu, scid, rbid),
     FOREIGN KEY (manu, ivid, rbid) REFERENCES atlas.rebates (manu, ivid, rbid),
     FOREIGN KEY (manu, scid)       REFERENCES atlas.scrubs  (manu, scid)
 );
+CREATE INDEX ON atlas.scrub_rebates(manu, ivid, scid);
 
 CREATE TABLE atlas.scrub_claims (
     manu text   not null,

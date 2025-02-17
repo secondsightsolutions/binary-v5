@@ -20,7 +20,7 @@ var MemUse = struct {
     ready bool
 }{sync.Mutex{}, 0, 0, 0, false, false}
 
-func run_memr_watch(done *sync.WaitGroup, stop chan any) {
+func run_memr_watch(done *sync.WaitGroup) {
     rgxMem := regexp.MustCompile(`(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+).*`)
     durSec := 0
     done.Add(1)

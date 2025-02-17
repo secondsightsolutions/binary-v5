@@ -20,7 +20,7 @@ type Titan struct {
 
 var titan *Titan
 
-func run_titan(done *sync.WaitGroup, opts *Opts, stop chan any) {
+func run_titan(done *sync.WaitGroup, opts *Opts) {
 	titan = &Titan{titan: &titanServer{}, pools: map[string]*pgxpool.Pool{}, opts: opts}
 
 	titan.X509cert, titan.TLSCert = crypt_init("titan", "run_titan", 33, titan_cert, cacr, "", titan_pkey)
@@ -29,12 +29,12 @@ func run_titan(done *sync.WaitGroup, opts *Opts, stop chan any) {
 	titan.pools["titan"] = db_pool("titan", titan_host, titan_port, titan_name, titan_user, titan_pass, true)
 	titan.pools["esp"]   = db_pool("titan", espdb_host, espdb_port, espdb_name, espdb_user, espdb_pass, true)
 
-	run_datab_ping( done, stop, "titan", 60, titan.pools)
-	run_titan_sync( done, stop, "titan", 60, titan)
-	run_grpc_server(done, stop, "titan", titan_grpc_port, titan.TLSCert, RegisterTitanServer, titan.titan, titanUnaryInterceptor, titanStreamInterceptor)
+	run_datab_ping( done, "titan", 60, titan.pools)
+	run_titan_sync( done, "titan", 60, titan)
+	run_grpc_server(done, "titan", titan_grpc_port, titan.TLSCert, RegisterTitanServer, titan.titan, titanUnaryInterceptor, titanStreamInterceptor)
 }
 
-func run_titan_sync(done *sync.WaitGroup, stop chan any, appl string, intv int, titan *Titan) {
+func run_titan_sync(done *sync.WaitGroup, appl string, intv int, titan *Titan) {
 	durn := time.Duration(0)
 	done.Add(1)
 	go func() {
@@ -42,8 +42,9 @@ func run_titan_sync(done *sync.WaitGroup, stop chan any, appl string, intv int, 
 		for {
 			select {
 			case <-time.After(durn):
+				Log(appl, "run_titan_sync", "", "syncing", 0, nil, nil)
 				titan.sync(stop)
-				durn = time.Duration(intv) * time.Minute
+				durn = time.Duration(intv) * time.Second
 			case <-stop:
 				Log(appl, "run_titan_sync", "", "received stop signal, returning", 0, nil, nil)
 				return
@@ -60,6 +61,8 @@ func (titan *Titan) sync(stop chan any) {
 	titan.syncPharmacies(stop)
 	titan.syncESP1(stop)
 	titan.syncEligibility(stop)
+	titan.syncDesignations(stop)
+	titan.syncLDNs(stop)
 }
 
 func titan_db_sync[T any](fmPn, fmTn, whr string, fmM *dbmap, toPn, toTn string, multitx bool, stop chan any) {
@@ -74,7 +77,7 @@ func titan_db_sync[T any](fmPn, fmTn, whr string, fmM *dbmap, toPn, toTn string,
 	toM.table(toP, toTn)
 	
 	if chn, err := db_select[T](fmP, "titan", fmT, fmM, whr, "", stop); err == nil {
-		cnt, seq, err := db_insert(toP, "titan", toT, toM, chn, 5000, "", false, multitx)
+		cnt, seq, err := db_insert(toP, "titan", toT, toM, chn, 5000, "", false, multitx, nil, stop)
 		Log("titan", "titan_db_sync", toTn, "sync completed", time.Since(strt), map[string]any{"cnt": cnt, "seq": seq}, err)
 	} else {
 		Log("titan", "titan_db_sync", toTn, "sync completed", time.Since(strt), nil, err)
@@ -83,10 +86,11 @@ func titan_db_sync[T any](fmPn, fmTn, whr string, fmM *dbmap, toPn, toTn string,
 
 func (titan *Titan) syncClaims(stop chan any) {
 	seq, _ := db_max(titan.pools["titan"], "titan.claims", "seq")
-	whr := fmt.Sprintf("manufacturer = 'astrazeneca' AND COALESCE(TRUNC(EXTRACT(EPOCH FROM created_at)*1000000, 0), 0) > %d", seq)
+	whr := fmt.Sprintf("manufacturer = 'astrazeneca' AND staging = false AND COALESCE(TRUNC(EXTRACT(EPOCH FROM created_at)*1000000, 0), 0) > %d", seq)
 	fmM := new_dbmap[Claim]()
 	fmM.column("chnm", "chain_name", 				"COALESCE(chain_name, '')")
 	fmM.column("cnfm", "claim_conforms_flag", 		"COALESCE(claim_conforms_flag, true)")
+	fmM.column("dupl", "duplicate",					"COALESCE(duplicate, false)")
 	fmM.column("seq",  "created_at",  				"COALESCE(TRUNC(EXTRACT(EPOCH FROM created_at)   *1000000, 0), 0)")
 	fmM.column("doc",  "created_at",  				"created_at")
 	fmM.column("dop",  "formatted_dop",  			"formatted_dop")
@@ -191,4 +195,36 @@ func (titan *Titan) syncEligibility(stop chan any) {
 	fmM.column("term", "end_at", 					"end_at")
 	fmM.column("seq", "id",                         "COALESCE(id, 0)")
 	titan_db_sync[Eligibility]("citus", "public.eligibility_ledger", whr, fmM, "titan", "titan.eligibility", true, stop)
+}
+
+func (titan *Titan) syncDesignations(stop chan any) {
+	seq, _ := db_max(titan.pools["titan"], "titan.desigs", "seq")
+	whr := fmt.Sprintf("id > %d", seq)
+	fmM := new_dbmap[Designation]()
+	fmM.column("manu", "manufacturer_name", 		"COALESCE(manufacturer_name, '')")
+	fmM.column("i340", "id_340b",  					"COALESCE(id_340b, '')")
+	fmM.column("flag", "flag", 						"COALESCE(flag, '')")
+	fmM.column("phid", "pharmacy_id", 				"COALESCE(pharmacy_id, 0)")
+	fmM.column("assg", "assigned",					"COALESCE(assigned, true)")
+	fmM.column("term", "terminated",				"COALESCE(terminated, false)")
+	fmM.column("xdat", "expired_at",				"")
+	fmM.column("dlat", "deleted_at",				"")
+	fmM.column("xsat", "expires_at",				"")
+	fmM.column("crat", "created_at",				"")
+	fmM.column("cpat", "completed_at",				"")
+	fmM.column("hin",  "health_industry_number",	"COALESCE(health_industry_number, '')")
+	fmM.column("seq", "id",                         "COALESCE(id, 0)")
+	titan_db_sync[Designation]("esp", "public.designations", whr, fmM, "titan", "titan.desigs", true, stop)
+}
+
+func (titan *Titan) syncLDNs(stop chan any) {
+	seq, _ := db_max(titan.pools["titan"], "titan.ldns", "seq")
+	whr := fmt.Sprintf("id > %d", seq)
+	fmM := new_dbmap[LDN]()
+	fmM.column("manu", "manufacturer_name", 		"COALESCE(manufacturer_name, '')")
+	fmM.column("i340", "id_340b",  					"COALESCE(id_340b, '')")
+	fmM.column("netw", "network", 					"COALESCE(network, '')")
+	fmM.column("crat", "created_at",				"to_date(created_at, 'YYYY-MM-DD')")
+	fmM.column("seq", "id",                         "COALESCE(id, 0)")
+	titan_db_sync[LDN]("esp", "public.ldns", whr, fmM, "titan", "titan.ldns", true, stop)
 }

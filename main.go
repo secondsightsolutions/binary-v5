@@ -25,10 +25,10 @@ func main() {
 	opts = options()
 
 	if opts.runTitan {
-		run_titan(&done, opts, stop)
+		run_titan(&done, opts)
 	}
 	if opts.runAtlas {
-		run_atlas(&done, opts, stop)
+		run_atlas(&done, opts)
 	}
 	if opts.runShell {
 		run_shell(opts)

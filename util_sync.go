@@ -39,7 +39,7 @@ func sync_fm_server[T any](pool *pgxpool.Pool, appl, tbln string, replace, multi
 	dbm.table(pool, tbln)
 	if seqn, err := db_max(pool, tbln, "seq"); err == nil {
 		chn := strm_recv_srvr(appl, name, seqn, xcrt, f, stop)
-		cnt, seq, err := db_insert(pool, appl, tbln, dbm, chn, 5000, "", replace, multitx)
+		cnt, seq, err := db_insert(pool, appl, tbln, dbm, chn, 5000, "", replace, multitx, nil, stop)
 		Log(appl, "sync_fm_server", tbln, "sync completed", time.Since(strt), map[string]any{"manu": manu, "cnt": cnt, "seq": seq}, err)
 	} else {
 		Log(appl, "sync_fm_server", tbln, "reading seqn failed", time.Since(strt), map[string]any{"manu": manu}, err)
@@ -66,20 +66,18 @@ func sync_to_server[T, R any](pool *pgxpool.Pool, appl, tbln, coln string, xcrt 
 }
 func sync_fm_client[T, R any](pool *pgxpool.Pool, appl, tbln string, multitx bool, strm grpc.ClientStreamingServer[T, R]) (int64, int64, error) {
 	strt := time.Now()
-	stop := make(chan any, 1)
 	name := metaGet(strm.Context(), "name")
 	xou  := metaGet(strm.Context(), "xou")
 	manu := metaGet(strm.Context(), "manu")
 	dbm  := new_dbmap[T]()
 	dbm.table(pool, tbln)
 	chn := strm_recv_clnt(appl, tbln, strm, stop)
-	cnt, seq, err := db_insert(pool, appl, tbln, dbm, chn, 5000, "", false, multitx)
+	cnt, seq, err := db_insert(pool, appl, tbln, dbm, chn, 5000, "", false, multitx, nil, stop)
 	Log(appl, "sync_fm_client", tbln, "sync completed", time.Since(strt), map[string]any{"name": name, "xou": xou, "manu": manu, "cnt": cnt, "seq": seq}, err)
 	return cnt, seq, err
 }
 func sync_to_client[T any](pool *pgxpool.Pool, appl, manu, tbln, whr string, dbm *dbmap, strm grpc.ServerStreamingServer[T]) (int64, int64, error) {
 	strt := time.Now()
-	stop := make(chan any, 1)
 	name := metaGet(strm.Context(), "name")
 	xou  := metaGet(strm.Context(), "xou")
 	if chn, err := db_select[T](pool, appl, tbln, dbm, whr, "", stop); err == nil {

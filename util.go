@@ -363,22 +363,22 @@ func findAny(srch string, list []string) string {
 	return ""
 }
 
-func split(str, sep string, dflt string) []string {
-	if str == "" {
-		if dflt == "" {
-			return []string{}
-		}
-		str = dflt
-	}
-	toks := strings.Split(str, sep)
-	list := make([]string, 0, len(toks))
-	for _, tok := range toks {
-		tok  = strings.Trim(tok, " ")
-		tok  = strings.Trim(tok, "\t")
-		list = append(list, tok)
-	}
-	return list
-}
+// func split(str, sep string, dflt string) []string {
+// 	if str == "" {
+// 		if dflt == "" {
+// 			return []string{}
+// 		}
+// 		str = dflt
+// 	}
+// 	toks := strings.Split(str, sep)
+// 	list := make([]string, 0, len(toks))
+// 	for _, tok := range toks {
+// 		tok  = strings.Trim(tok, " ")
+// 		tok  = strings.Trim(tok, "\t")
+// 		list = append(list, tok)
+// 	}
+// 	return list
+// }
 
 func Log(app, fcn, tgt, msg string, dur time.Duration, vals map[string]any, err error, args ...any) {
 	mesg := fmt.Sprintf(msg, args...)

@@ -102,6 +102,7 @@ func db_select_cust[T any](pool *pgxpool.Pool, appl string, dbm *dbmap, qry stri
 							if err := rows.Err(); err != nil {
 								Log(appl, "db_select_cust", "", "getting next row failed", 0, nil, err)
 								fmt.Println(qry)
+								dbm.Print()
 							}
 							close(chn)
 							return
@@ -160,6 +161,7 @@ func db_select[T any](pool *pgxpool.Pool, appl, tbln string, dbm *dbmap, where, 
 							} else {
 								Log(appl, "db_select", tbln, "getting row values failed", 0, nil, err)
 								fmt.Println(qry)
+								dbm.Print()
 								tx.Rollback(ctx)
 								close(chn)
 								return
@@ -168,6 +170,8 @@ func db_select[T any](pool *pgxpool.Pool, appl, tbln string, dbm *dbmap, where, 
 							if err := rows.Err(); err != nil {
 								Log(appl, "db_select", tbln, "getting next row failed", 0, nil, err)
 								fmt.Println(qry)
+								dbm.Print()
+								tx.Rollback(ctx)
 							}
 							close(chn)
 							return
@@ -186,10 +190,10 @@ func db_select[T any](pool *pgxpool.Pool, appl, tbln string, dbm *dbmap, where, 
 	}
 }
 
-func db_insert_run[T any](wg *sync.WaitGroup, pool *pgxpool.Pool, appl, tbln string, dbm *dbmap, fm <-chan *T, batch int, idcol string, replace, multitx bool, cnt, seq *int64, err *error) {
+func db_insert_run[T any](wg *sync.WaitGroup, pool *pgxpool.Pool, appl, tbln string, dbm *dbmap, fm <-chan *T, batch int, idcol string, replace, multitx bool, cnt, seq *int64, err *error, elapsed *time.Duration, stop chan any) {
 	go func() {
 		defer wg.Done()
-		_cnt, _seq, _err := db_insert[T](pool, appl, tbln, dbm, fm, batch, idcol, replace, multitx)
+		_cnt, _seq, _err := db_insert[T](pool, appl, tbln, dbm, fm, batch, idcol, replace, multitx, elapsed, stop)
 		if cnt != nil {
 			*cnt = _cnt
 		}
@@ -202,8 +206,7 @@ func db_insert_run[T any](wg *sync.WaitGroup, pool *pgxpool.Pool, appl, tbln str
 	}()
 }
 
-func db_insert[T any](pool *pgxpool.Pool, appl, tbln string, dbm *dbmap, fm <-chan *T, batch int, idcol string, replace, multitx bool) (int64, int64, error) {
-	strt := time.Now()
+func db_insert[T any](pool *pgxpool.Pool, appl, tbln string, dbm *dbmap, fm <-chan *T, batch int, idcol string, replace, multitx bool, elapsed *time.Duration, stop chan any) (int64, int64, error) {
 	if dbm == nil {
 		dbm = new_dbmap[T]()
 		dbm.table(pool, tbln)
@@ -253,6 +256,7 @@ func db_insert[T any](pool *pgxpool.Pool, appl, tbln string, dbm *dbmap, fm <-ch
 		if len(lst) == 0 {
 			return nil
 		}
+		strt := time.Now()
 		if err := db_insert_batch(context.Background(), tx, pool, tbln, dbm, lst, true); err != nil {
 			Log(appl, "db_insert", tbln, "insert batch rows failed", time.Since(strt), map[string]any{"cnt": cnt, "seq": max}, err)
 			if tx != nil {
@@ -262,6 +266,9 @@ func db_insert[T any](pool *pgxpool.Pool, appl, tbln string, dbm *dbmap, fm <-ch
 		} else {
 			Log(appl, "db_insert", tbln, "inserted %d (%d)", time.Since(strt), map[string]any{"cnt": cnt, "seq": max}, err, len(lst), cnt)
 		}
+		if elapsed != nil {
+			*elapsed += time.Since(strt)
+		}
 		return nil
 	}
 	defer commit()
@@ -269,6 +276,8 @@ func db_insert[T any](pool *pgxpool.Pool, appl, tbln string, dbm *dbmap, fm <-ch
 	for {
 		select {
 		case <-stop:
+			return cnt, max, nil
+
 		case obj,ok := <-fm:
 			if !ok {
 				goto done

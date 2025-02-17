@@ -34,11 +34,11 @@ func new_gcache() *gcache {
 	return &gcache{all: []*gclaim{}, rxn: map[string][]*gclaim{}, seq: -1}
 }
 
-func load_gclms(done *sync.WaitGroup, gc *gcache) {
+func load_gclms(done *sync.WaitGroup, gc *gcache, dur *time.Duration) {
 	defer done.Done()
 	strt := time.Now()
 	cnt  := 0
-	whr  := fmt.Sprintf("seq > %d", gc.seq)
+	whr  := fmt.Sprintf("manu = '%s' AND seq > %d", manu, gc.seq)
 	if chn, err := db_select[Claim](atlas.pools["atlas"], "atlas", "atlas.claims", nil, whr, "", stop); err == nil {
 		for clm := range chn {
 			atlas.claims.add(clm)
@@ -46,6 +46,9 @@ func load_gclms(done *sync.WaitGroup, gc *gcache) {
 		}
 	}
 	atlas.claims.sort()
+	if dur != nil {
+		*dur = time.Since(strt)
+	}
 	Log("atlas", "load_gclms", name, "claims loaded/added", time.Since(strt), map[string]any{"cnt": cnt, "manu": manu}, nil)
 }
 

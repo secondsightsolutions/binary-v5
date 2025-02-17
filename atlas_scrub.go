@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 type scrub struct {
@@ -19,10 +20,10 @@ type scrub struct {
 	plcy IPolicy
 	metr *Metrics
 	lckM sync.Mutex
-	done chan any		// Tells the caller that the scrub is finished.
+	done bool
 }
 
-func new_scrub(s *Scrub, stop chan any) *scrub {
+func new_scrub(s *Scrub) *scrub {
 	scrb := &scrub{
 		scrb: s,
 		cs:   atlas.ca.clone(),
@@ -34,26 +35,25 @@ func new_scrub(s *Scrub, stop chan any) *scrub {
 		plcy: GetPolicy(s.Manu, s.Plcy),
 		metr: &Metrics{},
 		lckM: sync.Mutex{},
-		done: make(chan any, 1),
 	}
 	if scrb.scrb.Test != "" {
-		// testCache[Rebate](		scrb, &scrb.cs.rbts, "atlas.test_rebates",      stop)
-		// testCache[Claim](		scrb, &scrb.cs.clms, "atlas.test_claims", 		stop)
-		testCache[Entity](		scrb, &scrb.cs.ents, "atlas.test_entities", 	stop)
-		testCache[Pharmacy](	scrb, &scrb.cs.phms, "atlas.test_pharmacies",	stop)
-		testCache[NDC](			scrb, &scrb.cs.ndcs, "atlas.test_ndcs", 		stop)
-		testCache[SPI](			scrb, &scrb.cs.spis, "atlas.test_spis", 		stop)
-		testCache[Designation](	scrb, &scrb.cs.desg, "atlas.test_desigs", 		stop)
-		testCache[LDN](			scrb, &scrb.cs.ldns, "atlas.test_ldns", 		stop)
-		testCache[ESP1PharmNDC](scrb, &scrb.cs.esp1, "atlas.test_esp1", 		stop)
-		testCache[Eligibility](	scrb, &scrb.cs.ledg, "atlas.test_eligibilities",stop)
+		// testCache[Rebate](		scrb, &scrb.cs.rbts, "atlas.test_rebates")
+		// testCache[Claim](		scrb, &scrb.cs.clms, "atlas.test_claims")
+		testCache[Entity](		scrb, &scrb.cs.ents, "atlas.test_entities")
+		testCache[Pharmacy](	scrb, &scrb.cs.phms, "atlas.test_pharmacies")
+		testCache[NDC](			scrb, &scrb.cs.ndcs, "atlas.test_ndcs")
+		testCache[SPI](			scrb, &scrb.cs.spis, "atlas.test_spis")
+		testCache[Designation](	scrb, &scrb.cs.desg, "atlas.test_desigs")
+		testCache[LDN](			scrb, &scrb.cs.ldns, "atlas.test_ldns")
+		testCache[ESP1PharmNDC](scrb, &scrb.cs.esp1, "atlas.test_esp1")
+		testCache[Eligibility](	scrb, &scrb.cs.ledg, "atlas.test_eligibilities")
 		scrb.spis = new_spis()
-		scrb.spis.load(scrb.cs.spis)
+		scrb.spis.load(scrb.cs.spis, nil)
 	}
 	return scrb
 }
 
-func testCache[T any](scrb *scrub, ca **cache, tbln string, stop chan any) {
+func testCache[T any](scrb *scrub, ca **cache, tbln string) {
 	whr := fmt.Sprintf(" test = '%s' ", scrb.scrb.Test)
 	c   := new_cache[T]()
 	*ca = c
@@ -67,6 +67,29 @@ func testCache[T any](scrb *scrub, ca **cache, tbln string, stop chan any) {
 }
 
 func (sc *scrub) run() {
+	wrks := 10
+	wqsz := 20
+	wgrp := sync.WaitGroup{}
+	wgrp.Add(2)
+	go sc.load_rebates(&wgrp)			// If this policy wants rebates loaded (most do), then load/prep them here.
+	go sc.prep_claims(&wgrp)  			// Filters/prepares claims based on policy.
+	wgrp.Wait()							// Wait until all rebates pulled/prepped and claims are prepped (based on policy).
+
+	chn1 := make(chan *rebate, 1000)	// Rebate puller will feed us all the rebates by sending to this channel. (see next)
+	chn2 := make(chan *rebate, 1000)
+
+	wgrp.Add(2)
+	go sc.pull_rebates(&wgrp, chn1)			// This thread will close the rbts channel once all rebates have been written to it.
+	go sc.work_rebates(&wgrp, chn1, chn2, wrks, wqsz)
+	
+	for rbt := range chn2 {
+		sc.update_metrics(rbt)
+	}
+	sc.done = true
+}
+
+func (sc *scrub) work_rebates(wgrp *sync.WaitGroup, in, out chan *rebate, wrks, qsiz int) {
+	defer wgrp.Done()
 	hashIndex := func(indx int64, modulo int) int {
 		return int(indx % int64(modulo))
 	}
@@ -117,84 +140,64 @@ func (sc *scrub) run() {
 			}
 		}
 	}
-	closeAndWait := func(wgrp *sync.WaitGroup, chns []chan *rebate, done chan *rebate) {
-		for _, chn := range chns {
-			close(chn)
-		}
-		wgrp.Wait()
-		close(done)
-	}
-
-	wrks := 1
-	qsiz := 20
-	wgrp := sync.WaitGroup{}
-	wgrp.Add(2)
-	go sc.load_rebates(&wgrp)			// If this policy wants rebates loaded (most do), then load/prep them here.
-	go sc.prep_claims(&wgrp)  			// Filters/prepares claims based on policy.
-	wgrp.Wait()							// Wait until all rebates pulled/prepped and claims are prepped (based on policy).
-
-	rbts := make(chan *rebate, 5000)	// Rebate puller will feed us all the rebates by sending to this channel. (see next)
-	go sc.pull_rebates(rbts)			// This thread will close the rbts channel once all rebates have been written to it.
-
-	scrb_rbts := make(chan *ScrubRebate,    500)
-	scrb_mtcs := make(chan *ScrubMatch,		500)
-	scrb_atts := make(chan *ScrubAttempt, 	500)
-	scrb_clms := make(chan *ScrubClaim,     500)
-
-	dgrp := sync.WaitGroup{}
-	dgrp.Add(4)
-	db_insert_run(&dgrp, atlas.pools["atlas"], "atlas", "atlas.scrub_rebates",	nil, scrb_rbts, 500000, "", false, true, nil, nil, nil)
-	db_insert_run(&dgrp, atlas.pools["atlas"], "atlas", "atlas.scrub_matches", 	nil, scrb_mtcs, 500000, "", false, true, nil, nil, nil)
-	db_insert_run(&dgrp, atlas.pools["atlas"], "atlas", "atlas.scrub_attempts",	nil, scrb_atts, 500000, "", false, true, nil, nil, nil)
-	db_insert_run(&dgrp, atlas.pools["atlas"], "atlas", "atlas.scrub_claims",	nil, scrb_clms, 500000, "", false, true, nil, nil, nil)
-
-	done := make(chan *rebate, qsiz*wrks)
 	chns := make([]chan *rebate, wrks)
+	cgrp := &sync.WaitGroup{}
 	for a := 0; a < len(chns); a++ {
-		wgrp.Add(1)
+		cgrp.Add(1)
 		chns[a] = make(chan *rebate, qsiz)
-		go worker(&wgrp, chns[a], done)	// The worker must always call cgrp.Done() !!!!
+		go worker(cgrp, chns[a], out)	// The worker must always call cgrp.Done() !!!!
 	}
 	for {
 		select {
 		case <-stop:
-			// closeAndWait(&wgrp, chns, done)	// Closes workers, waits for them to finish, then closes done.
-			// goto done
-
-		case rbt, ok := <-rbts:				// Reads from main queue and distributes to workers.
+		case rbt, ok := <-in:
 			if !ok {
-				closeAndWait(&wgrp, chns, done)
-				rbts = nil
-				continue
+				for _, chn := range chns {	// Tell the workers that we're done. 
+					close(chn)				// Workers will return once they drain their channels.
+				}
+				goto done					// Leave here to go below and wait for all workers to finish.
 			}
 			slot := getSlot(rbt, "dos", wrks)
 			chns[slot] <- rbt				// Worker gets rebate on short per-worker queue.
-
-		case rbt, ok := <-done:				// All workers return the rebates here once they've finished with them.
-			if !ok {						// If no more rebates returned, and this channel was closed, we're done.
-				goto done
-			}
-			sc.update_metrics(rbt)
-
-			// Rebates on a scrub are written to:
-			// - scrub_rebates	: one for each rebate - has stat, excl, spmt, errc, errm, ...
-			// - scrub_matches	: one for claim that matched on the rebate (usually just one)
-			// - scrub_attempts	: one for each time we attempt to match a claim to a rebate (excluding match successes).
-
-			sr  := rbt.new_scrub_rebate(sc)
-			sms := rbt.new_scrub_matches(sc)
-			sas := rbt.new_scrub_attempts(sc)
-
-			scrb_rbts <- sr				// Writes ScrubRebate to the database writer.
-			for _, sm := range sms {
-				scrb_mtcs <- sm			// Writes the ScrubMatchs to the database writer.
-			}
-			for _, sa := range sas {
-				scrb_atts <- sa			// Writes the ScrubAttempts to the database writer.
-			}
 		}
 	}
 	done:
+	cgrp.Wait()					// Wait here for workers to return.
+}
+func (sc *scrub) save_rebates(qsiz int) {
+	Log("atlas", "save_rebates", fmt.Sprintf("scid=%d", sc.scid), "starting", 0, nil, nil)
+	strt := time.Now()
+	
+	scrb_rbts := make(chan *ScrubRebate,    qsiz)
+	scrb_mtcs := make(chan *ScrubMatch,		qsiz)
+	scrb_atts := make(chan *ScrubAttempt, 	qsiz)
+	scrb_clms := make(chan *ScrubClaim,     qsiz)
+
+	save_rbts := time.Duration(0)
+	save_mtcs := time.Duration(0)
+	save_atts := time.Duration(0)
+	save_clms := time.Duration(0)
+	
+	dgrp := sync.WaitGroup{}
+	dgrp.Add(4)
+	db_insert_run(&dgrp, atlas.pools["atlas"], "atlas", "atlas.scrub_rebates",	nil, scrb_rbts, qsiz, "", false, true, nil, nil, nil, &save_rbts, stop)
+	db_insert_run(&dgrp, atlas.pools["atlas"], "atlas", "atlas.scrub_matches", 	nil, scrb_mtcs, qsiz, "", false, true, nil, nil, nil, &save_mtcs, stop)
+	db_insert_run(&dgrp, atlas.pools["atlas"], "atlas", "atlas.scrub_attempts",	nil, scrb_atts, qsiz, "", false, true, nil, nil, nil, &save_atts, stop)
+	db_insert_run(&dgrp, atlas.pools["atlas"], "atlas", "atlas.scrub_claims",	nil, scrb_clms, qsiz, "", false, true, nil, nil, nil, &save_clms, stop)
+
+	for _, rbt := range sc.rbts {
+		sr  := rbt.new_scrub_rebate(sc)
+		sms := rbt.new_scrub_matches(sc)
+		sas := rbt.new_scrub_attempts(sc)
+
+		scrb_rbts <- sr				// Writes ScrubRebate to the database writer.
+		for _, sm := range sms {
+			scrb_mtcs <- sm			// Writes the ScrubMatchs to the database writer.
+		}
+		for _, sa := range sas {
+			scrb_atts <- sa			// Writes the ScrubAttempts to the database writer.
+		}
+	}
 	close(scrb_rbts)	// Flushes any buffered db writes.
 	close(scrb_mtcs)	// Flushes any buffered db writes.
 	close(scrb_atts)	// Flushes any buffered db writes.
@@ -204,8 +207,15 @@ func (sc *scrub) run() {
 		scrb_clms <-scrb
 	}
 	close(scrb_clms)	// Flushes any buffered db writes.
+
 	dgrp.Wait()
-	sc.done <- nil		// Tells the caller (grpc server) that the scrub is done.
+
+	sc.metr.SaveScrubRebates  = int64(save_rbts)
+	sc.metr.SaveScrubMatches  = int64(save_mtcs)
+	sc.metr.SaveScrubAttempts = int64(save_atts)
+	sc.metr.SaveScrubClaims   = int64(save_clms)
+
+	Log("atlas", "save_rebates", fmt.Sprintf("scid=%d", sc.scid), "completed", time.Since(strt), map[string]any{"rbts": sc.metr.SaveScrubRebates, "mtcs": sc.metr.SaveScrubMatches, "atts": sc.metr.SaveScrubAttempts, "clms": sc.metr.SaveScrubClaims}, nil)
 }
 
 func (sc *scrub) load_rebates(wgrp *sync.WaitGroup) {
@@ -213,10 +223,9 @@ func (sc *scrub) load_rebates(wgrp *sync.WaitGroup) {
 	if !sc.plcy.options().load_rebates {	// The option to load rebates into memory must be stated. Otherwise we stream.
 		return
 	}
-	stop := make(chan any)
 	pool := atlas.pools["atlas"]
-	whr  := fmt.Sprintf("ivid = %d", sc.ivid)
-	if cnt, err := db_count(context.Background(), pool, fmt.Sprintf("FROM atlas.rebates WHERE ivid = %d", sc.ivid)); err == nil {
+	whr  := fmt.Sprintf("manu = '%s' AND ivid = %d", sc.scrb.Manu, sc.ivid)
+	if cnt, err := db_count(context.Background(), pool, fmt.Sprintf("FROM atlas.rebates WHERE manu = '%s' AND ivid = %d", sc.scrb.Manu, sc.ivid)); err == nil {
 		sc.rbts = make([]*rebate, 0, cnt)
 	}
 	if chn, err := db_select[Rebate](pool, "atlas", "atlas.rebates", nil, whr, "rbid", stop); err == nil {
@@ -232,20 +241,21 @@ func (sc *scrub) prep_claims(wgrp *sync.WaitGroup) {
 	sc.plcy.prep_claims(sc)	// Claims always in memory. Scrub has a claim cache that wraps the global claims cache.
 }
 
-func (sc *scrub) pull_rebates(out chan<- *rebate) {
+func (sc *scrub) pull_rebates(wgrp *sync.WaitGroup, out chan<- *rebate) {
+	defer wgrp.Done()
 	// Only one thread here. Make sure we pull rebates in their proper order (and queue them to next stage in order).
-	defer close(out)
+	defer close(out)		// Starts the completion sequence downstream.
 	if sc.rbts != nil {		// If we've loaded into memory (and prepped them!) then the rebates come from memory.
 		for _, rbt := range sc.rbts {
 			out <- rbt		// Sends rebate to next stage (work_rebates)
 		}
 	} else {				// Rebates not pre-loaded into memory, so stream them in from the database.
-		whr  := fmt.Sprintf("ivid = %d", sc.ivid)
+		whr  := fmt.Sprintf("manu = '%s' AND ivid = %d", sc.scrb.Manu, sc.ivid)
 		sort := strings.Join(sc.plcy.rebate_order(), ",")
 		if sort == "" {
 			sort = "rbid"
 		}
-		if chn, err := db_select[Rebate](atlas.pools["atlas"], "atlas", "atlas.rebates", nil, whr, sort, nil); err == nil {
+		if chn, err := db_select[Rebate](atlas.pools["atlas"], "atlas", "atlas.rebates", nil, whr, sort, stop); err == nil {
 			for rbt := range chn {
 				out <- new_rebate(rbt)	// Sends rebate to next stage (work_rebates)
 			}

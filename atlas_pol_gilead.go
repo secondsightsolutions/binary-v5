@@ -6,6 +6,9 @@ import (
 type pol_gilead_default struct {
 	IPolicy
 }
+func (p *pol_gilead_default) options() *policy_opts {
+	return &policy_opts{stacks: false, chains: false, load_rebates: true}
+}
 func (p *pol_gilead_default) rebate_order() []string {
 	return nil
 }

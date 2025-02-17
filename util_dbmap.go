@@ -81,6 +81,7 @@ func (dbm *dbmap) table(pool *pgxpool.Pool, tbln string) {
 		for rows.Next() {
 			var coln, colt, null string
 			var dflt sql.NullString
+			// fnd := false
 			rows.Scan(&coln, &colt, &null, &dflt)
 			// Find the existing dbfld - it must exist (indicates the field on the object).
 			for _, dbf := range dbm.dbfs {
@@ -91,6 +92,7 @@ func (dbm *dbmap) table(pool *pgxpool.Pool, tbln string) {
 					dbf.typ = colt
 					dbf.upd = true
 					dbf.col = coln		// In case not set, and we matched on dbf.fld
+					// fnd = true
 					// Fill in remaining db info.
 					if dflt.Valid {
 						if dflt.String == "''::text" {
@@ -107,6 +109,9 @@ func (dbm *dbmap) table(pool *pgxpool.Pool, tbln string) {
 					break
 				}
 			}
+			// if !fnd {
+			// 	fmt.Printf("dbm.table(%s): col %s has no matching field\n", tbln, coln)
+			// }
 		}
 		rows.Close()
 		// Now remove dbf entries (object fields) that have no corresponding database column.

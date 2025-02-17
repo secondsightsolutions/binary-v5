@@ -1,7 +1,20 @@
 package main
 
-import (
-)
+import "time"
+
+type metrics struct {
+    load_data       time.Duration
+    load_claims     time.Duration
+    load_esp1       time.Duration
+    load_entities   time.Duration
+    load_ledger     time.Duration
+    load_ndcs       time.Duration
+    load_pharms     time.Duration
+    load_spis       time.Duration
+    load_desg       time.Duration
+    load_ldns       time.Duration
+    init_spis       time.Duration
+}
 
 func (s *scrub) update_metrics(rbt *rebate) {
     s.lckM.Lock()
@@ -21,27 +34,28 @@ func (s *scrub) update_metrics(rbt *rebate) {
     default:
     }
     for _, sclm := range rbt.clms {
-        clm := sclm.gclm.clm
-        doc := clm.Doc
-        dof := clm.Hdos
-        if diff, err := dates.Compare(rbt.rbt.Dos, doc); err == nil {
-            if diff == 0 {
-                s.metr.DosEquDoc++
-            } else if diff < 0 {
-                s.metr.DosBefDoc++
-            } else {
-                s.metr.DosAftDoc++
-            }
+        clm  := sclm.gclm.clm
+        doc  := clm.Doc
+        dof  := atlas.dates.hashToDays[clm.Hdos]
+        dos  := rbt.rbt.Dos
+        diff := doc - dos
+        if diff == 0 {
+            s.metr.DosEquDoc++
+        } else if diff > 0 {
+            s.metr.DosBefDoc++
+        } else {
+            s.metr.DosAftDoc++
         }
-        if diff, err := dates.Compare(rbt.rbt.Dos, dof); err == nil {
-            if diff == 0 {
-                s.metr.DosEquDof++
-            } else if diff < 0 {
-                s.metr.DosBefDof++
-            } else {
-                s.metr.DosAftDof++
-            }
+
+        diff = dof - dos
+        if diff == 0 {
+            s.metr.DosEquDof++
+        } else if diff > 0 {
+            s.metr.DosBefDof++
+        } else {
+            s.metr.DosAftDof++
         }
+        
         opts := s.plcy.options()
         if yes, how := CheckSPI(s, rbt.rbt.Spid, clm.Spid, opts.chains, opts.stacks); yes {
             switch how {

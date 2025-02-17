@@ -1,8 +1,9 @@
 package main
 
 import (
-    "strings"
-    "sync"
+	"strings"
+	"sync"
+	"time"
 )
 
 // type SPI struct {
@@ -59,10 +60,11 @@ func new_spis() *SPIs {
     return spis
 }
 
-func (spis *SPIs) load(c *cache) {
+func (spis *SPIs) load(c *cache, dur *time.Duration) {
     if c == nil {
         return
     }
+    strt := time.Now()
     spis.Lock()
     defer spis.Unlock()
     if len(spis.idMap) == 0 && len(spis.deaMap) == 0 {
@@ -71,6 +73,9 @@ func (spis *SPIs) load(c *cache) {
 			spis.addSPI(spi)
         }
 	}
+    if dur != nil {
+        *dur = time.Since(strt)
+    }
 }
 
 func (spis *SPIs) addToStacks(lists... []string) {

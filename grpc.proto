@@ -49,10 +49,14 @@ message Scrub {
     string cmid = 3;
     string manu = 4;
     string plcy = 5;
-    string hdrs = 6;
-    string test = 7;
-    int64  crat = 8;
-    int64  seq  = 9;
+    string prof = 6;    // Policy profile
+    string cust = 7;    // custom (added) column hdrs in results (like 340b_id, etc). This is a CSV list. (written by policy)
+    string test = 8;
+    int64  crat = 9;
+    int64  rdat = 10;
+    int64  srat = 11;
+    int64  dnat = 12;
+    int64  seq  = 13;
 }
 
 message Claim {
@@ -87,9 +91,13 @@ message ScrubRebate {
     int64  rbid = 4;
     string stat = 5;
     string spmt = 6;   // service provider match type: exact, xwalk, stack, chain
-    string errc = 7;
-    string errm = 8;
-    int64  seq  = 9;
+    string fprt = 7;
+    string excl = 8;    // If a rebate prep phase has excluded this rebate
+    string errc = 9;
+    string errm = 10;
+    string data = 11;   // Original data row from invoice_rows (note this is not stored in scrub_rebates - here for mapping convenience).
+    string cust = 12;   // custom (added) column data in results (like 340b_id value, etc). This is a CSV list.
+    int64  seq  = 13;
 }
 
 message ScrubMatch {
@@ -148,21 +156,19 @@ message Command {
 message Entity {
     int64  seq   = 1;
     string i340  = 2;
-    int64  strt  = 3;
-    int64  term  = 4;
+    string state = 3;
+    int64  strt  = 4;
+    int64  term  = 5;
 }
 message Pharmacy {
     string i340 = 1;
     string phid = 2;
-    string ncp  = 3;
-    string npi  = 4;
-    string dea  = 5;
-    string chnm = 6;
-    string ncps = 8;
-    string npis = 9;
-    string deas = 10;
-    string state = 11;
-    int64  seq   = 12;
+    string chnm = 3;
+    string ncps = 4;
+    string npis = 5;
+    string deas = 6;
+    string state = 7;
+    int64  seq   = 8;
 }
 message NDC {
     string manu = 1;
@@ -185,7 +191,6 @@ message SPI {
 message Designation {
     string manu = 1;
     string i340 = 2;
-    string netw = 3;
     string flag = 4;
     string phid = 5;
     bool   assg = 6;
@@ -195,9 +200,8 @@ message Designation {
     int64  xsat = 10;  // expires_at
     int64  crat = 12;  // created_at
     int64  cpat = 13;
-    bool   excl = 14;
-    string hin  = 15;
-    int64  seq  = 16;
+    string hin  = 14;
+    int64  seq  = 15;
 }
 message LDN {
     string manu = 1;
@@ -253,46 +257,60 @@ message ScrubIdent {
 }
 
 message Metrics {
-    int32   rbt_total           = 1;
-    int32   rbt_valid           = 2;
-    int32   rbt_matched         = 3;
-    int32   rbt_nomatch         = 4;
-    int32   rbt_invalid         = 5;
-    int32   rbt_passed          = 6;
-    int32   rbt_failed          = 7;
-    int32   clm_total           = 8;
-    int32   clm_valid           = 9;
-    int32   clm_matched         = 10;
-    int32   clm_nomatch         = 11;
-    int32   clm_invalid         = 12;
-    int32   spi_exact           = 13;
-    int32   spi_cross           = 14;
-    int32   spi_stack           = 15;
-    int32   spi_chain           = 16;
-    int32   dos_equ_doc         = 17;
-    int32   dos_bef_doc         = 18;
-    int32   dos_aft_doc         = 19;
-    int32   dos_equ_dof         = 20;
-    int32   dos_bef_dof         = 21;
-    int32   dos_aft_dof         = 22;
-    int32   dos_range_pass      = 23;
-    int32   dos_range_fail      = 24;
-    int32   dof_range_pass      = 25;
-    int32   dof_range_fail      = 26;
-    int32   doc_range_pass      = 27;
-    int32   doc_range_fail      = 28;
-    int32   r_no_match_rx       = 31;
-    int32   r_no_match_spi      = 32;
-    int32   r_clm_used          = 33;
-    int32   r_dos_rbt_aft_clm   = 34;
-    int32   r_dos_clm_aft_rbt   = 35;
-    int32   r_old_rbt_new_clm   = 36;
-    int32   r_new_rbt_old_clm   = 37;
-    int32   r_clm_not_cnfm      = 38;
-    int32   r_phm_not_desg      = 39;
-    int32   r_inv_desg_type     = 40;
-    int32   r_wrong_network     = 41;
-    int32   r_not_elig_at_sub   = 42;
+    string  manu                = 1;
+    int64   scid                = 2;
+    int64   ivid                = 3;
+    int32   rbt_total           = 4;
+    int32   rbt_valid           = 5;
+    int32   rbt_matched         = 6;
+    int32   rbt_nomatch         = 7;
+    int32   rbt_invalid         = 8;
+    int32   rbt_passed          = 9;
+    int32   rbt_failed          = 10;
+    int32   clm_total           = 11;
+    int32   clm_valid           = 12;
+    int32   clm_matched         = 13;
+    int32   clm_nomatch         = 14;
+    int32   clm_invalid         = 15;
+    int32   spi_exact           = 16;
+    int32   spi_cross           = 17;
+    int32   spi_stack           = 18;
+    int32   spi_chain           = 19;
+    int32   dos_equ_doc         = 20;
+    int32   dos_bef_doc         = 21;
+    int32   dos_aft_doc         = 22;
+    int32   dos_equ_dof         = 23;
+    int32   dos_bef_dof         = 24;
+    int32   dos_aft_dof         = 25;
+    int32   dos_range_pass      = 26;
+    int32   dos_range_fail      = 27;
+    int32   dof_range_pass      = 28;
+    int32   dof_range_fail      = 29;
+    int32   doc_range_pass      = 30;
+    int32   doc_range_fail      = 31;
+    int32   r_no_match_rx       = 32;
+    int32   r_no_match_spi      = 33;
+    int32   r_no_match_ndc      = 34;
+    int32   r_clm_used          = 35;
+    int32   r_dos_rbt_aft_clm   = 36;
+    int32   r_dos_clm_aft_rbt   = 37;
+    int32   r_old_rbt_new_clm   = 38;
+    int32   r_new_rbt_old_clm   = 39;
+    int32   r_clm_not_cnfm      = 40;
+    int32   r_phm_not_desg      = 41;
+    int32   r_inv_desg_type     = 42;
+    int32   r_wrong_network     = 43;
+    int32   r_not_elig_at_sub   = 44;
+    int64   load_rebates        = 45;
+    int64   prep_claims         = 46;
+    int64   pull_rebates        = 47;
+    int64   work_rebates        = 48;
+    int64   save_rebates        = 49;
+    int64   save_scrub_rebates  = 50;
+    int64   save_scrub_matches  = 51;
+    int64   save_scrub_attempts = 52;
+    int64   save_scrub_claims   = 53;
+    int64   seq                 = 54;
 }
 message TestData {
     repeated Claim        claims     = 1;
@@ -330,6 +348,8 @@ service Titan {
     rpc GetESP1Pharms(SyncReq)              returns (stream ESP1PharmNDC) {}
     rpc GetEligibilityLedger(SyncReq)       returns (stream Eligibility) {}
     rpc GetAuths(SyncReq)                   returns (stream Auth) {}
+    rpc GetDesignations(SyncReq)            returns (stream Designation) {}
+    rpc GetLDNs(SyncReq)                    returns (stream LDN) {}
 
     rpc SyncCommands(stream Command)                    returns (Res) {}
     rpc SyncScrubs(stream Scrub)                        returns (Res) {}

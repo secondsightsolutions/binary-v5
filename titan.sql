@@ -1,5 +1,4 @@
 
-DROP TABLE IF EXISTS titan.scrub_rebates_claims;
 DROP TABLE IF EXISTS titan.scrub_matches;
 DROP TABLE IF EXISTS titan.scrub_rebates;
 DROP TABLE IF EXISTS titan.scrub_claims;
@@ -66,7 +65,6 @@ CREATE TABLE titan.scrubs (
     ivid bigint not null,
     cmid bigint not null,
     plcy text not null,
-    hdrs text not null,
     crat timestamp with time zone not null, -- created
     rdat timestamp with time zone, -- ready
     srat timestamp with time zone, -- started
@@ -76,11 +74,13 @@ CREATE TABLE titan.scrubs (
 );
 
 CREATE TABLE titan.metrics (
-    scid 				bigint not null,
     manu                text not null,
+    scid 				bigint not null,
+    ivid                bigint not null,
     rbt_total           integer not null default 0,
     rbt_matched         integer not null default 0,
     rbt_nomatch         integer not null default 0,
+    rbt_valid           integer not null default 0,
     rbt_invalid         integer not null default 0,
     rbt_passed          integer not null default 0,
     rbt_failed          integer not null default 0,
@@ -118,6 +118,15 @@ CREATE TABLE titan.metrics (
     r_inv_desg_type     integer not null default 0,
     r_wrong_network     integer not null default 0,
     r_not_elig_at_sub   integer not null default 0,
+    load_rebates        integer not null default 0,
+    prep_claims         integer not null default 0,
+    pull_rebates        integer not null default 0,
+    work_rebates        integer not null default 0,
+    save_rebates        integer not null default 0,
+    save_scrub_rebates  integer not null default 0,
+    save_scrub_matches  integer not null default 0,
+    save_scrub_attempts integer not null default 0,
+    save_scrub_claims   integer not null default 0,
     seq                 bigint not null,
     CONSTRAINT metrics_pk PRIMARY KEY (manu, scid),
     FOREIGN KEY (manu, scid) references titan.scrubs(manu, scid)
@@ -140,6 +149,7 @@ CREATE TABLE titan.claims (
     netw text not null,
     prnm text not null,
     chnm text not null default '',
+    dupl bool not null default false,
     elig bool not null default true,
     susp bool not null default false,
     cnfm bool not null default true,
@@ -155,12 +165,14 @@ CREATE INDEX ON titan.claims(manu, seq);
 CREATE TABLE titan.scrub_rebates (
     manu text not null,
     scid bigint not null,
+    ivid bigint not null,
     rbid bigint not null,
-    indx bigint not null default 0,
     stat text not null default '',
-    excl text not null default '',
     spmt text not null default '',
     fprt text not null default '',
+    excl text not null default '',
+    errc text not null default '',
+    errm text not null default '',
     seq  bigint not null,
     CONSTRAINT scrub_rebates_pk PRIMARY KEY (manu, scid, rbid) --,
     -- FOREIGN KEY (manu, scid) references titan.scrubs(manu, scid)
@@ -213,7 +225,7 @@ CREATE TABLE titan.entities (
     i340 text   not null,
     strt date,
     term date,
-    stat text   not null default '',
+    state text   not null default '',
     seq  bigint not null primary key
 );
 CREATE INDEX ON titan.entities(seq);
@@ -225,7 +237,7 @@ CREATE TABLE titan.pharmacies (
     npis text not null default '',
     deas text not null default '',
     chnm text not null default '',
-    stat text not null default '',
+    state text not null default '',
     seq  bigint not null primary key
 );
 
@@ -235,7 +247,7 @@ CREATE TABLE titan.ndcs (
     name text not null,
     netw text not null default 'retail',
     seq  bigint not null,
-    CONSTRAINT ndcs_pk PRIMARY KEY (manu, ndc)
+    CONSTRAINT ndcs_pk PRIMARY KEY (seq)
 );
 CREATE INDEX ON titan.ndcs(manu);
 CREATE INDEX ON titan.ndcs(seq);
@@ -257,12 +269,10 @@ CREATE TABLE titan.desigs (
     manu text not null,
     i340 text not null,
     phid text not null,
-    netw text not null default 'retail',
     flag text not null default '',
     hin  text not null default '',
     assg boolean not null default true,
     term boolean not null default false,
-    excl boolean not null default false,
     xdat timestamp with time zone,
     dlat timestamp with time zone,
     xsat timestamp with time zone,
@@ -280,7 +290,7 @@ CREATE TABLE titan.ldns (
     assg boolean not null default true,
     term boolean not null default false,
     seq  bigint not null,
-    CONSTRAINT ldns_pk PRIMARY KEY (manu, netw, phid)
+    CONSTRAINT ldns_pk PRIMARY KEY (seq)
 );
 CREATE INDEX ON titan.ldns(manu);
 
