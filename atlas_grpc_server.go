@@ -52,6 +52,12 @@ func atlasUnaryServerInterceptor(ctx context.Context, req any, si *grpc.UnarySer
 	dbm := new_dbmap[Command]()
 	dbm.table(pool, "atlas.commands")
 
+	update := func(cmd *Command) {
+		if err := db_update(context.Background(), cmd, nil, pool, "atlas.commands", dbm, map[string]string{"cmid": fmt.Sprintf("%d", cmd.Cmid)}); err != nil {
+			Log("atlas", "unary_int", si.FullMethod, "command row update failed", time.Since(strt), map[string]any{"cmid": cmd.Cmid, "name": cmd.Name, "auth": cmd.Auth, "user": cmd.User, "netw": cmd.Netw, "host": cmd.Host}, err)
+		}
+	}
+
 	if cmid, err := db_insert_one[Command](ctx, pool, "atlas.commands", dbm, cmd, "cmid"); err == nil {
 		srvr := si.Server.(*atlasServer)
 		srvr.cmid = cmid
@@ -62,13 +68,16 @@ func atlasUnaryServerInterceptor(ctx context.Context, req any, si *grpc.UnarySer
 				if err := db_update(context.Background(), cmd, nil, pool, "atlas.commands", dbm, map[string]string{"cmid": fmt.Sprintf("%d", cmid)}); err != nil {
 					Log("atlas", "unary_int", si.FullMethod, "failed to update command row", time.Since(strt), map[string]any{"cmid": cmid, "name": cmd.Name, "auth": cmd.Auth, "user": cmd.User, "netw": cmd.Netw, "host": cmd.Host}, err)
 				}
+				update(cmd)
 				return res, err
 			} else {
 				Log("atlas", "unary_int", si.FullMethod, "command succeeded", time.Since(strt), map[string]any{"cmid": cmid, "name": cmd.Name, "auth": cmd.Auth, "user": cmd.User, "netw": cmd.Netw, "host": cmd.Host}, err)
+				update(cmd)
 				return res, err
 			}
 		} else {
 			Log("atlas", "unary_int", si.FullMethod, "validation failed", time.Since(strt), map[string]any{"cmid": cmid, "name": cmd.Name, "auth": cmd.Auth, "user": cmd.User, "netw": cmd.Netw, "host": cmd.Host}, vald)
+			update(cmd)
 			return nil, vald
 		}
 	} else {
@@ -105,6 +114,12 @@ func atlasStreamServerInterceptor(srv any, ss grpc.ServerStream, si *grpc.Stream
 	dbm := new_dbmap[Command]()
 	dbm.table(pool, "atlas.commands")
 	
+	update := func(cmd *Command) {
+		if err := db_update(context.Background(), cmd, nil, pool, "atlas.commands", dbm, map[string]string{"cmid": fmt.Sprintf("%d", cmd.Cmid)}); err != nil {
+			Log("atlas", "stream_int", si.FullMethod, "command row update failed", time.Since(strt), map[string]any{"cmid": cmd.Cmid, "name": cmd.Name, "auth": cmd.Auth, "user": cmd.User, "netw": cmd.Netw, "host": cmd.Host}, err)
+		}
+	}
+
 	if cmid, err := db_insert_one[Command](context.Background(), pool, "atlas.commands", dbm, cmd, "cmid"); err == nil {
 		srvr := srv.(*atlasServer)
 		srvr.cmid = cmid
@@ -115,13 +130,16 @@ func atlasStreamServerInterceptor(srv any, ss grpc.ServerStream, si *grpc.Stream
 				if err := db_update(context.Background(), cmd, nil, pool, "atlas.commands", dbm, map[string]string{"cmid": fmt.Sprintf("%d", cmid)}); err != nil {
 					Log("atlas", "stream_int", si.FullMethod, "failed to update command row", time.Since(strt), map[string]any{"cmid": cmid, "name": cmd.Name, "auth": cmd.Auth, "user": cmd.User, "netw": cmd.Netw, "host": cmd.Host}, err)
 				}
+				update(cmd)
 				return err
 			} else {
 				Log("atlas", "stream_int", si.FullMethod, "command succeeded", time.Since(strt), map[string]any{"cmid": cmid, "name": cmd.Name, "auth": cmd.Auth, "user": cmd.User, "netw": cmd.Netw, "host": cmd.Host}, err)
+				update(cmd)
 				return nil
 			}
 		} else {
 			Log("atlas", "stream_int", si.FullMethod, "validation failed", time.Since(strt), map[string]any{"cmid": cmid, "name": cmd.Name, "auth": cmd.Auth, "user": cmd.User, "netw": cmd.Netw, "host": cmd.Host}, vald)
+			update(cmd)
 			return vald
 		}
 	} else {

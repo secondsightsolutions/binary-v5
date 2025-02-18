@@ -150,7 +150,8 @@ message Command {
     string cwd  = 16;   // current working directory
     string rslt = 17;
     int64  crat = 18;
-    int64  seq  = 19;
+    int64  dnat = 19;
+    int64  seq  = 20;
 }
 
 message Entity {

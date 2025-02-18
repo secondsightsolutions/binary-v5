@@ -54,6 +54,7 @@ CREATE TABLE titan.commands (
     cmdl text not null,
     rslt text not null default '',
     crat timestamp with time zone not null default now(), -- created
+    dnat timestamp with time zone,
     seq  bigint not null,
     CONSTRAINT commands_pk PRIMARY KEY (manu, cmid)
 );

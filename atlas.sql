@@ -53,6 +53,7 @@ CREATE TABLE atlas.commands (
     cmdl text not null,
     rslt text not null default '',
     crat timestamp with time zone not null default now(), -- created
+    dnat timestamp with time zone,
     seq  bigserial
 );
 CREATE INDEX ON atlas.commands(seq);
