@@ -173,13 +173,15 @@ func (titan *Titan) syncPharmacies(stop chan any) {
 }
 
 func (titan *Titan) syncESP1(stop chan any) {
-	whr := ""
+	seq, _ := db_max(titan.pools["titan"], "titan.esp1", "seq")
+	whr := fmt.Sprintf("COALESCE(TRUNC(EXTRACT(EPOCH FROM updated_at)*1000000, 0), 0) > %d", seq)
 	fmM := new_dbmap[ESP1PharmNDC]()
 	fmM.column("manu", "manufacturer",              "COALESCE(manufacturer, '')")
 	fmM.column("spid", "service_provider_id",		"COALESCE(service_provider_id, '')")
 	fmM.column("ndc",  "ndc",  						"COALESCE(ndc, '')")
 	fmM.column("strt", "start", 					"start")
 	fmM.column("term", "term", 						"term")
+	fmM.column("seq",  "updated_at",  				"COALESCE(TRUNC(EXTRACT(EPOCH FROM updated_at)*1000000, 0), 0)")
 	titan_db_sync[ESP1PharmNDC]("citus", "public.esp1_providers", whr, fmM, "titan", "titan.esp1", true, stop)
 }
 
@@ -224,7 +226,7 @@ func (titan *Titan) syncLDNs(stop chan any) {
 	fmM.column("manu", "manufacturer_name", 		"COALESCE(manufacturer_name, '')")
 	fmM.column("i340", "id_340b",  					"COALESCE(id_340b, '')")
 	fmM.column("netw", "network", 					"COALESCE(network, '')")
-	fmM.column("crat", "created_at",				"to_date(created_at, 'YYYY-MM-DD')")
+	fmM.column("crat", "created_at",				"")
 	fmM.column("seq", "id",                         "COALESCE(id, 0)")
 	titan_db_sync[LDN]("esp", "public.ldns", whr, fmM, "titan", "titan.ldns", true, stop)
 }

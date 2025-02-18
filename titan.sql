@@ -285,10 +285,9 @@ CREATE INDEX ON titan.desigs(manu);
 
 CREATE TABLE titan.ldns (
     manu text not null,
+    i340 text not null default '',
     netw text not null,
-    phid text not null,
-    assg boolean not null default true,
-    term boolean not null default false,
+    crat boolean not null default true,
     seq  bigint not null,
     CONSTRAINT ldns_pk PRIMARY KEY (seq)
 );
@@ -300,6 +299,7 @@ CREATE TABLE titan.esp1 (
     ndc  text   not null,
     strt date,
     term date,
+    seq  bigint not null,
     CONSTRAINT esp1_pk PRIMARY KEY (manu, spid, ndc)
 );
 

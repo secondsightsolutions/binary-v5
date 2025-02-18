@@ -206,10 +206,9 @@ message Designation {
 message LDN {
     string manu = 1;
     string netw = 2;
-    string phid = 3;
-    bool   assg = 4;
-    bool   term = 5;
-    int64  seq  = 6;
+    string i340 = 3;
+    bool   crat = 4;
+    int64  seq  = 5;
 }
 message ESP1PharmNDC {
     string  manu = 1;
@@ -217,6 +216,7 @@ message ESP1PharmNDC {
     string  ndc  = 3;
     int64   strt = 4;
     int64   term = 5;
+    int64   seq  = 6;
 }
 message Eligibility {
     int64  seq    = 1;   // id
