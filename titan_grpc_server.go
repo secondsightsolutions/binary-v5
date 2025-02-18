@@ -233,7 +233,7 @@ func (s *titanServer) GetAuths(req *SyncReq, strm grpc.ServerStreamingServer[Aut
 	return titan_db_read("titan.auth", strm, req.Last)
 }
 func (s *titanServer) GetDesignations(req *SyncReq, strm grpc.ServerStreamingServer[Designation]) error {
-	return titan_db_read("titan.designations", strm, req.Last)
+	return titan_db_read("titan.desigs", strm, req.Last)
 }
 func (s *titanServer) GetLDNs(req *SyncReq, strm grpc.ServerStreamingServer[LDN]) error {
 	return titan_db_read("titan.ldns", strm, req.Last)

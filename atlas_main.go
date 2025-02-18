@@ -144,7 +144,7 @@ func (atlas *Atlas) sync() {
 	strt = time.Now()
 	Log("atlas", "sync", "load/update caches", "starting", time.Since(strt), nil, nil)
 	wgrp := &sync.WaitGroup{}
-	wgrp.Add(7)
+	wgrp.Add(9)
 	load_gclms(wgrp, atlas.claims, 			 &atlas.metrics.load_claims)
 	load_cache(wgrp, &atlas.ca.esp1, "esp1", &atlas.metrics.load_esp1, 		atlas.getESP1)
 	load_cache(wgrp, &atlas.ca.ents, "ents", &atlas.metrics.load_entities, 	atlas.getEntities)
